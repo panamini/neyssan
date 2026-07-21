@@ -212,7 +212,8 @@ export function targetEmployerOwnsOccurrence(args: {
   return targetEmployerAliasSpans(args).some(
     (span) =>
       /\p{N}/u.test(span.alias) &&
-      numericAliasHasEmployerContext(args.value, span) &&
+      (/\p{L}/u.test(span.alias) ||
+        numericAliasHasEmployerContext(args.value, span)) &&
       args.occurrenceIndex >= span.start && args.occurrenceIndex < span.end,
   );
 }
@@ -231,40 +232,4 @@ function numericAliasHasEmployerContext(
       suffix,
     )
   );
-}
-
-const GENERIC_AT_CONTEXT_TOKENS = new Set([
-  "a",
-  "an",
-  "my",
-  "our",
-  "scale",
-  "the",
-  "this",
-  "that",
-]);
-
-export function hasConflictingTargetEmployerMention(args: {
-  value: string;
-  targetEmployer?: TargetEmployerResolution;
-}): boolean {
-  if (args.targetEmployer?.status !== "RESOLVED") return false;
-  const spans = targetEmployerAliasSpans({
-    value: args.value,
-    targetEmployer: args.targetEmployer,
-  });
-  for (const match of args.value.matchAll(
-    /\b(?:[Aa]t|[Jj]oining)\s+(?=[\p{Lu}\p{N}])/gu,
-  )) {
-    const mentionStart = match.index + match[0].length;
-    const mentionToken = employerTokens(args.value.slice(mentionStart))[0];
-    if (
-      !mentionToken ||
-      GENERIC_AT_CONTEXT_TOKENS.has(mentionToken.normalized)
-    ) {
-      continue;
-    }
-    if (!spans.some((span) => span.start === mentionStart)) return true;
-  }
-  return false;
 }

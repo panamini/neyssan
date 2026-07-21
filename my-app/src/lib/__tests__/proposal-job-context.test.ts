@@ -188,6 +188,67 @@ describe("resolveProposalDraftDrawerSourceDraft", () => {
     });
   });
 
+  it("backfills structured employer authority when the leading stored draft predates the field", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        storedOutputSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription: "Coordinate reliable delivery handoffs.",
+        },
+        linkedJobSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription: "Coordinate reliable delivery handoffs.",
+          targetEmployerName: "Northwind Inc.",
+        },
+      }),
+    ).toMatchObject({
+      mode: "saved-historical-origin",
+      targetEmployerName: "Northwind Inc.",
+    });
+  });
+
+  it("keeps employer precedence field-level when another draft supplies the visible brief", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        storedOutputSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription: "Coordinate reliable delivery handoffs.",
+        },
+        metadataSource: {
+          targetEmployerName: "Persisted Employer",
+        },
+        linkedJobSourceDraft: {
+          targetEmployerName: "Linked Employer",
+        },
+      }),
+    ).toMatchObject({
+      mode: "saved-historical-origin",
+      jobTitle: "Operations Associate",
+      targetEmployerName: "Persisted Employer",
+    });
+
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: {
+          mode: "explicit-live-job",
+          jobTitle: "Current Role",
+          jobDescription: "Current brief.",
+          targetEmployerName: "Current Employer",
+          sourceUrl: null,
+          platform: null,
+        },
+        metadataSource: {
+          targetEmployerName: "Persisted Employer",
+        },
+        linkedJobSourceDraft: {
+          targetEmployerName: "Linked Employer",
+        },
+      }),
+    ).toMatchObject({
+      targetEmployerName: "Current Employer",
+    });
+  });
+
   it("keeps a generated output source visible for the Job & CV drawer without hydrating compose", () => {
     expect(
       resolveProposalDraftDrawerSourceDraft({

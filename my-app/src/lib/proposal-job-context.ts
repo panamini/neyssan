@@ -238,12 +238,23 @@ export function resolveProposalDraftDrawerSourceDraft(
       }
     : null;
 
-  return (
+  const selectedCandidate =
     normalizeCandidate(input.storedOutputSourceDraft, "saved-historical-origin") ??
     normalizeCandidate(metadataCandidate, "saved-historical-origin") ??
     normalizeCandidate(input.linkedJobSourceDraft, "explicit-live-job") ??
-    activeWorkspaceCandidate
-  );
+    activeWorkspaceCandidate;
+  if (!selectedCandidate) return null;
+
+  const targetEmployerName =
+    normalizeDraftText(input.activeWorkspaceSourceDraft?.targetEmployerName) ||
+    normalizeDraftText(input.metadataSource?.targetEmployerName) ||
+    normalizeDraftText(input.storedOutputSourceDraft?.targetEmployerName) ||
+    normalizeDraftText(input.linkedJobSourceDraft?.targetEmployerName);
+
+  return {
+    ...selectedCandidate,
+    ...(targetEmployerName ? { targetEmployerName } : {}),
+  };
 }
 
 export function resolveProposalDraftDrawerCvTitle(

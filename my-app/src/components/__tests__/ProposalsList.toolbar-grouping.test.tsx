@@ -14,6 +14,7 @@ const SAVED_PROPOSALS = [
     content: "Dear team,\n\nSaved proposal alpha.\n\nBest,",
     status: "saved",
     metadata: {
+      jobId: "job_alpha",
       proposalType: "cover_letter",
       voicePreset: "signature",
       sourceJobDescription: "Lead operations and coordinate delivery.",
@@ -42,7 +43,11 @@ vi.mock("convex/react", () => ({
     isAuthenticated: true,
   }),
   useQuery: (query: string) =>
-    query === "proposalsPublic.default" ? SAVED_PROPOSALS : null,
+    query === "proposalsPublic.default"
+      ? SAVED_PROPOSALS
+      : query === "jobsPublic.getById"
+        ? { id: "job_alpha", company: "Acme Corp." }
+        : null,
   useMutation: () => vi.fn().mockResolvedValue(undefined),
   useAction: () => generateProposalActionMock,
 }));
@@ -50,6 +55,7 @@ vi.mock("convex/react", () => ({
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
     proposalsPublic: { default: "proposalsPublic.default" },
+    jobsPublic: { getById: "jobsPublic.getById" },
     updateProposalPublic: { default: "updateProposalPublic.default" },
     deleteProposalPublic: { default: "deleteProposalPublic.default" },
     functions: {
@@ -305,6 +311,32 @@ describe("ProposalsList toolbar grouping", () => {
       expect(generateProposalActionMock).toHaveBeenCalledWith(
         expect.objectContaining({
           targetEmployerName: "Northwind Inc.",
+        }),
+      );
+    });
+  });
+
+  it("backfills the employer from a linked job when historical metadata predates the field", async () => {
+    render(<ProposalsList selectedProposalId="proposal_alpha" />);
+
+    let refine: (() => void) | undefined;
+    await waitFor(() => {
+      const toolbar = getMainProposalDisplayCall()
+        ?.detachedActionHeaderSupplement;
+      expect(React.isValidElement(toolbar)).toBe(true);
+      refine = (
+        toolbar as React.ReactElement<{ onRefine?: () => void }>
+      ).props.onRefine;
+      expect(refine).toBeTypeOf("function");
+    });
+    await act(async () => {
+      refine?.();
+    });
+
+    await waitFor(() => {
+      expect(generateProposalActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetEmployerName: "Acme Corp.",
         }),
       );
     });

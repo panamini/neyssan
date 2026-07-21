@@ -39,7 +39,6 @@ import {
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 import {
-  hasConflictingTargetEmployerMention,
   MISSING_TARGET_EMPLOYER,
   resolveTargetEmployerAuthorities,
   targetEmployerOwnsOccurrence,
@@ -3641,7 +3640,6 @@ type PremiumBodyPartValidationIssue = {
     | "unsupported_education_credential"
     | "fabricated_mission_claim"
     | "meta_prose"
-    | "conflicting_target_employer"
     | "unsupported_numeric_claim"
     | "unsupported_ownership_verb"
     | "candidate_name_mismatch";
@@ -3681,7 +3679,6 @@ export type PremiumWriterOutputValidationIssue = {
     | "section_demand_not_allowed"
     | "no_cv_uses_candidate_fact"
     | "direct_claim_missing_fact"
-    | "conflicting_target_employer"
     | "unsupported_numeric_claim"
     | "unsupported_ownership_verb"
     | "unsupported_credential_claim"
@@ -4488,20 +4485,6 @@ export function validatePremiumWriterOutputV1(args: {
       ).values(),
     );
     const referencedFactSurface = referencedFacts.map((fact) => fact.text).join(" ");
-    if (
-      hasConflictingTargetEmployerMention({
-        value: compact,
-        targetEmployer: args.brief.targetEmployer,
-      })
-    ) {
-      issues.push({
-        code: "conflicting_target_employer",
-        section,
-        claimId: assignedClaim?.id,
-        message: "Generated employer mention conflicts with structured authority.",
-        repairable: false,
-      });
-    }
     if (
       hasUnsupportedNumericClaim({
         generatedText: compact,
@@ -6076,14 +6059,6 @@ export function validatePremiumCoverLetterBodyParts(args: {
     }
     if (WRITER_META_PROSE_PATTERN.test(compact)) {
       issues.push({ code: "meta_prose", repairable: false });
-    }
-    if (
-      hasConflictingTargetEmployerMention({
-        value: compact,
-        targetEmployer: args.brief.targetEmployer,
-      })
-    ) {
-      issues.push({ code: "conflicting_target_employer", repairable: false });
     }
     if (
       hasUnsupportedNumericClaim({

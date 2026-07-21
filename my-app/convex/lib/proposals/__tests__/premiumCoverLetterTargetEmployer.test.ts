@@ -7,10 +7,8 @@ import {
   buildPremiumCoverLetterBrief,
   buildPremiumCoverLetterPrompt,
   rankAllowedFacts,
-  validatePremiumCoverLetterBodyParts,
 } from "../premiumCoverLetter";
 import {
-  hasConflictingTargetEmployerMention,
   resolveTargetEmployerAuthorities,
   targetEmployerAliasSpans,
   targetEmployerOwnsOccurrence,
@@ -148,6 +146,13 @@ describe("Target Employer Module", () => {
         targetEmployer: sevenEleven,
       }),
     ).toEqual([]);
+    expect(
+      targetEmployerOwnsOccurrence({
+        value: "I am applying to 7-Eleven.",
+        occurrenceIndex: 17,
+        targetEmployer: sevenEleven,
+      }),
+    ).toBe(true);
 
     const writtenNumberBrand = resolveTargetEmployerAuthorities(["One Inc."]);
     expect(
@@ -157,45 +162,6 @@ describe("Target Employer Module", () => {
         targetEmployer: writtenNumberBrand,
       }),
     ).toBe(false);
-  });
-
-  it("rejects employer-context mentions that conflict with the structured authority", () => {
-    const acme = resolveTargetEmployerAuthorities(["Acme Corp."]);
-    expect(
-      hasConflictingTargetEmployerMention({
-        value: "At Northwind, I would support reliable delivery.",
-        targetEmployer: acme,
-      }),
-    ).toBe(true);
-    expect(
-      hasConflictingTargetEmployerMention({
-        value: "At Acme, I would support reliable delivery.",
-        targetEmployer: acme,
-      }),
-    ).toBe(false);
-    expect(
-      hasConflictingTargetEmployerMention({
-        value: "At my previous role, I supported reliable delivery.",
-        targetEmployer: acme,
-      }),
-    ).toBe(false);
-
-    const { brief } = buildNoCvBrief({
-      targetEmployerName: "Acme Corp.",
-      jobTitle: "Software Engineer at Northwind",
-      jobDescription: "Join Northwind and build reliable services.",
-    });
-    expect(
-      validatePremiumCoverLetterBodyParts({
-        brief,
-        bodyParts: {
-          opening: "At Northwind, reliable delivery matters.",
-          proofBlock: "The role calls for reliable service delivery.",
-          employerValueBlock: "That focus supports clear handoffs.",
-          closeLine: "I am interested in contributing to the role.",
-        },
-      }).map((issue) => issue.code),
-    ).toContain("conflicting_target_employer");
   });
 
   it("keeps one resolved result in the brief and prompt despite conflicting diagnostics", () => {
@@ -265,7 +231,16 @@ describe("Target Employer Module", () => {
       "utf8",
     );
     expect(regenerateSource).toMatch(
-      /targetEmployerName:\s*selected\.metadata\?\.targetEmployerName\s*\?\?\s*null/,
+      /targetEmployerName:\s*resolvedRegenerateTargetEmployerName/,
+    );
+    expect(regenerateSource).toMatch(/api\.jobsPublic\.getById/);
+
+    const forgeSource = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(forgeSource).toMatch(
+      /const preservedTargetEmployerName = resolvedTargetEmployerName/,
+    );
+    expect(forgeSource).toMatch(
+      /targetEmployerName:\s*canPreserveSourceIdentity\s*\?\s*preservedTargetEmployerName\s*:\s*null/,
     );
 
     for (const path of [

@@ -4280,6 +4280,7 @@ export function ProposalForge(): JSX.Element {
             !jobContextCleared && canonicalJobRecord
               ? {
                   title: canonicalJobRecord.title,
+                  company: canonicalJobRecord.company,
                   rawDescription: canonicalJobRecord.rawDescription,
                   sourceUrl: canonicalJobRecord.sourceUrl,
                   sourceDomain: canonicalJobRecord.sourceDomain,
@@ -4325,6 +4326,7 @@ export function ProposalForge(): JSX.Element {
         }),
       [
         canonicalJobRecord?.rawDescription,
+        canonicalJobRecord?.company,
         canonicalJobRecord?.sourceDomain,
         canonicalJobRecord?.sourceUrl,
         canonicalJobRecord?.title,
@@ -5237,6 +5239,56 @@ export function ProposalForge(): JSX.Element {
         : proposalContent,
     [proposalContent, proposalDocument],
   );
+  const selectedPersistedProposal = React.useMemo(
+    () =>
+      isSavedView && selectedProposalId
+        ? (savedProposals ?? fallbackSavedProposals).find(
+            (proposal) => String(proposal._id) === String(selectedProposalId),
+          ) ?? null
+        : null,
+    [fallbackSavedProposals, isSavedView, savedProposals, selectedProposalId],
+  );
+  const linkedProposalJobId =
+    selectedPersistedProposal?.metadata?.jobId?.trim() ||
+    resolvedProposalJobId ||
+    null;
+  const linkedProposalEmployerName = React.useMemo(
+    () =>
+      linkedProposalJobId
+        ? (proposalRailJobs ?? [])
+            .find((job) => String(job.id) === linkedProposalJobId)
+            ?.company?.trim() || null
+        : null,
+    [linkedProposalJobId, proposalRailJobs],
+  );
+  const resolvedTargetEmployerName = React.useMemo(() => {
+    if (stagedProposalSourceDraft) {
+      return (
+        stagedProposalSourceDraft.targetEmployerName?.trim() ||
+        stagedSourceJobRecord?.company?.trim() ||
+        null
+      );
+    }
+    if (canonicalJobRecord) {
+      return canonicalJobRecord.company?.trim() || null;
+    }
+
+    return (
+      selectedPersistedProposal?.metadata?.targetEmployerName?.trim() ||
+      resolvedProposalWorkspaceSourceDraft?.targetEmployerName?.trim() ||
+      lastProposalRequest?.targetEmployerName?.trim() ||
+      linkedProposalEmployerName ||
+      null
+    );
+  }, [
+    canonicalJobRecord?.company,
+    lastProposalRequest?.targetEmployerName,
+    linkedProposalEmployerName,
+    resolvedProposalWorkspaceSourceDraft?.targetEmployerName,
+    selectedPersistedProposal?.metadata?.targetEmployerName,
+    stagedProposalSourceDraft,
+    stagedSourceJobRecord?.company,
+  ]);
   const proposalPersistenceMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
   >(() => {
@@ -5266,12 +5318,8 @@ export function ProposalForge(): JSX.Element {
     if (sourceJobDescription) {
       nextMetadata.sourceJobDescription = sourceJobDescription;
     }
-    const targetEmployerName =
-      resolvedProposalWorkspaceSourceDraft?.targetEmployerName?.trim() ||
-      lastProposalRequest?.targetEmployerName?.trim() ||
-      "";
-    if (targetEmployerName) {
-      nextMetadata.targetEmployerName = targetEmployerName;
+    if (resolvedTargetEmployerName) {
+      nextMetadata.targetEmployerName = resolvedTargetEmployerName;
     }
     const sourceUrl =
       resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() || "";
@@ -5357,12 +5405,11 @@ export function ProposalForge(): JSX.Element {
     resolvedProposalJobId,
     resolvedProposalWorkspaceSourceDraft?.jobDescription,
     resolvedProposalWorkspaceSourceDraft?.jobTitle,
-    resolvedProposalWorkspaceSourceDraft?.targetEmployerName,
     resolvedProposalWorkspaceSourceDraft?.platform,
     resolvedProposalWorkspaceSourceDraft?.sourceUrl,
     lastProposalRequest?.creativity,
     lastProposalRequest?.formalityLevel,
-    lastProposalRequest?.targetEmployerName,
+    resolvedTargetEmployerName,
     lastProposalRequest?.voicePreset,
     proposalRenderMetadata,
     proposalApplicantName,
@@ -7758,6 +7805,7 @@ export function ProposalForge(): JSX.Element {
         stickyImportedSource.platform ??
         prefill?.platform ??
         null;
+      const preservedTargetEmployerName = resolvedTargetEmployerName;
       const nextJobTitle = values.jobTitle.trim();
       const nextJobDescription = values.jobDescription.trim();
       const currentSourceJobTitle =
@@ -7784,6 +7832,9 @@ export function ProposalForge(): JSX.Element {
         toneTuning: values.toneTuning ?? null,
         characterLimitMode: draftCharacterLimitRef.current.mode,
         characterLimitValue: draftCharacterLimitRef.current.value,
+        targetEmployerName: canPreserveSourceIdentity
+          ? preservedTargetEmployerName
+          : null,
         sourceUrl: canPreserveSourceIdentity ? preservedSourceUrl : null,
         platform: canPreserveSourceIdentity ? preservedPlatform : null,
       };
@@ -7795,6 +7846,7 @@ export function ProposalForge(): JSX.Element {
       composePreviewValues?.sourceUrl,
       outputSourceComposeDraft?.platform,
       outputSourceComposeDraft?.sourceUrl,
+      resolvedTargetEmployerName,
       resolvedProposalWorkspaceSourceDraft?.jobDescription,
       resolvedProposalWorkspaceSourceDraft?.jobTitle,
       stickyImportedSource.platform,
@@ -14162,10 +14214,7 @@ export function ProposalForge(): JSX.Element {
                           }
                           canonicalJobId={canonicalJobId}
                           targetEmployerName={
-                            stagedProposalSourceDraft?.targetEmployerName ??
-                            proposalDraftSourceDraft?.targetEmployerName ??
-                            canonicalJobRecord?.company?.trim() ??
-                            null
+                            resolvedTargetEmployerName
                           }
                           jobSourceLanguage={
                             stagedSourceJobRecord?.sourceLanguage ??

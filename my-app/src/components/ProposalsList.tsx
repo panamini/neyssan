@@ -94,6 +94,7 @@ type SavedProposalRecord = {
     content?: string;
   }>;
   metadata?: DocumentStyleMetadata & {
+    jobId?: string;
     sourceJobTitle?: string;
     sourceJobDescription?: string;
     targetEmployerName?: string;
@@ -831,6 +832,18 @@ export default function ProposalsList({
     (proposal) => proposal.status === "saved",
   ).length;
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
+  const selectedLinkedJob = useQuery(
+    api.jobsPublic.getById as any,
+    isConvexAuthenticated &&
+      selected?.metadata?.jobId &&
+      !selected.metadata.targetEmployerName?.trim()
+      ? { jobId: selected.metadata.jobId }
+      : "skip",
+  ) as { company?: string | null } | null | undefined;
+  const resolvedRegenerateTargetEmployerName =
+    selected?.metadata?.targetEmployerName?.trim() ||
+    selectedLinkedJob?.company?.trim() ||
+    null;
   const resolveSavedProposalRenderState = React.useCallback(
     (proposal: SavedProposalRecord | null) => {
       if (!proposal) return null;
@@ -1463,7 +1476,7 @@ export default function ProposalsList({
       const payload: RegeneratePayload = {
         jobTitle,
         jobDescription: sourceJobDescription,
-        targetEmployerName: selected.metadata?.targetEmployerName ?? null,
+        targetEmployerName: resolvedRegenerateTargetEmployerName,
         proposalType,
         voicePreset,
         characterLimitMode: selected.metadata?.characterLimitMode,
@@ -1495,6 +1508,9 @@ export default function ProposalsList({
         actualModelType: res.actualModelType,
         fallbackTriggerCode: res.fallbackTriggerCode,
       };
+      if (resolvedRegenerateTargetEmployerName) {
+        nextMetadata.targetEmployerName = resolvedRegenerateTargetEmployerName;
+      }
       if (voicePreset) {
         nextMetadata.voicePreset = voicePreset;
         nextMetadata.resolvedVoicePreset = voicePreset;
