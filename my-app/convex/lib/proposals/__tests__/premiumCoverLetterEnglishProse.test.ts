@@ -141,6 +141,22 @@ describe("premium cover-letter English prose module", () => {
     );
   });
 
+  it("stops an unknown relative predicate at a punctuation boundary", () => {
+    expect(
+      analyze(
+        "Supported by tools that customers use, the workflow improves delivery.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 39, end: 51 },
+        finitePredicateSpan: { start: 52, end: 60 },
+        relativePredicateSpans: [],
+      }),
+    ]);
+  });
+
   it.each(["The work.", "The support."])(
     "keeps nominal homographs conservative: %s",
     (text) => {
@@ -226,6 +242,97 @@ describe("premium cover-letter English prose module", () => {
     },
   );
 
+  it.each([
+    {
+      text: "Built on research, I collaborated with teams.",
+      finitePredicateSpan: { start: 21, end: 33 },
+    },
+    {
+      text: "Built on research, I partnered with teams.",
+      finitePredicateSpan: { start: 21, end: 30 },
+    },
+  ])(
+    "accepts an unlisted past predicate before a prepositional complement: $text",
+    ({ text, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          subjectSpan: { start: 19, end: 20 },
+          finitePredicateSpan,
+        }),
+      ]);
+    },
+  );
+
+  it("keeps a reduced-participle verb-led fragment invalid", () => {
+    expect(
+      analyze(
+        "Led a design-system migration used across four product squads.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: expect.arrayContaining([
+          "verb_led_fragment",
+          "missing_finite_predicate",
+        ]),
+      }),
+    ]);
+  });
+
+  it.each([
+    {
+      text: "Managed client support.",
+      classification: "INVALID",
+      confidence: "high",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed process support.",
+      classification: "INVALID",
+      confidence: "high",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed clients support teams.",
+      classification: "VALID",
+      confidence: "high",
+      subjectSpan: { start: 0, end: 15 },
+      finitePredicateSpan: { start: 16, end: 23 },
+    },
+    {
+      text: "Managed processes support teams.",
+      classification: "VALID",
+      confidence: "high",
+      subjectSpan: { start: 0, end: 17 },
+      finitePredicateSpan: { start: 18, end: 25 },
+    },
+  ])(
+    "uses subject agreement to disambiguate a base-form predicate: $text",
+    ({
+      text,
+      classification,
+      confidence,
+      subjectSpan,
+      finitePredicateSpan,
+    }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification,
+          confidence,
+          subjectSpan,
+          finitePredicateSpan,
+        }),
+      ]);
+    },
+  );
+
   it("does not let an infinitive capture a finite verb from another clause", () => {
     const [result] = analyze(
       "Teams work to improve delivery while managers review results.",
@@ -252,6 +359,22 @@ describe("premium cover-letter English prose module", () => {
         subjectSpan: { start: 0, end: 5 },
         finitePredicateSpan: { start: 6, end: 10 },
         infinitiveSpans: [{ start: 11, end: 30 }],
+      }),
+    ]);
+  });
+
+  it("bounds a clause after an infinitive without requiring a coordinator", () => {
+    expect(
+      analyze(
+        "Built to improve delivery, the workflow supports teams.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 27, end: 39 },
+        finitePredicateSpan: { start: 40, end: 48 },
+        infinitiveSpans: [{ start: 6, end: 25 }],
       }),
     ]);
   });
@@ -341,5 +464,7 @@ describe("premium cover-letter English prose module", () => {
     expect(source).not.toContain(
       "Managed services to help teams scale are central to reliable delivery.",
     );
+    expect(source).not.toContain('"collaborated"');
+    expect(source).not.toContain('"partnered"');
   });
 });
