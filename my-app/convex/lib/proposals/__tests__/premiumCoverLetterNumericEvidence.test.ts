@@ -441,6 +441,60 @@ describe("premium cover-letter numeric evidence", () => {
     ).toEqual([]);
   });
 
+  it.each([
+    ["Spanish", "Trabajé en la plataforma durante 3 años."],
+    ["German", "Ich arbeitete 3 Jahre an der Plattform."],
+  ])(
+    "matches a translated duration unit for enabled %s output",
+    (_language, visibleText) => {
+      const evidence = projection({
+        factGraph: factGraph([
+          {
+            id: "fact_duration_enabled_language",
+            source: "cv",
+            text: "Worked on the platform for 3 years.",
+          },
+        ]),
+      });
+
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: evidence,
+          visibleText,
+          section: "proofBlock",
+          factIds: ["fact_duration_enabled_language"],
+          demandIds: [],
+          claimIds: [],
+          allowMeasurementTranslation: true,
+        }).unsupported,
+      ).toEqual([]);
+    },
+  );
+
+  it("does not let duration translation change the canonical unit", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_three_days",
+          source: "cv",
+          text: "Completed the migration in 3 days.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "Completé la migración en 3 años.",
+        section: "proofBlock",
+        factIds: ["fact_three_days"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
   it("matches a localized trailing currency symbol", () => {
     const evidence = projection({
       factGraph: factGraph([
@@ -544,6 +598,41 @@ describe("premium cover-letter numeric evidence", () => {
         visibleText: "I worked there between 2020 and 2024.",
         section: "proofBlock",
         factIds: ["fact_between_role_dates"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it.each([
+    "Engineer — 2020 to 2024",
+    "Engineer — 2020 through 2024",
+    "Engineer — 2020 until 2024",
+    "Engineer — 2020 to Present",
+  ])("classifies the first endpoint of textual date ranges: %s", (text) => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_textual_role_dates",
+          source: "cv",
+          text,
+        },
+      ]),
+    });
+
+    expect(
+      evidence.sources.find(
+        (source) =>
+          source.factId === "fact_textual_role_dates" &&
+          source.normalizedValue === "2020",
+      ),
+    ).toEqual(expect.objectContaining({ role: "DATE" }));
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I have worked as an engineer since 2020.",
+        section: "proofBlock",
+        factIds: ["fact_textual_role_dates"],
         demandIds: [],
         claimIds: [],
       }).unsupported,

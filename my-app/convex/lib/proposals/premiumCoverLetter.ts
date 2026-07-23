@@ -258,6 +258,7 @@ export type PremiumWriterOutputV1 = {
 
 export type PremiumCoverLetterNumericEvidenceValidationContext = Readonly<{
   projection: PremiumCoverLetterNumericEvidenceProjection;
+  allowMeasurementTranslation: boolean;
   provenanceBySection: Readonly<
     Record<
       ClaimPlanSection,
@@ -273,9 +274,11 @@ export type PremiumCoverLetterNumericEvidenceValidationContext = Readonly<{
 function numericEvidenceValidationContext(args: {
   projection: PremiumCoverLetterNumericEvidenceProjection;
   writerOutput: PremiumWriterOutputV1;
+  allowMeasurementTranslation: boolean;
 }): PremiumCoverLetterNumericEvidenceValidationContext {
   return {
     projection: args.projection,
+    allowMeasurementTranslation: args.allowMeasurementTranslation,
     provenanceBySection: Object.fromEntries(
       CLAIM_PLAN_SECTIONS.map((section) => {
         const part = args.writerOutput.bodyParts[section];
@@ -6996,6 +6999,8 @@ function repairTextHasCandidateUnsupportedClaim(args: {
       factIds: numericProvenance.factIds,
       demandIds: numericProvenance.demandIds,
       claimIds: numericProvenance.claimIds,
+      allowMeasurementTranslation:
+        args.numericEvidenceContext.allowMeasurementTranslation,
     }).unsupported.length > 0
   ) {
     return true;
@@ -7581,6 +7586,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   const numericEvidenceContext = numericEvidenceValidationContext({
     projection: numericEvidenceProjection,
     writerOutput,
+    allowMeasurementTranslation: brief.language !== "English",
   });
   const validateBodyParts = (candidateBodyParts: CoverLetterBodyParts) =>
     validatePremiumCoverLetterBodyParts({

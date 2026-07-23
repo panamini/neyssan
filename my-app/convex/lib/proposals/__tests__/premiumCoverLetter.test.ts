@@ -41,6 +41,7 @@ import {
   generateOpenAIResponsesStructured,
   type OpenAIResponsesSchemaContract,
 } from "../premiumCoverLetterOpenAITransport";
+import type { ProposalOutputLanguage } from "../proposalOutput";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -240,12 +241,13 @@ async function withQualityRepairFlag<T>(
 function attemptDirectQualityRepair(
   writer: Parameters<typeof attemptPremiumCoverLetterGeneration>[0]["writer"],
   personalizationContext = directContext,
+  outputLanguage: ProposalOutputLanguage = "English",
 ) {
   return withQualityRepairFlag("1", () =>
     attemptPremiumCoverLetterGeneration({
       personalizationContext,
       voicePreset: "signature",
-      outputLanguage: "English",
+      outputLanguage,
       jobTitle: directJob.jobTitle,
       jobDescription: directJob.jobDescription,
       candidateName: "Alex Martin",
@@ -6849,7 +6851,7 @@ describe("premium cover letter generation and rendering", () => {
               proofBlock:
                 "I built experimentation dashboards used by product and growth teams.",
               employerValueBlock: originalEmployerValue,
-              closeLine: "I would be glad to discuss the position further.",
+              closeLine: "Je serais ravi d'échanger sur le rôle.",
             },
             durationContext,
           );
@@ -6874,6 +6876,63 @@ describe("premium cover letter generation and rendering", () => {
       attempted: true,
       outcome: "rejected_validation",
       rejectionCategory: "rejected_validation",
+    });
+  });
+
+  it("preserves translated-duration matching during quality repair", async () => {
+    const durationContext = {
+      ...directContext,
+      recentExperience: [
+        {
+          ...directContext.recentExperience[0],
+          highlights: [
+            directContext.recentExperience[0].highlights[0],
+            "Completed a design system migration in 3 years across 4 product squads.",
+          ],
+        },
+      ],
+    };
+    const translatedDurationBefore =
+      "J’ai réalisé une migration de design system en 3.0 ans pour 4 équipes produit.";
+    const translatedDurationAfter =
+      "J’ai réalisé une migration de design system en 3 ans pour 4 équipes produit.";
+    const calls: string[] = [];
+    const result = await attemptDirectQualityRepair(
+      async () => {
+        calls.push("writer");
+        if (calls.length === 1) {
+          return buildDirectPremiumWriterOutputFixture(
+            {
+              opening:
+                "J’ai amélioré la conversion des inscriptions de 11 % grâce à des expériences UI.",
+              proofBlock:
+                "J’ai créé des tableaux de bord utilisés par les équipes produit et croissance.",
+              employerValueBlock: translatedDurationBefore,
+              closeLine: "Je serais ravi d’échanger davantage sur ce poste.",
+            },
+            durationContext,
+          );
+        }
+        return {
+          opening:
+            "J’ai amélioré la conversion des inscriptions de 11 % grâce à des expériences UI.",
+          proofBlock:
+            "J’ai créé des tableaux de bord utilisés par les équipes produit et croissance.",
+          employerValueBlock: translatedDurationAfter,
+          closeLine:
+            "I would bring that design-system discipline to product-facing interface work.",
+        };
+      },
+      durationContext,
+      "French",
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(result?.bodyParts.employerValueBlock).toBe(translatedDurationAfter);
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "attempted_accepted",
+      finalProvenanceStatus: "validated_after_structured_repair",
     });
   });
 
