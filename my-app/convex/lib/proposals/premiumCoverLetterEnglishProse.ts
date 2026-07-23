@@ -183,13 +183,21 @@ function indexInRanges(index: number, ranges: readonly TokenRange[]): boolean {
 function findRelativePredicateIndexes(
   tokens: readonly TaggedToken[],
   infinitiveRanges: readonly TokenRange[],
+  segment: SentenceSegment,
 ): number[] {
   const indexes: number[] = [];
   for (let markerIndex = 1; markerIndex < tokens.length; markerIndex += 1) {
+    const marker = tokens[markerIndex];
+    const previous = tokens[markerIndex - 1];
+    if (!RELATIVE_MARKER_PATTERN.test(marker?.normal ?? "")) {
+      continue;
+    }
     if (
-      !RELATIVE_MARKER_PATTERN.test(
-        tokens[markerIndex]?.normal ?? "",
-      )
+      marker &&
+      previous &&
+      segment.text
+        .slice(previous.end - segment.start, marker.start - segment.start)
+        .includes(",")
     ) {
       continue;
     }
@@ -249,9 +257,12 @@ function subjectEndIndex(args: {
   infinitiveRanges: readonly TokenRange[];
   relativePredicateIndexes: readonly number[];
 }): number {
+  const firstRelativePredicateIndex = args.relativePredicateIndexes[0];
   const relativeMarkerIndex = args.tokens.findIndex(
     (token, index) =>
+      firstRelativePredicateIndex !== undefined &&
       index < args.predicateIndex &&
+      index < firstRelativePredicateIndex &&
       RELATIVE_MARKER_PATTERN.test(token.normal),
   );
   if (relativeMarkerIndex > 0) return relativeMarkerIndex - 1;
@@ -429,6 +440,7 @@ function analyzeSentence(args: {
   const relativePredicateIndexes = findRelativePredicateIndexes(
     tokens,
     infinitiveRanges,
+    args.segment,
   );
   const evidence: AnalysisEvidence = {
     section: args.section,

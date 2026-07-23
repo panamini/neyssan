@@ -115,6 +115,18 @@ describe("premium cover-letter English prose module", () => {
     );
   });
 
+  it.each([
+    "Built on user research, that approach delivers.",
+    "Aligned with clear goals, that team supports delivery.",
+  ])("does not treat a post-comma demonstrative as relative: %s", (text) => {
+    expect(analyze(text)[0]).toEqual(
+      expect.objectContaining({
+        classification: "UNKNOWN",
+        relativePredicateSpans: [],
+      }),
+    );
+  });
+
   it("bounds an infinitive before a structurally tagged subordinate clause", () => {
     expect(
       analyze(
