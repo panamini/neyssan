@@ -1,6 +1,4 @@
-export const ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS = [
-  "p2-hyphenated-duration-paraphrase",
-] as const;
+export const ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS = [] as const;
 
 export const ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS = [
   "p2-employer-job-level-em-dash",
@@ -29,15 +27,9 @@ export const ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS = [
   "history-prose-finite-subject-punctuation-variation",
 ] as const;
 
-export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS = [
-  "p2-duration-three-day-paraphrase",
-  "p2-duration-three-day-case-punctuation",
-] as const;
+export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS = [] as const;
 
-export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS = {
-  "p2-duration-three-day-paraphrase": '["3"]',
-  "p2-duration-three-day-case-punctuation": '["3"]',
-} as const satisfies Readonly<
+export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS = {} as const satisfies Readonly<
   Record<
     (typeof ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS)[number],
     string
@@ -210,7 +202,6 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     id: "p2-duration-three-day-paraphrase",
     provenance: "P2",
     pairId: "numeric-three-day-duration",
-    knownFailureId: "p2-hyphenated-duration-paraphrase",
     axis: "numeric_evidence",
     canonicalEmployer: null,
     sourceText: "Completed a 3-Day Training Program.",
@@ -224,7 +215,6 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     id: "p2-duration-three-day-case-punctuation",
     provenance: "PR349",
     pairId: "numeric-three-day-duration",
-    knownFailureId: "p2-hyphenated-duration-paraphrase",
     axis: "numeric_evidence",
     canonicalEmployer: null,
     sourceText: "Completed a 3-day training program.",

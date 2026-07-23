@@ -131,6 +131,7 @@ jobs:
           ./node_modules/.bin/vitest --run \
             convex/lib/proposals/__tests__/coverLetterPolicyCandidate.test.ts \
             convex/lib/proposals/__tests__/premiumCoverLetterEnglishQualityGate.test.ts \
+            convex/lib/proposals/__tests__/premiumCoverLetterNumericEvidence.test.ts \
             convex/lib/proposals/__tests__/proposalWriterPrompt.test.ts \
             scripts/evals/__tests__/benchmark-cover-letter-writers.test.ts \
             scripts/evals/__tests__/cover-letter-policy-shadow.test.ts \

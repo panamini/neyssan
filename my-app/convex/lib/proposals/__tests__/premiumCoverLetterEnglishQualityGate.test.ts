@@ -413,6 +413,51 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not accept a job-context metric as candidate prose through demand provenance", () => {
+    const jobDemandGraph: JobDemandGraphV1 = {
+      version: "job_demand_graph_v1",
+      priorityTokens: [],
+      demands: [
+        {
+          id: "demand_scale",
+          text: "Operate a 100M business line.",
+          bucket: "core_responsibility",
+          requiredness: "core",
+          tokens: ["operate", "business"],
+          mustNotBecomeCandidateClaim: true,
+        },
+      ],
+    };
+    const demandClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "employerValueBlock"
+          ? { ...claim, demandIds: ["demand_scale"] }
+          : claim,
+      ),
+    };
+    const writerOutput = output({
+      opening: "I reduced the onboarding backlog by 24%.",
+      proofBlock: "I documented handoffs for three implementation teams.",
+      employerValueBlock: "I operated a 100M business line.",
+      closeLine: "I would bring that discipline to the team.",
+    });
+    writerOutput.bodyParts.employerValueBlock.demandIds = ["demand_scale"];
+
+    expect(
+      validateEnglishCvBackedQualityGate({
+        writerOutput,
+        claimPlan: demandClaimPlan,
+        factGraph,
+        jobDemandGraph,
+      }),
+    ).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "100000000",
+    });
+  });
+
   it("normalizes decimal precision, decimal commas, and thousands separators in metrics", () => {
     const metricFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1750,7 +1795,7 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
-  it("accepts a numeral supported by the section's assigned job demand", () => {
+  it("fails closed on an assigned job-demand numeral without an explicit owner signal", () => {
     const demandId = "demand_always_on";
     const demandClaimPlan: ClaimPlanV1 = {
       ...claimPlan,
@@ -1790,7 +1835,7 @@ describe("English CV-backed quality gate", () => {
       jobDemandGraph,
     });
 
-    expect(issues).not.toContainEqual(
+    expect(issues).toContainEqual(
       expect.objectContaining({
         code: "unsupported_visible_metric",
         section: "employerValueBlock",
@@ -3305,7 +3350,7 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it("uses assigned facts for adjacent bridge metrics when fact IDs are omitted", () => {
+  it("does not use downstream claim associations as numeric source provenance", () => {
     const adjacentClaimPlan: ClaimPlanV1 = {
       ...claimPlan,
       contextClass: "cv_adjacent",
@@ -3344,7 +3389,7 @@ describe("English CV-backed quality gate", () => {
       factGraph: adjacentMetricFactGraph,
     });
 
-    expect(issues).not.toContainEqual({
+    expect(issues).toContainEqual({
       code: "unsupported_visible_metric",
       section: "employerValueBlock",
       metric: "24%",
