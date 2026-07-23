@@ -113,6 +113,42 @@ describe("premium cover-letter English prose module", () => {
   );
 
   it.each([
+    "Managed teams create reliable workflows.",
+    "Built systems transform operations.",
+  ])(
+    "keeps an unsupported base predicate after a participial-homograph subject conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "Managed teams create efficiently.",
+    "Built system transforms reliably.",
+  ])(
+    "keeps an unsupported present predicate followed by an adverb conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
     "I supported U.S. teams across regions.",
     "I supported U.K. operations across regions.",
   ])("preserves a genuine abbreviation continuation: %s", (text) => {
@@ -352,6 +388,23 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it("rejects a multiword noun phrase without a main predicate after a fronted subordinate", () => {
+    expect(
+      analyze("When I managed reporting, delivery outcomes."),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "fronted_subordinate_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
   it("keeps a fronted participial clause distinct from a finite subordinate", () => {
     expect(analyze("Built on research, delivery improved.")).toEqual([
       expect.objectContaining({
@@ -385,6 +438,52 @@ describe("premium cover-letter English prose module", () => {
       ]);
     },
   );
+
+  it.each([
+    {
+      text: "Managed teams consistently deliver outcomes.",
+      subjectSpan: { start: 0, end: 26 },
+      finitePredicateSpan: { start: 27, end: 34 },
+    },
+    {
+      text: "Built systems effectively reduce costs.",
+      subjectSpan: { start: 0, end: 25 },
+      finitePredicateSpan: { start: 26, end: 32 },
+    },
+  ])(
+    "keeps an intervening adverb out of agreement while retaining the subject span: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining([
+            "finite_predicate",
+            "modified_subject",
+          ]),
+        }),
+      ]);
+    },
+  );
+
+  it("keeps certain agreement mismatches invalid across an adverb", () => {
+    expect(
+      analyze("Managed service consistently support delivery."),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: expect.arrayContaining([
+          "verb_led_fragment",
+          "missing_finite_predicate",
+        ]),
+      }),
+    ]);
+  });
 
   it.each([
     {
@@ -632,6 +731,27 @@ describe("premium cover-letter English prose module", () => {
   );
 
   it.each([
+    "Led migrations across teams efficiently.",
+    "Managed programs for clients consistently.",
+  ])(
+    "keeps a prepositional object from becoming an unsupported predicate: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "INVALID",
+          confidence: "high",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: expect.arrayContaining([
+            "verb_led_fragment",
+            "missing_finite_predicate",
+          ]),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
     "Built on research, people support delivery.",
     "Built on research, personnel support delivery.",
   ])(
@@ -710,6 +830,36 @@ describe("premium cover-letter English prose module", () => {
 
   it.each([
     {
+      text: "Managed work to help teams scale improves delivery.",
+      predicateSpan: { start: 33, end: 41 },
+      infinitiveSpan: { start: 13, end: 32 },
+    },
+    {
+      text: "Managed work to build and deliver reliable systems improves outcomes.",
+      predicateSpan: { start: 51, end: 59 },
+      infinitiveSpan: { start: 13, end: 50 },
+    },
+  ])(
+    "ends an infinitive before a supported main lexical predicate: $text",
+    ({ text, predicateSpan, infinitiveSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          subjectSpan: { start: 0, end: 12 },
+          finitePredicateSpan: predicateSpan,
+          infinitiveSpans: [infinitiveSpan],
+          reasonCodes: expect.arrayContaining([
+            "bounded_infinitive",
+            "main_finite_predicate_after_infinitive",
+          ]),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    {
       text: "Built to have supported teams.",
       infinitiveSpan: { start: 6, end: 29 },
     },
@@ -731,6 +881,43 @@ describe("premium cover-letter English prose module", () => {
             "verb_led_fragment",
             "missing_finite_predicate",
           ]),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "Review of delivery outcomes.",
+    "Share of regional revenue.",
+    "Support for product teams.",
+  ])("does not treat a noun use as an imperative: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "UNKNOWN",
+        confidence: "low",
+        sentenceForm: "unknown",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
+  it.each([
+    { text: "Review reports promptly.", predicateEnd: 6 },
+    { text: "Share results broadly.", predicateEnd: 5 },
+    { text: "Support teams consistently.", predicateEnd: 7 },
+  ])(
+    "preserves a genuine imperative with an object or adverb: $text",
+    ({ text, predicateEnd }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "imperative",
+          subjectSpan: null,
+          finitePredicateSpan: { start: 0, end: predicateEnd },
+          reasonCodes: expect.arrayContaining(["imperative_form"]),
         }),
       ]);
     },
@@ -848,6 +1035,15 @@ describe("premium cover-letter English prose module", () => {
       "Managed clients’ support.",
       "Managed services supports delivery.",
       "Built systems delivers results.",
+      "Managed teams create reliable workflows.",
+      "Built systems transform operations.",
+      "Managed teams create efficiently.",
+      "Built system transforms reliably.",
+      "Managed teams consistently deliver outcomes.",
+      "When I managed reporting, delivery outcomes.",
+      "Review of delivery outcomes.",
+      "Led migrations across teams efficiently.",
+      "Managed work to help teams scale improves delivery.",
     ]) {
       expect(source).not.toContain(fixture);
     }
@@ -860,6 +1056,9 @@ describe("premium cover-letter English prose module", () => {
       '"personnel"',
       '"transforms"',
       '"clients"',
+      '"create"',
+      '"transform"',
+      '"transforms"',
     ]) {
       expect(source).not.toContain(fixtureLexeme);
     }

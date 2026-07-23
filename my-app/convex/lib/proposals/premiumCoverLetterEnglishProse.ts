@@ -439,7 +439,8 @@ function isFiniteVerbForm(
   if (previous === "to") return false;
   if (
     FINITE_AUXILIARIES.has(token.canonical) ||
-    FINITE_LEXICAL_FORMS.has(token.canonical)
+    FINITE_LEXICAL_FORMS.has(token.canonical) ||
+    isFiniteBaseForm(token.canonical)
   ) {
     return true;
   }
@@ -476,19 +477,33 @@ function hasPossessiveEnding(canonical: string): boolean {
   return /(?:['’]s|['’])$/u.test(canonical);
 }
 
+function subjectAgreementTokens(
+  subjectTokens: readonly ProseToken[],
+): readonly ProseToken[] {
+  let endIndex = subjectTokens.length;
+  while (
+    endIndex > 0 &&
+    /ly$/u.test(subjectTokens[endIndex - 1]?.canonical ?? "")
+  ) {
+    endIndex -= 1;
+  }
+  return subjectTokens.slice(0, endIndex);
+}
+
 function inferSubjectAgreement(
   subjectTokens: readonly ProseToken[],
 ): SubjectAgreement {
-  const subjectHead = subjectTokens.at(-1);
+  const agreementTokens = subjectAgreementTokens(subjectTokens);
+  const subjectHead = agreementTokens.at(-1);
   if (!subjectHead || hasPossessiveEnding(subjectHead.canonical)) {
     return "unknown";
   }
-  const coordinatorIndex = subjectTokens.findIndex(
+  const coordinatorIndex = agreementTokens.findIndex(
     (token) => token.canonical === "and",
   );
   if (
     coordinatorIndex > 0 &&
-    coordinatorIndex < subjectTokens.length - 1
+    coordinatorIndex < agreementTokens.length - 1
   ) {
     return "base";
   }
@@ -514,7 +529,8 @@ function hasPlausibleSubjectTokens(args: {
   predicateCanonical: string;
 }): boolean {
   if (args.subjectTokens.length === 0) return false;
-  const subjectHead = args.subjectTokens.at(-1);
+  const agreementTokens = subjectAgreementTokens(args.subjectTokens);
+  const subjectHead = agreementTokens.at(-1);
   if (
     !subjectHead ||
     CLAUSE_COORDINATORS.has(subjectHead.canonical)
@@ -603,6 +619,7 @@ function findInfinitiveRanges(args: {
       continue;
     }
     let endIndex = args.tokens.length - 1;
+    let infinitivePredicateIndex = index + 1;
     for (
       let cursor = index + 2;
       cursor < args.tokens.length;
@@ -617,6 +634,45 @@ function findInfinitiveRanges(args: {
       if (FINITE_AUXILIARIES.has(token.canonical)) {
         endIndex = cursor - 1;
         break;
+      }
+      if (
+        cursor === index + 2 &&
+        INFINITIVE_AUXILIARIES.has(
+          args.tokens[index + 1]?.canonical ?? "",
+        )
+      ) {
+        infinitivePredicateIndex = cursor;
+        continue;
+      }
+      const subjectTokensBeforeInfinitive = args.tokens.slice(0, index);
+      if (
+        isFiniteVerbForm(args.tokens, cursor) &&
+        !CLAUSE_COORDINATORS.has(
+          args.tokens[cursor - 1]?.canonical ?? "",
+        )
+      ) {
+        const localSubjectTokens = args.tokens.slice(
+          infinitivePredicateIndex + 1,
+          cursor,
+        );
+        if (
+          hasPlausibleSubjectTokens({
+            subjectTokens: localSubjectTokens,
+            predicateCanonical: token.canonical,
+          })
+        ) {
+          infinitivePredicateIndex = cursor;
+          continue;
+        }
+        if (
+          hasPlausibleSubjectTokens({
+            subjectTokens: subjectTokensBeforeInfinitive,
+            predicateCanonical: token.canonical,
+          })
+        ) {
+          endIndex = cursor - 1;
+          break;
+        }
       }
       const previousToken = args.tokens[cursor - 1];
       const punctuationGap = previousToken
@@ -945,10 +1001,22 @@ function inferSubject(args: {
   return { span, reasonCode: "modified_subject" };
 }
 
-function hasPostCommaClauseShape(args: {
+function hasSubjectContent(
+  subjectTokens: readonly ProseToken[],
+): boolean {
+  return subjectTokens.some(
+    (token) =>
+      !SUBJECT_DETERMINERS.has(token.canonical) &&
+      !PREPOSITIONAL_FRAGMENT_STARTERS.has(token.canonical) &&
+      !RELATIVE_MARKERS.has(token.canonical) &&
+      !CLAUSE_COORDINATORS.has(token.canonical),
+  );
+}
+
+function postCommaClauseTokens(args: {
   tokens: readonly ProseToken[];
   segment: SentenceSegment;
-}): boolean {
+}): readonly ProseToken[] {
   let clauseStartIndex = -1;
   for (let index = 1; index < args.tokens.length; index += 1) {
     const previousToken = args.tokens[index - 1];
@@ -962,23 +1030,9 @@ function hasPostCommaClauseShape(args: {
         : "";
     if (punctuationGap.includes(",")) clauseStartIndex = index;
   }
-  if (clauseStartIndex < 0) return false;
-  const clauseTokens = args.tokens.slice(clauseStartIndex);
-  const subjectStarter = clauseTokens[0]?.canonical ?? "";
-  if (
-    clauseTokens.length < 2 ||
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(subjectStarter) ||
-    CLAUSE_COORDINATORS.has(subjectStarter)
-  ) {
-    return false;
-  }
-  if (
-    SUBJECT_DETERMINERS.has(subjectStarter) ||
-    subjectStarter === "that"
-  ) {
-    return clauseTokens.length >= 3;
-  }
-  return !RELATIVE_MARKERS.has(subjectStarter);
+  return clauseStartIndex < 0
+    ? []
+    : args.tokens.slice(clauseStartIndex);
 }
 
 function hasUnsupportedPresentClauseShape(args: {
@@ -987,8 +1041,19 @@ function hasUnsupportedPresentClauseShape(args: {
 }): boolean {
   for (let index = 2; index < args.tokens.length - 1; index += 1) {
     const candidate = args.tokens[index];
-    const subjectHead = args.tokens[index - 1];
     const following = args.tokens[index + 1];
+    const subjectTokens = args.tokens.slice(0, index);
+    const subjectHead = subjectAgreementTokens(subjectTokens).at(-1);
+    const subjectAgreement = inferSubjectAgreement(subjectTokens);
+    const candidateAgreement: SubjectAgreement =
+      candidate?.canonical.endsWith("s") &&
+      !/(?:ss|us|is)$/u.test(candidate.canonical)
+        ? "third_person_singular"
+        : "base";
+    const candidateHasPresentShape =
+      candidateAgreement === "third_person_singular" ||
+      (/^[a-z]+$/u.test(candidate?.canonical ?? "") &&
+        !/(?:ed|en|ing|ly|s)$/u.test(candidate?.canonical ?? ""));
     if (
       !candidate ||
       !subjectHead ||
@@ -996,15 +1061,46 @@ function hasUnsupportedPresentClauseShape(args: {
       tokenIndexIsInRanges(index, args.infinitiveRanges) ||
       isFiniteVerbForm(args.tokens, index) ||
       hasPossessiveEnding(subjectHead.canonical) ||
+      SUBJECT_DETERMINERS.has(candidate.canonical) ||
+      PREPOSITIONAL_FRAGMENT_STARTERS.has(candidate.canonical) ||
+      RELATIVE_MARKERS.has(candidate.canonical) ||
+      CLAUSE_COORDINATORS.has(candidate.canonical) ||
+      subjectTokens.some((token) =>
+        PREPOSITIONAL_FRAGMENT_STARTERS.has(token.canonical),
+      ) ||
       PREPOSITIONAL_FRAGMENT_STARTERS.has(following.canonical) ||
-      !candidate.canonical.endsWith("s") ||
-      /(?:ss|us|is)$/u.test(candidate.canonical)
+      !candidateHasPresentShape ||
+      (candidateAgreement === "base" &&
+        subjectAgreement !== candidateAgreement)
     ) {
       continue;
     }
     return true;
   }
   return false;
+}
+
+function hasPostCommaPredicateEvidence(args: {
+  tokens: readonly ProseToken[];
+  segment: SentenceSegment;
+}): boolean {
+  const clauseTokens = postCommaClauseTokens(args);
+  for (let index = 1; index < clauseTokens.length; index += 1) {
+    const subjectTokens = clauseTokens.slice(0, index);
+    const subjectHead = subjectAgreementTokens(subjectTokens).at(-1);
+    if (
+      isFiniteVerbForm(clauseTokens, index) &&
+      subjectHead &&
+      !hasPossessiveEnding(subjectHead.canonical) &&
+      hasSubjectContent(subjectTokens)
+    ) {
+      return true;
+    }
+  }
+  return hasUnsupportedPresentClauseShape({
+    tokens: clauseTokens,
+    infinitiveRanges: [],
+  });
 }
 
 function isVerbLedFragmentCategory(args: {
@@ -1033,7 +1129,7 @@ function isVerbLedFragmentCategory(args: {
   }
   if (args.mainFinitePredicateIndex !== null) return false;
   if (
-    hasPostCommaClauseShape({
+    hasPostCommaPredicateEvidence({
       tokens: args.tokens,
       segment: args.segment,
     })
@@ -1133,10 +1229,14 @@ function analyzeSentence(args: {
       segment: args.segment,
     });
   const firstToken = tokens[0];
+  const secondToken = tokens[1];
   const isImperative =
     firstToken !== undefined &&
     IMPERATIVE_VERBS.has(firstToken.canonical) &&
-    !SUBJECT_PRONOUNS.has(firstToken.canonical);
+    !SUBJECT_PRONOUNS.has(firstToken.canonical) &&
+    !PREPOSITIONAL_FRAGMENT_STARTERS.has(
+      secondToken?.canonical ?? "",
+    );
   const mainFinitePredicateIndex = isImperative
     ? 0
       : findMainFinitePredicateIndex({
@@ -1149,7 +1249,7 @@ function analyzeSentence(args: {
   const isIncompleteFrontedSubordinate =
     frontedSubordinateRange !== null &&
     mainFinitePredicateIndex === null &&
-    !hasPostCommaClauseShape({
+    !hasPostCommaPredicateEvidence({
       tokens,
       segment: args.segment,
     });
