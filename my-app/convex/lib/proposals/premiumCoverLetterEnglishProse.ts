@@ -447,7 +447,7 @@ function isFiniteVerbForm(
   ) {
     return true;
   }
-  if (index === 0 || !/(?:ed|en)$/u.test(token.canonical)) return false;
+  if (index === 0 || !/ed$/u.test(token.canonical)) return false;
   return (
     !SUBJECT_DETERMINERS.has(previous) &&
     !PREPOSITIONAL_FRAGMENT_STARTERS.has(previous)
@@ -743,17 +743,10 @@ function tokenIndexIsInRanges(
   );
 }
 
-function findFrontedFiniteSubordinateRange(args: {
+function findFrontedCommaRange(args: {
   tokens: readonly ProseToken[];
   segment: SentenceSegment;
 }): TokenRange | null {
-  if (
-    !INFINITIVE_BOUNDARIES.has(
-      args.tokens[0]?.canonical ?? "",
-    )
-  ) {
-    return null;
-  }
   let endIndex = -1;
   for (let index = 0; index < args.tokens.length - 1; index += 1) {
     const token = args.tokens[index];
@@ -770,8 +763,27 @@ function findFrontedFiniteSubordinateRange(args: {
       break;
     }
   }
-  if (endIndex < 2) return null;
-  for (let predicateIndex = 2; predicateIndex <= endIndex; predicateIndex += 1) {
+  return endIndex < 1 ? null : { startIndex: 0, endIndex };
+}
+
+function findFrontedFiniteSubordinateRange(args: {
+  tokens: readonly ProseToken[];
+  segment: SentenceSegment;
+}): TokenRange | null {
+  if (
+    !INFINITIVE_BOUNDARIES.has(
+      args.tokens[0]?.canonical ?? "",
+    )
+  ) {
+    return null;
+  }
+  const commaRange = findFrontedCommaRange(args);
+  if (!commaRange || commaRange.endIndex < 2) return null;
+  for (
+    let predicateIndex = 2;
+    predicateIndex <= commaRange.endIndex;
+    predicateIndex += 1
+  ) {
     if (!isFiniteVerbForm(args.tokens, predicateIndex)) continue;
     if (
       hasPlausibleSubjectTokens({
@@ -780,7 +792,7 @@ function findFrontedFiniteSubordinateRange(args: {
           args.tokens[predicateIndex]?.canonical ?? "",
       })
     ) {
-      return { startIndex: 0, endIndex };
+      return commaRange;
     }
   }
   return null;
@@ -812,14 +824,47 @@ function startsWithSubordinateMarker(
   return INFINITIVE_BOUNDARIES.has(tokens[0]?.canonical ?? "");
 }
 
-function isUnboundedLeadingPrepositionalFragment(args: {
+function findExplicitSubjectPronounIndex(args: {
+  tokens: readonly ProseToken[];
+  predicateIndex: number;
+}): number {
+  return args.tokens.findIndex(
+    (token, index) =>
+      index > 0 &&
+      index < args.predicateIndex &&
+      SUBJECT_PRONOUNS.has(token.canonical),
+  );
+}
+
+function isCertainLeadingPrepositionalPseudoSubject(args: {
   tokens: readonly ProseToken[];
   segment: SentenceSegment;
 }): boolean {
-  return (
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(
+  if (
+    !PREPOSITIONAL_FRAGMENT_STARTERS.has(
       args.tokens[0]?.canonical ?? "",
-    ) && !args.segment.text.includes(",")
+    ) ||
+    args.segment.text.includes(",")
+  ) {
+    return false;
+  }
+  const predicateIndex = args.tokens.findIndex((_, index) =>
+    isFiniteVerbForm(args.tokens, index),
+  );
+  if (
+    predicateIndex < 2 ||
+    findExplicitSubjectPronounIndex({
+      tokens: args.tokens,
+      predicateIndex,
+    }) >= 0
+  ) {
+    return false;
+  }
+  return (
+    predicateIndex <= 3 &&
+    args.tokens
+      .slice(1, predicateIndex)
+      .some((token) => SUBJECT_DETERMINERS.has(token.canonical))
   );
 }
 
@@ -965,7 +1010,20 @@ function subjectStartIndex(args: {
     ",",
     predicateLocalStart,
   );
-  if (commaIndex < 0) return 0;
+  if (commaIndex < 0) {
+    if (
+      PREPOSITIONAL_FRAGMENT_STARTERS.has(
+        args.tokens[0]?.canonical ?? "",
+      )
+    ) {
+      const explicitSubjectIndex = findExplicitSubjectPronounIndex({
+        tokens: args.tokens,
+        predicateIndex: args.predicateIndex,
+      });
+      if (explicitSubjectIndex >= 0) return explicitSubjectIndex;
+    }
+    return 0;
+  }
   const boundary = args.segment.start + commaIndex;
   const firstTokenAfterComma = args.tokens.findIndex(
     (token, index) =>
@@ -992,13 +1050,17 @@ function looksLikeReducedParticipleContinuation(args: {
     args.subjectStartIndex === 0 &&
     VERB_LED_PARTICIPLES.has(subjectTokens[0]?.canonical ?? "");
   const predicateIsParticiple = /(?:ed|en)$/u.test(predicateCanonical);
+  const hasExplicitVerbObject =
+    SUBJECT_DETERMINERS.has(
+      args.tokens[args.subjectStartIndex + 1]?.canonical ?? "",
+    ) &&
+    args.predicateIndex > args.subjectStartIndex + 2;
   return (
     startsWithVerbLedParticiple &&
     predicateIsParticiple &&
     (args.predicateIndex === args.subjectStartIndex + 1 ||
-      (subjectTokens.some((token) =>
-        SUBJECT_DETERMINERS.has(token.canonical),
-      ) &&
+      followingCanonical === "by" ||
+      (hasExplicitVerbObject &&
         PREPOSITIONAL_FRAGMENT_STARTERS.has(followingCanonical)))
   );
 }
@@ -1120,6 +1182,7 @@ function hasUnsupportedPresentClauseShape(args: {
   ) {
     const candidate = args.tokens[index];
     const following = args.tokens[index + 1];
+    const afterFollowing = args.tokens[index + 2];
     const subjectTokens = args.tokens.slice(0, index);
     const subjectHead = subjectAgreementTokens(subjectTokens).at(-1);
     const subjectAgreement = inferSubjectAgreement(subjectTokens);
@@ -1147,10 +1210,21 @@ function hasUnsupportedPresentClauseShape(args: {
       subjectTokens.some((token) =>
         PREPOSITIONAL_FRAGMENT_STARTERS.has(token.canonical),
       ) ||
-      PREPOSITIONAL_FRAGMENT_STARTERS.has(following.canonical) ||
-      !candidateHasPresentShape ||
-      (candidateAgreement === "base" &&
-        subjectAgreement === "third_person_singular")
+      (VERB_LED_PARTICIPLES.has(
+        args.tokens[0]?.canonical ?? "",
+      ) &&
+        subjectTokens
+          .slice(1)
+          .some((token) => token.canonical.includes("-")) &&
+        PREPOSITIONAL_FRAGMENT_STARTERS.has(following.canonical)) ||
+      (VERB_LED_PARTICIPLES.has(
+        args.tokens[0]?.canonical ?? "",
+      ) &&
+        /(?:ed|en)$/u.test(following.canonical) &&
+        PREPOSITIONAL_FRAGMENT_STARTERS.has(
+          afterFollowing?.canonical ?? "",
+        )) ||
+      !candidateHasPresentShape
     ) {
       continue;
     }
@@ -1233,6 +1307,17 @@ function isVerbLedFragmentCategory(args: {
 
 type SemicolonClauseValidation = "valid" | "invalid" | "unknown";
 
+function isCertainPrepositionalParticipleFragment(
+  tokens: readonly ProseToken[],
+): boolean {
+  return (
+    /(?:ed|en)$/u.test(tokens[0]?.canonical ?? "") &&
+    PREPOSITIONAL_FRAGMENT_STARTERS.has(
+      tokens[1]?.canonical ?? "",
+    )
+  );
+}
+
 function validateSemicolonClauses(
   segment: SentenceSegment,
 ): SemicolonClauseValidation {
@@ -1266,6 +1351,10 @@ function validateSemicolonClauses(
         tokens,
         segment: clause,
       });
+    const frontedCommaRange = findFrontedCommaRange({
+      tokens,
+      segment: clause,
+    });
     const imperativePredicateIndex = findImperativePredicateIndex({
       tokens,
       frontedSubordinateRange,
@@ -1279,19 +1368,34 @@ function validateSemicolonClauses(
     });
     const isStandaloneSubordinate =
       startsWithSubordinateMarker(tokens) &&
+      frontedCommaRange === null;
+    const hasUnrecognizedFrontedSubordinate =
+      startsWithSubordinateMarker(tokens) &&
+      frontedCommaRange !== null &&
       frontedSubordinateRange === null;
     const isPrepositionalFragment =
-      isUnboundedLeadingPrepositionalFragment({
+      isCertainLeadingPrepositionalPseudoSubject({
         tokens,
         segment: clause,
       });
     if (isStandaloneSubordinate || isPrepositionalFragment) {
       return "invalid";
     }
+    if (hasUnrecognizedFrontedSubordinate) {
+      validation = "unknown";
+      localOffset += surface.length + 1;
+      continue;
+    }
     if (
       imperativePredicateIndex === null &&
       mainFinitePredicateIndex === null
     ) {
+      const hasUnsupportedPredicate =
+        hasUnsupportedPresentClauseShape({
+          tokens,
+          infinitiveRanges,
+          startIndex: 1,
+        });
       if (
         isVerbLedFragmentCategory({
           tokens,
@@ -1299,11 +1403,11 @@ function validateSemicolonClauses(
           mainFinitePredicateIndex,
           segment: clause,
         }) ||
-        !hasUnsupportedPresentClauseShape({
-          tokens,
-          infinitiveRanges,
-          startIndex: 1,
-        })
+        isCertainPrepositionalParticipleFragment(tokens) ||
+        (SUBJECT_DETERMINERS.has(
+          tokens[0]?.canonical ?? "",
+        ) &&
+          !hasUnsupportedPredicate)
       ) {
         return "invalid";
       }
@@ -1339,6 +1443,10 @@ function analyzeSentence(args: {
       tokens,
       segment: args.segment,
     });
+  const frontedCommaRange = findFrontedCommaRange({
+    tokens,
+    segment: args.segment,
+  });
   const imperativePredicateIndex = findImperativePredicateIndex({
     tokens,
     frontedSubordinateRange,
@@ -1362,9 +1470,13 @@ function analyzeSentence(args: {
     });
   const isStandaloneSubordinate =
     startsWithSubordinateMarker(tokens) &&
+    frontedCommaRange === null;
+  const hasUnrecognizedFrontedSubordinate =
+    startsWithSubordinateMarker(tokens) &&
+    frontedCommaRange !== null &&
     frontedSubordinateRange === null;
   const isPrepositionalSubjectFragment =
-    isUnboundedLeadingPrepositionalFragment({
+    isCertainLeadingPrepositionalPseudoSubject({
       tokens,
       segment: args.segment,
     });
@@ -1418,6 +1530,7 @@ function analyzeSentence(args: {
 
   if (
     mainFinitePredicateIndex === null ||
+    hasUnrecognizedFrontedSubordinate ||
     semicolonClauseValidation === "unknown"
   ) {
     return {

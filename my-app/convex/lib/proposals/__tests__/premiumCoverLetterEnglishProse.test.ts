@@ -169,6 +169,40 @@ describe("premium cover-letter English prose module", () => {
   });
 
   it.each([
+    "Review the data; update the records.",
+    "Submit the report; archive the evidence.",
+  ])("keeps an unlisted semicolon imperative conservative: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "UNKNOWN",
+        confidence: "low",
+        sentenceForm: "unknown",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
+  it("keeps a determiner-led nominal semicolon fragment invalid", () => {
+    expect(analyze("Review the data; The records.")).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "semicolon_clause_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it.each([
     "Managed teams create reliable workflows.",
     "Built systems transform operations.",
   ])(
@@ -196,6 +230,44 @@ describe("premium cover-letter English prose module", () => {
         expect.objectContaining({
           classification: "UNKNOWN",
           confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "Managed services rarely fail under pressure.",
+    "Built systems often falter under pressure.",
+  ])(
+    "keeps an adverb-separated unlisted predicate conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          sentenceForm: "unknown",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "Built on research, my career took off.",
+    "Supported by evidence, the plan went forward.",
+  ])(
+    "keeps an unlisted irregular past predicate after a fronted clause conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          sentenceForm: "unknown",
           subjectSpan: null,
           finitePredicateSpan: null,
           reasonCodes: ["ambiguous_clause_structure"],
@@ -508,6 +580,41 @@ describe("premium cover-letter English prose module", () => {
     "If systems work reliably.",
   ])("rejects a standalone leading finite subordinate: %s", (text) => {
     expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "standalone_subordinate_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it.each([
+    "When I spoke with clients, I improved delivery.",
+    "When I met with clients, I improved delivery.",
+  ])(
+    "keeps an unrecognized fronted subordinate predicate conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          sentenceForm: "unknown",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it("keeps the same unrecognized subordinate invalid without a main-clause boundary", () => {
+    expect(analyze("When I spoke with clients.")).toEqual([
       expect.objectContaining({
         classification: "INVALID",
         confidence: "high",
@@ -1091,6 +1198,49 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it.each([
+    {
+      text: "In my role I managed client reporting.",
+      subjectSpan: { start: 11, end: 12 },
+      finitePredicateSpan: { start: 13, end: 20 },
+    },
+    {
+      text: "With clear goals I delivered results.",
+      subjectSpan: { start: 17, end: 18 },
+      finitePredicateSpan: { start: 19, end: 28 },
+    },
+  ])(
+    "finds an explicit subject after an unpunctuated introductory prepositional phrase: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "declarative",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining([
+            "finite_predicate",
+            "simple_subject",
+          ]),
+        }),
+      ]);
+    },
+  );
+
+  it("keeps an unpunctuated introductory prepositional phrase conservative without a clear subject boundary", () => {
+    expect(analyze("In my role teams delivered results.")).toEqual([
+      expect.objectContaining({
+        classification: "UNKNOWN",
+        confidence: "low",
+        sentenceForm: "unknown",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
   it("preserves a bounded fronted prepositional modifier", () => {
     expect(
       analyze("With clear goals, a manager supports delivery."),
@@ -1108,6 +1258,85 @@ describe("premium cover-letter English prose module", () => {
       }),
     ]);
   });
+
+  it.each([
+    "Improved client reporting driven by data.",
+    "Managed service quality supported by evidence.",
+    "Led large-scale migrations across teams.",
+  ])("rejects a reduced participle after a multiword object: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["verb_led_fragment", "missing_finite_predicate"],
+      }),
+    ]);
+  });
+
+  it.each([
+    {
+      text: "Improved client reporting supported delivery.",
+      subjectSpan: { start: 0, end: 25 },
+      finitePredicateSpan: { start: 26, end: 35 },
+    },
+    {
+      text: "Managed service quality improved outcomes.",
+      subjectSpan: { start: 0, end: 23 },
+      finitePredicateSpan: { start: 24, end: 32 },
+    },
+  ])(
+    "preserves a genuine past predicate after a participial-homograph subject: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "declarative",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining(["finite_predicate"]),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    {
+      text: "Managed service quality improved with feedback.",
+      subjectSpan: { start: 0, end: 23 },
+      finitePredicateSpan: { start: 24, end: 32 },
+    },
+    {
+      text: "Improved systems collaborated with teams.",
+      subjectSpan: { start: 0, end: 16 },
+      finitePredicateSpan: { start: 17, end: 29 },
+    },
+    {
+      text: "Built systems partnered with clients.",
+      subjectSpan: { start: 0, end: 13 },
+      finitePredicateSpan: { start: 14, end: 23 },
+    },
+  ])(
+    "preserves a genuine past predicate before a prepositional complement: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "declarative",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining([
+            "finite_predicate",
+            "modified_subject",
+          ]),
+        }),
+      ]);
+    },
+  );
 
   it.each([
     { text: "Review reports promptly.", predicateEnd: 6 },
@@ -1245,6 +1474,10 @@ describe("premium cover-letter English prose module", () => {
       "Built systems transform operations.",
       "Managed teams create efficiently.",
       "Built system transforms reliably.",
+      "Managed services rarely fail under pressure.",
+      "Built systems often falter under pressure.",
+      "Built on research, my career took off.",
+      "Supported by evidence, the plan went forward.",
       "Managed teams consistently deliver outcomes.",
       "When I managed reporting, delivery outcomes.",
       "Review of delivery outcomes.",
@@ -1255,13 +1488,30 @@ describe("premium cover-letter English prose module", () => {
       "Teams deliver results; Because managers review outcomes.",
       "Teams deliver results; With a manager supports delivery.",
       "Teams deliver results; Managers create outcomes.",
+      "Review the data; update the records.",
+      "Submit the report; archive the evidence.",
+      "Review the data; The records.",
       "When you are ready, submit reports.",
       "When you are ready, support for delivery.",
       "Because teams deliver results.",
       "Teams work to improve delivery and managers review results.",
       "With a manager supports delivery.",
+      "In my role I managed client reporting.",
+      "With clear goals I delivered results.",
+      "In my role teams delivered results.",
       "Managed analytics supports delivery.",
       "Built economics support planning.",
+      "When I spoke with clients, I improved delivery.",
+      "When I met with clients, I improved delivery.",
+      "When I spoke with clients.",
+      "Improved client reporting driven by data.",
+      "Managed service quality supported by evidence.",
+      "Led large-scale migrations across teams.",
+      "Improved client reporting supported delivery.",
+      "Managed service quality improved outcomes.",
+      "Managed service quality improved with feedback.",
+      "Improved systems collaborated with teams.",
+      "Built systems partnered with clients.",
     ]) {
       expect(source).not.toContain(fixture);
     }
@@ -1279,6 +1529,15 @@ describe("premium cover-letter English prose module", () => {
       '"transforms"',
       '"analytics"',
       '"economics"',
+      '"spoke"',
+      '"met"',
+      '"fail"',
+      '"falter"',
+      '"took"',
+      '"went"',
+      '"update"',
+      '"archive"',
+      '"driven"',
     ]) {
       expect(source).not.toContain(fixtureLexeme);
     }
