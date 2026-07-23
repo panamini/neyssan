@@ -1755,4 +1755,92 @@ describe("premium cover-letter numeric evidence", () => {
       ).toBe(false);
     }
   });
+
+  it("canonicalizes source measurements independently of the output language", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        { id: "fact_projects_fr", source: "cv", text: "Géré 5 projets." },
+      ]),
+    });
+    const match = (visibleText: string) =>
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText,
+        section: "proofBlock",
+        factIds: ["fact_projects_fr"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: false,
+      }).unsupported;
+
+    expect(match("I managed 5 projects.")).toEqual([]);
+    expect(match("I managed 5 servers.")).not.toEqual([]);
+  });
+
+  it("emits one only for strong quantitative measurements", () => {
+    for (const visibleText of [
+      "One area where I can contribute is delivery.",
+      "One challenge is reliable handoffs.",
+      "One goal is clear communication.",
+    ]) {
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: projection({}),
+          visibleText,
+          section: "proofBlock",
+          factIds: [],
+          demandIds: [],
+          claimIds: [],
+        }).unsupported,
+      ).toEqual([]);
+    }
+    for (const visibleText of [
+      "I supported one client.",
+      "I led one team.",
+      "I completed a one-year program.",
+    ]) {
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: projection({}),
+          visibleText,
+          section: "proofBlock",
+          factIds: [],
+          demandIds: [],
+          claimIds: [],
+        }).unsupported,
+      ).not.toEqual([]);
+    }
+  });
+
+  it.each([
+    ["3 yrs", "3 years", "3 months"],
+    ["6 mos", "6 months", "6 weeks"],
+    ["4 wks", "4 weeks", "4 days"],
+    ["2 days", "2 days", "2 years"],
+  ])(
+    "normalizes duration abbreviation %s without changing units",
+    (sourceDuration, visibleDuration, wrongDuration) => {
+      const evidence = projection({
+        factGraph: factGraph([
+          {
+            id: "fact_abbreviated_duration",
+            source: "cv",
+            text: `Delivered for ${sourceDuration}.`,
+          },
+        ]),
+      });
+      const match = (visibleText: string) =>
+        matchPremiumCoverLetterNumericEvidence({
+          projection: evidence,
+          visibleText,
+          section: "proofBlock",
+          factIds: ["fact_abbreviated_duration"],
+          demandIds: [],
+          claimIds: [],
+        }).unsupported;
+
+      expect(match(`Delivered for ${visibleDuration}.`)).toEqual([]);
+      expect(match(`Delivered for ${wrongDuration}.`)).not.toEqual([]);
+    },
+  );
 });

@@ -1317,17 +1317,29 @@ function writtenNumericTokenOccurrences(
       end,
       percentage,
     });
+    const immediateMeasurementSurface =
+      value
+        .slice(end)
+        .match(/^\s*[-–—]?\s*([A-Za-z][A-Za-z-]*)/u)?.[1] ?? "";
+    const immediateMeasurement = immediateMeasurementSurface.toLowerCase();
+    if (
+      unsignedMetricValue === 1 &&
+      !percentage &&
+      !/^[A-Z]/u.test(immediateMeasurementSurface) &&
+      !DURATION_UNITS.has(canonicalMetricMeasurement(measurement)) &&
+      !DURATION_UNITS.has(canonicalMetricMeasurement(immediateMeasurement)) &&
+      !Array.from(TRANSLATED_METRIC_MEASUREMENT_ALIASES.values()).includes(
+        canonicalMetricMeasurement(measurement),
+      )
+    ) {
+      return [];
+    }
     const direction = percentageDirection({
       value,
       start: index,
       end,
       percentage,
     });
-    const immediateMeasurement =
-      value
-        .slice(end)
-        .match(/^\s*([A-Za-z][A-Za-z-]*)/u)?.[1]
-        .toLowerCase() ?? "";
     const currency = metricCurrency(immediateMeasurement);
     if (
       !percentage &&
@@ -1493,14 +1505,30 @@ function entityCoveringOccurrence(
 const DURATION_UNITS = new Set([
   "day",
   "days",
+  "d",
   "week",
   "weeks",
+  "wk",
+  "wks",
   "month",
   "months",
+  "mo",
+  "mos",
   "quarter",
   "quarters",
   "year",
   "years",
+  "yr",
+  "yrs",
+]);
+const ABBREVIATED_DURATION_UNITS = new Map([
+  ["d", "day"],
+  ["wk", "week"],
+  ["wks", "week"],
+  ["mo", "month"],
+  ["mos", "month"],
+  ["yr", "year"],
+  ["yrs", "year"],
 ]);
 const TRANSLATED_DURATION_UNITS = new Map([
   ["jour", "day"],
@@ -1651,11 +1679,14 @@ function durationUnitForOccurrence(
 ): string | undefined {
   const suffix = value.slice(occurrence.end, occurrence.end + 32);
   const unit =
-    suffix.match(/^\s*[-–—]?\s*([A-Za-z]+)/u)?.[1]?.toLocaleLowerCase(
+    suffix.match(/^\s*[-–—]?\s*([\p{L}]+)/u)?.[1]?.toLocaleLowerCase(
       "en-US",
     ) ?? "";
   if (!DURATION_UNITS.has(unit)) return undefined;
-  return unit.endsWith("s") ? unit.slice(0, -1) : unit;
+  return (
+    ABBREVIATED_DURATION_UNITS.get(unit) ??
+    (unit.endsWith("s") ? unit.slice(0, -1) : unit)
+  );
 }
 
 function translatedDurationUnitForOccurrence(
@@ -2088,6 +2119,15 @@ function sourceMatchesOccurrence(
     );
   }
   if (signedPercentageMatch) return true;
+  const translatedSourceMeasurement =
+    TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(source.measurement);
+  if (
+    !allowMeasurementTranslation &&
+    translatedSourceMeasurement &&
+    occurrence.measurement === translatedSourceMeasurement
+  ) {
+    return true;
+  }
   if (source.key === occurrence.key) return true;
   if (allowMeasurementTranslation) {
     const translatedMeasurement = translatedMetricMeasurementForOccurrence(
