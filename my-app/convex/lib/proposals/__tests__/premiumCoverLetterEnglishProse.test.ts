@@ -113,6 +113,62 @@ describe("premium cover-letter English prose module", () => {
   );
 
   it.each([
+    "Teams deliver results; The work.",
+    "Teams deliver results; Aligned for delivery.",
+    "Teams deliver results; Because managers review outcomes.",
+    "Teams deliver results; With a manager supports delivery.",
+  ])("rejects an incomplete semicolon-delimited clause: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "semicolon_clause_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it.each([
+    "Teams deliver results; Managers review outcomes.",
+    "Teams deliver results; Submit reports.",
+  ])("accepts complete semicolon-delimited independent clauses: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 0, end: 5 },
+        finitePredicateSpan: { start: 6, end: 13 },
+        reasonCodes: expect.arrayContaining(["finite_predicate"]),
+      }),
+    ]);
+  });
+
+  it("keeps an unsupported semicolon clause conservative", () => {
+    const text = "Teams deliver results; Managers create outcomes.";
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "UNKNOWN",
+        confidence: "low",
+        sentenceForm: "unknown",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
+  it.each([
     "Managed teams create reliable workflows.",
     "Built systems transform operations.",
   ])(
@@ -399,6 +455,67 @@ describe("premium cover-letter English prose module", () => {
         finitePredicateSpan: null,
         reasonCodes: [
           "fronted_subordinate_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it.each([
+    {
+      text: "When you are ready, submit reports.",
+      finitePredicateSpan: { start: 20, end: 26 },
+    },
+    {
+      text: "If teams are ready, deliver results promptly.",
+      finitePredicateSpan: { start: 20, end: 27 },
+    },
+  ])(
+    "identifies a post-subordinate imperative at the main-clause boundary: $text",
+    ({ text, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "imperative",
+          subjectSpan: null,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining(["imperative_form"]),
+        }),
+      ]);
+    },
+  );
+
+  it("preserves the noun-use guard after a fronted subordinate", () => {
+    expect(analyze("When you are ready, support for delivery.")).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "fronted_subordinate_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it.each([
+    "Because teams deliver results.",
+    "When teams deliver results.",
+    "If systems work reliably.",
+  ])("rejects a standalone leading finite subordinate: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "standalone_subordinate_fragment",
           "missing_finite_predicate",
         ],
       }),
@@ -752,6 +869,38 @@ describe("premium cover-letter English prose module", () => {
   );
 
   it.each([
+    {
+      text: "Managed analytics supports delivery.",
+      subjectKind: "mass 3sg",
+    },
+    {
+      text: "Managed analytics support delivery.",
+      subjectKind: "mass base",
+    },
+    {
+      text: "Built economics supports planning.",
+      subjectKind: "discipline 3sg",
+    },
+    {
+      text: "Built economics support planning.",
+      subjectKind: "discipline base",
+    },
+  ])(
+    "keeps an -ics subject number ambiguous for a $subjectKind predicate: $text",
+    ({ text }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
     "Built on research, people support delivery.",
     "Built on research, personnel support delivery.",
   ])(
@@ -795,6 +944,26 @@ describe("premium cover-letter English prose module", () => {
         subjectSpan: { start: 0, end: 5 },
         finitePredicateSpan: { start: 6, end: 10 },
         infinitiveSpans: [{ start: 11, end: 30 }],
+      }),
+    ]);
+  });
+
+  it("ends an infinitive before a coordinator introducing a finite clause", () => {
+    expect(
+      analyze(
+        "Teams work to improve delivery and managers review results.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 0, end: 5 },
+        finitePredicateSpan: { start: 6, end: 10 },
+        infinitiveSpans: [{ start: 11, end: 30 }],
+        reasonCodes: expect.arrayContaining([
+          "finite_predicate",
+          "bounded_infinitive",
+        ]),
       }),
     ]);
   });
@@ -899,6 +1068,43 @@ describe("premium cover-letter English prose module", () => {
         subjectSpan: null,
         finitePredicateSpan: null,
         reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
+  it.each([
+    "With a manager supports delivery.",
+    "For the team delivers results.",
+  ])("rejects a whole subject span beginning with a preposition: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        sentenceForm: "fragment",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "prepositional_subject_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it("preserves a bounded fronted prepositional modifier", () => {
+    expect(
+      analyze("With clear goals, a manager supports delivery."),
+    ).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        sentenceForm: "declarative",
+        subjectSpan: { start: 18, end: 27 },
+        finitePredicateSpan: { start: 28, end: 36 },
+        reasonCodes: expect.arrayContaining([
+          "finite_predicate",
+          "modified_subject",
+        ]),
       }),
     ]);
   });
@@ -1044,6 +1250,18 @@ describe("premium cover-letter English prose module", () => {
       "Review of delivery outcomes.",
       "Led migrations across teams efficiently.",
       "Managed work to help teams scale improves delivery.",
+      "Teams deliver results; The work.",
+      "Teams deliver results; Aligned for delivery.",
+      "Teams deliver results; Because managers review outcomes.",
+      "Teams deliver results; With a manager supports delivery.",
+      "Teams deliver results; Managers create outcomes.",
+      "When you are ready, submit reports.",
+      "When you are ready, support for delivery.",
+      "Because teams deliver results.",
+      "Teams work to improve delivery and managers review results.",
+      "With a manager supports delivery.",
+      "Managed analytics supports delivery.",
+      "Built economics support planning.",
     ]) {
       expect(source).not.toContain(fixture);
     }
@@ -1059,6 +1277,8 @@ describe("premium cover-letter English prose module", () => {
       '"create"',
       '"transform"',
       '"transforms"',
+      '"analytics"',
+      '"economics"',
     ]) {
       expect(source).not.toContain(fixtureLexeme);
     }
