@@ -209,6 +209,29 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it("uses clause structure to disambiguate a dotted initialism boundary", () => {
+    expect(
+      analyze("I served in the U.S. Army and improved reporting."),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I served in the U.S. Army and improved reporting.",
+        sentenceSpan: { start: 0, end: 49 },
+      }),
+    ]);
+    expect(
+      analyze("I served in the U.S. Tomorrow I improved reporting."),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I served in the U.S.",
+        sentenceSpan: { start: 0, end: 20 },
+      }),
+      expect.objectContaining({
+        text: "Tomorrow I improved reporting.",
+        sentenceSpan: { start: 21, end: 51 },
+      }),
+    ]);
+  });
+
   it("preserves Unicode offsets in subject and predicate spans", () => {
     expect(analyze("Élodie delivers results.")[0]).toEqual(
       expect.objectContaining({
@@ -253,5 +276,7 @@ describe("premium cover-letter English prose module", () => {
     expect(source).not.toContain(
       "Managed services to help teams scale are central",
     );
+    expect(source).not.toContain("Army");
+    expect(source).not.toContain("Tomorrow");
   });
 });

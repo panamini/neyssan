@@ -57,13 +57,32 @@ function isRelativeMarker(token: TaggedToken | undefined): boolean {
   );
 }
 function isProperNameInitialismContinuation(
-  nextWord: string, segmentPrefix: string, throughPeriod: string,
+  remaining: string,
+  segmentPrefix: string,
 ): boolean {
-  if (tagger.tagSentence(nextWord)[0]?.pos !== "NNP") return false;
-  return /^(?:\p{Lu}\.){2,}$/u.test(segmentPrefix) ||
-    /\b(?:at|for|from|to|with|joined|consulted)\s+(?:\p{Lu}\.){2,}$/u.test(
-      throughPeriod,
-    );
+  const candidate = remaining.match(
+    /^\s*[\s\S]*?[.!?]+(?:["'”’»)}\]]+)?(?=\s|$)/u,
+  )?.[0] ?? remaining;
+  const tokens = tagger.tagSentence(candidate).filter(
+    (token) => !PUNCTUATION_POS_PATTERN.test(token.pos),
+  );
+  if (tokens[0]?.pos !== "NNP") return false;
+  if (/^(?:\p{Lu}\.){2,}$/u.test(segmentPrefix)) return true;
+  const predicateIndex = tokens.findIndex(
+    (token, index) =>
+      index > 0 &&
+      (
+        FINITE_POS_PATTERN.test(token.pos) ||
+        INITIAL_PARTICIPLE_POS_PATTERN.test(token.pos)
+      ),
+  );
+  if (predicateIndex < 0) return true;
+  return (
+    tokens[1]?.pos === "CC" &&
+    !tokens
+      .slice(2, predicateIndex)
+      .some((token) => NOMINAL_POS_PATTERN.test(token.pos))
+  );
 }
 function hasCommaBetween(
   segment: SentenceSegment, previous: TaggedToken, marker: TaggedToken,
@@ -101,7 +120,8 @@ function isProtectedPeriod(value: string, periodIndex: number, segmentStart: num
     if (lowercaseStyled) return false;
     if (/^\s*[a-z]/u.test(remaining)) return true;
     return isProperNameInitialismContinuation(
-      nextWord, segmentPrefix, throughPeriod,
+      remaining,
+      segmentPrefix,
     );
   }
   return false;
