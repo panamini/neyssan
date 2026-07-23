@@ -295,6 +295,7 @@ describe("premium cover-letter English prose module", () => {
   it.each([
     "Built on user research, my work demonstrates customer focus.",
     "Supported by product data, our process clarifies decisions.",
+    "Managed services experience transforms operations.",
   ])(
     "keeps an unsupported present predicate after a fronted clause conservative: %s",
     (text) => {
@@ -309,6 +310,58 @@ describe("premium cover-letter English prose module", () => {
       ]);
     },
   );
+
+  it.each([
+    {
+      text: "When I managed reporting, delivery improves.",
+      subjectSpan: { start: 26, end: 34 },
+      finitePredicateSpan: { start: 35, end: 43 },
+    },
+    {
+      text: "While teams reviewed results, managers improve delivery.",
+      subjectSpan: { start: 30, end: 38 },
+      finitePredicateSpan: { start: 39, end: 46 },
+    },
+  ])(
+    "selects the post-comma main clause after a fronted finite subordinate: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining(["finite_predicate"]),
+        }),
+      ]);
+    },
+  );
+
+  it("rejects an incomplete main clause after a fronted finite subordinate", () => {
+    expect(analyze("When I managed reporting, delivery.")).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: [
+          "fronted_subordinate_fragment",
+          "missing_finite_predicate",
+        ],
+      }),
+    ]);
+  });
+
+  it("keeps a fronted participial clause distinct from a finite subordinate", () => {
+    expect(analyze("Built on research, delivery improved.")).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 19, end: 27 },
+        finitePredicateSpan: { start: 28, end: 36 },
+      }),
+    ]);
+  });
 
   it.each([
     {
@@ -332,6 +385,165 @@ describe("premium cover-letter English prose module", () => {
       ]);
     },
   );
+
+  it.each([
+    {
+      text: "Managed service supports delivery.",
+      subjectKind: "singular",
+      predicateKind: "3sg",
+      classification: "VALID",
+      subjectSpan: { start: 0, end: 15 },
+      finitePredicateSpan: { start: 16, end: 24 },
+    },
+    {
+      text: "Managed service support delivery.",
+      subjectKind: "singular",
+      predicateKind: "base",
+      classification: "INVALID",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed service transforms operations.",
+      subjectKind: "singular",
+      predicateKind: "unlisted",
+      classification: "UNKNOWN",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed services supports delivery.",
+      subjectKind: "plural",
+      predicateKind: "3sg",
+      classification: "INVALID",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed services support delivery.",
+      subjectKind: "plural",
+      predicateKind: "base",
+      classification: "VALID",
+      subjectSpan: { start: 0, end: 16 },
+      finitePredicateSpan: { start: 17, end: 24 },
+    },
+    {
+      text: "Managed services transforms operations.",
+      subjectKind: "plural",
+      predicateKind: "unlisted",
+      classification: "UNKNOWN",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed clients' supports delivery.",
+      subjectKind: "possessive",
+      predicateKind: "3sg",
+      classification: "INVALID",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed clients' support delivery.",
+      subjectKind: "possessive",
+      predicateKind: "base",
+      classification: "INVALID",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Managed clients' transforms operations.",
+      subjectKind: "possessive",
+      predicateKind: "unlisted",
+      classification: "INVALID",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+    {
+      text: "Built system delivers results.",
+      subjectKind: "singular",
+      predicateKind: "3sg",
+      classification: "VALID",
+      subjectSpan: { start: 0, end: 12 },
+      finitePredicateSpan: { start: 13, end: 21 },
+    },
+    {
+      text: "Built systems deliver results.",
+      subjectKind: "plural",
+      predicateKind: "base",
+      classification: "VALID",
+      subjectSpan: { start: 0, end: 13 },
+      finitePredicateSpan: { start: 14, end: 21 },
+    },
+    {
+      text: "Built systems delivers results.",
+      subjectKind: "plural",
+      predicateKind: "3sg",
+      classification: "INVALID",
+      subjectSpan: null,
+      finitePredicateSpan: null,
+    },
+  ])(
+    "crosses a $subjectKind participial-homograph subject with a $predicateKind predicate: $text",
+    ({
+      text,
+      classification,
+      subjectSpan,
+      finitePredicateSpan,
+    }) => {
+      const [result] = analyze(text);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          classification,
+          confidence: classification === "UNKNOWN" ? "low" : "high",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes:
+            classification === "VALID"
+              ? expect.arrayContaining(["finite_predicate"])
+              : classification === "INVALID"
+                ? expect.arrayContaining([
+                    "verb_led_fragment",
+                    "missing_finite_predicate",
+                  ])
+                : ["ambiguous_clause_structure"],
+        }),
+      );
+    },
+  );
+
+  it.each([
+    "Managed clients' support.",
+    "Managed clients’ support.",
+  ])("preserves a trailing possessive marker: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: expect.arrayContaining([
+          "verb_led_fragment",
+          "missing_finite_predicate",
+        ]),
+      }),
+    ]);
+  });
+
+  it.each([
+    "The clients' support improves delivery.",
+    "The clients’ support improves delivery.",
+  ])("preserves a complete noun phrase containing a possessive: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 0, end: 20 },
+        finitePredicateSpan: { start: 21, end: 29 },
+      }),
+    ]);
+  });
 
   it("keeps a reduced-participle verb-led fragment invalid", () => {
     expect(
@@ -630,6 +842,12 @@ describe("premium cover-letter English prose module", () => {
       "Managed established processes.",
       "Built on research, people support delivery.",
       "Built on research, personnel support delivery.",
+      "Managed services experience transforms operations.",
+      "When I managed reporting, delivery.",
+      "Managed clients' support.",
+      "Managed clients’ support.",
+      "Managed services supports delivery.",
+      "Built systems delivers results.",
     ]) {
       expect(source).not.toContain(fixture);
     }
@@ -640,6 +858,8 @@ describe("premium cover-letter English prose module", () => {
       '"established"',
       '"people"',
       '"personnel"',
+      '"transforms"',
+      '"clients"',
     ]) {
       expect(source).not.toContain(fixtureLexeme);
     }
