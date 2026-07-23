@@ -8,6 +8,7 @@ import type {
 import {
   buildPremiumCoverLetterNumericEvidenceProjection,
   matchPremiumCoverLetterNumericEvidence,
+  numericEvidenceNormalizedValues,
 } from "../premiumCoverLetterNumericEvidence";
 import { resolveTargetEmployerAuthorities } from "../premiumCoverLetterTargetEmployer";
 
@@ -305,6 +306,35 @@ describe("premium cover-letter numeric evidence", () => {
     );
   });
 
+  it("classifies bare CV year ranges once and matches a visible date paraphrase", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_role_dates",
+          source: "cv",
+          text: "Engineer — 2020–2024",
+        },
+      ]),
+    });
+
+    expect(
+      evidence.sources.filter((source) => source.factId === "fact_role_dates"),
+    ).toEqual([
+      expect.objectContaining({ role: "DATE", normalizedValue: "2020" }),
+      expect.objectContaining({ role: "DATE", normalizedValue: "2024" }),
+    ]);
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I worked as an engineer from 2020 to 2024.",
+        section: "proofBlock",
+        factIds: ["fact_role_dates"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
   it.each([
     ["7-Eleven Inc.", "7-Eleven offers reliable delivery."],
     ["99", "At 99, reporting supports delivery."],
@@ -443,6 +473,50 @@ describe("premium cover-letter numeric evidence", () => {
       requiredOwner: "CANDIDATE",
     });
     expect(employerMatch.unsupported.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["React 18 delivery.", "I delivered React 18 applications."],
+    ["Engineer from 2020 to 2024.", "I worked as an engineer from 2020 to 2024."],
+    ["Engineer — Level 3.", "I worked at Level 3."],
+  ])(
+    "requires candidate ownership for job-context numeric roles: %s",
+    (demandText, visibleText) => {
+      const jobDemandGraph: JobDemandGraphV1 = {
+        ...emptyDemandGraph,
+        demands: [
+          {
+            id: "demand_numeric_role",
+            text: demandText,
+            bucket: "key_requirement",
+            requiredness: "required",
+            tokens: ["delivery"],
+            mustNotBecomeCandidateClaim: true,
+          },
+        ],
+      };
+      const result = matchPremiumCoverLetterNumericEvidence({
+        projection: projection({ jobDemandGraph }),
+        visibleText,
+        section: "proofBlock",
+        factIds: [],
+        demandIds: ["demand_numeric_role"],
+        claimIds: [],
+      });
+
+      expect(result.matches).toEqual([]);
+      expect(result.unsupported).toContainEqual(
+        expect.objectContaining({
+          reasonCodes: expect.arrayContaining(["owner_mismatch"]),
+        }),
+      );
+    },
+  );
+
+  it("keeps duration units in repair comparison keys", () => {
+    expect(numericEvidenceNormalizedValues("Completed in three days.")).not.toEqual(
+      numericEvidenceNormalizedValues("Completed in three years."),
+    );
   });
 
   it("refuses claimIds as source provenance", () => {

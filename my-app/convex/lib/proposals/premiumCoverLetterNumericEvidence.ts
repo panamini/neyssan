@@ -1150,27 +1150,42 @@ function versionQualifierForOccurrence(
   return normalized;
 }
 
+function isCalendarYearOccurrence(occurrence: NumericOccurrence): boolean {
+  const numeric = Number(occurrence.metric.replace(/[^\d.-]/gu, ""));
+  return Number.isInteger(numeric) && numeric >= 1900 && numeric <= 2100;
+}
+
+function hasDateContextForOccurrence(
+  value: string,
+  occurrence: NumericOccurrence,
+): boolean {
+  if (!isCalendarYearOccurrence(occurrence)) return false;
+  const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
+  const suffix = value.slice(occurrence.end, occurrence.end + 32);
+  const surface = value.slice(occurrence.index, occurrence.end);
+  return (
+    /\b(?:in|since|during|from|until|through|to)\s*$/iu.test(prefix) ||
+    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
+      `${prefix} ${suffix}`,
+    ) ||
+    /\b(?:19|20|21)\d{2}\s*[-–—]\s*$/u.test(prefix) ||
+    /^\s*[-–—]\s*(?:19|20|21)\d{2}\b/u.test(suffix) ||
+    (/\b(?:19|20|21)\d{2}\s*$/u.test(prefix) &&
+      /^\s*[-–—]\s*(?:19|20|21)\d{2}\b/u.test(surface))
+  );
+}
+
 function explicitContextRoleForOccurrence(
   value: string,
   occurrence: NumericOccurrence,
 ): PremiumCoverLetterNumericEvidenceRole | undefined {
   if (durationUnitForOccurrence(value, occurrence)) return "DURATION";
   const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
-  const suffix = value.slice(occurrence.end, occurrence.end + 32);
   if (/\b(?:level|grade|tier)\s*[-–—:]?\s*$/iu.test(prefix)) {
     return "JOB_LEVEL";
   }
   if (versionQualifierForOccurrence(value, occurrence)) return "VERSION";
-  const numeric = Number(occurrence.metric.replace(/[^\d.-]/gu, ""));
-  if (
-    Number.isInteger(numeric) &&
-    numeric >= 1900 &&
-    numeric <= 2100 &&
-    (/\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
-      /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
-        `${prefix} ${suffix}`,
-      ))
-  ) {
+  if (hasDateContextForOccurrence(value, occurrence)) {
     return "DATE";
   }
   return undefined;
@@ -1201,16 +1216,7 @@ function classifyRole(args: {
   ) {
     return { role: "VERSION", reason: "version_context" };
   }
-  const numeric = Number(args.occurrence.metric.replace(/[^\d.-]/gu, ""));
-  if (
-    Number.isInteger(numeric) &&
-    numeric >= 1900 &&
-    numeric <= 2100 &&
-    (/\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
-      /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
-        `${prefix} ${suffix}`,
-      ))
-  ) {
+  if (hasDateContextForOccurrence(args.value, args.occurrence)) {
     return { role: "DATE", reason: "date_context" };
   }
   if (args.entityText) {
@@ -1389,13 +1395,13 @@ function sourceMatchesOccurrence(
   source: PremiumCoverLetterNumericEvidenceSource,
   occurrence: NumericOccurrence,
   visibleText: string,
+  allowMeasurementTranslation: boolean,
 ): boolean {
   if (source.baseKey !== occurrence.baseKey) return false;
   const prefix = visibleText.slice(
     Math.max(0, occurrence.index - 32),
     occurrence.index,
   );
-  const suffix = visibleText.slice(occurrence.end, occurrence.end + 32);
   if (source.role === "EMPLOYER") return true;
   if (source.role === "PROPER_NAME") {
     return Boolean(
@@ -1428,14 +1434,10 @@ function sourceMatchesOccurrence(
     );
   }
   if (source.role === "DATE") {
-    return (
-      /\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
-      /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
-        `${prefix} ${suffix}`,
-      )
-    );
+    return hasDateContextForOccurrence(visibleText, occurrence);
   }
   if (source.key === occurrence.key) return true;
+  if (allowMeasurementTranslation) return true;
   if (!source.measurement || !occurrence.measurement) return true;
   return false;
 }
@@ -1445,8 +1447,8 @@ function sourceIsAuthorizedForMatch(args: {
   requiredOwner?: PremiumCoverLetterNumericEvidenceOwner;
 }): boolean {
   if (args.requiredOwner) return args.source.owner === args.requiredOwner;
-  if (args.source.role !== "METRIC" && args.source.role !== "DURATION") {
-    return true;
+  if (args.source.role === "EMPLOYER") {
+    return args.source.owner === "TARGET_EMPLOYER";
   }
   return args.source.owner === "CANDIDATE";
 }
@@ -1459,6 +1461,7 @@ export function matchPremiumCoverLetterNumericEvidence(args: {
   demandIds: readonly string[];
   claimIds: readonly string[];
   requiredOwner?: PremiumCoverLetterNumericEvidenceOwner;
+  allowMeasurementTranslation?: boolean;
 }): PremiumCoverLetterNumericEvidenceMatchResult {
   const factIds = new Set(args.factIds);
   const demandIds = new Set(args.demandIds);
@@ -1477,7 +1480,12 @@ export function matchPremiumCoverLetterNumericEvidence(args: {
       }),
     );
     let matchingSources = availableSources.filter((source) =>
-      sourceMatchesOccurrence(source, occurrence, args.visibleText),
+      sourceMatchesOccurrence(
+        source,
+        occurrence,
+        args.visibleText,
+        args.allowMeasurementTranslation ?? false,
+      ),
     );
     if (
       matchingSources.length === 0 &&
@@ -1553,7 +1561,16 @@ export function matchPremiumCoverLetterNumericEvidence(args: {
 }
 
 export function numericEvidenceNormalizedValues(value: string): string[] {
-  return numericOccurrences(value).map((occurrence) => occurrence.normalizedValue);
+  return numericOccurrences(value).map((occurrence) => {
+    const role = explicitContextRoleForOccurrence(value, occurrence) ?? "METRIC";
+    const qualifier =
+      role === "DURATION"
+        ? durationUnitForOccurrence(value, occurrence)
+        : role === "VERSION"
+          ? versionQualifierForOccurrence(value, occurrence)
+          : undefined;
+    return [role, occurrence.baseKey, qualifier].filter(Boolean).join(":");
+  });
 }
 
 const FACT_GRAPH_PERCENTAGE_PATTERN =

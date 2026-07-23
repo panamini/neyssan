@@ -4543,7 +4543,6 @@ export function validatePremiumWriterOutputV1(args: {
       .map((fact) => fact.text)
       .join(" ");
     if (
-      args.claimPlan.language === "English" &&
       matchPremiumCoverLetterNumericEvidence({
         projection: numericEvidenceProjection,
         visibleText: compact,
@@ -4551,6 +4550,7 @@ export function validatePremiumWriterOutputV1(args: {
         factIds: part.factIds,
         demandIds: part.demandIds,
         claimIds: part.claimIds,
+        allowMeasurementTranslation: args.claimPlan.language !== "English",
       }).unsupported.length > 0
     ) {
       issues.push({
@@ -6138,7 +6138,6 @@ export function validatePremiumCoverLetterBodyParts(args: {
     }
     const numericProvenance = numericEvidenceContext.provenanceBySection[section];
     if (
-      args.brief.language === "English" &&
       numericProvenance &&
       matchPremiumCoverLetterNumericEvidence({
         projection: numericEvidenceContext.projection,
@@ -6147,6 +6146,7 @@ export function validatePremiumCoverLetterBodyParts(args: {
         factIds: numericProvenance.factIds,
         demandIds: numericProvenance.demandIds,
         claimIds: numericProvenance.claimIds,
+        allowMeasurementTranslation: args.brief.language !== "English",
       }).unsupported.length > 0
     ) {
       issues.push({ code: "unsupported_numeric_claim", repairable: false });
