@@ -1,43 +1,25 @@
+import winkPosTaggerFactory from "wink-pos-tagger";
+import type { WinkPosToken } from "wink-pos-tagger";
 import type { ClaimPlanSection } from "./premiumCoverLetter";
-
 export type PremiumCoverLetterEnglishProseClassification =
-  | "VALID"
-  | "INVALID"
-  | "UNKNOWN";
-
+  | "VALID" | "INVALID" | "UNKNOWN";
 export type PremiumCoverLetterEnglishProseConfidence =
-  | "high"
-  | "medium"
-  | "low";
-
+  | "high" | "medium" | "low";
 export type PremiumCoverLetterEnglishProseSentenceForm =
-  | "declarative"
-  | "imperative"
-  | "fragment"
-  | "unknown";
+  | "declarative" | "imperative" | "fragment" | "unknown";
 
 export type PremiumCoverLetterEnglishProseReasonCode =
-  | "ambiguous_clause_structure"
-  | "bounded_infinitive"
-  | "coordinated_subject"
-  | "finite_predicate"
-  | "fronted_subordinate_fragment"
-  | "imperative_form"
-  | "main_finite_predicate_after_infinitive"
-  | "missing_finite_predicate"
-  | "modified_subject"
-  | "prepositional_subject_fragment"
-  | "relative_clause"
-  | "semicolon_clause_fragment"
-  | "simple_subject"
+  | "ambiguous_clause_structure" | "bounded_infinitive"
+  | "coordinated_subject" | "finite_predicate"
+  | "fronted_subordinate_fragment" | "imperative_form"
+  | "main_finite_predicate_after_infinitive" | "missing_finite_predicate"
+  | "modified_subject" | "prepositional_subject_fragment"
+  | "relative_clause" | "semicolon_clause_fragment" | "simple_subject"
   | "standalone_subordinate_fragment"
   | "verb_led_fragment";
-
 export type PremiumCoverLetterEnglishProseSpan = Readonly<{
-  start: number;
-  end: number;
+  start: number; end: number;
 }>;
-
 export type PremiumCoverLetterEnglishProseAnalysis = Readonly<{
   section: ClaimPlanSection;
   text: string;
@@ -51,262 +33,24 @@ export type PremiumCoverLetterEnglishProseAnalysis = Readonly<{
   relativePredicateSpans: readonly PremiumCoverLetterEnglishProseSpan[];
   sentenceForm: PremiumCoverLetterEnglishProseSentenceForm;
 }>;
-
 type SentenceSegment = Readonly<{
-  text: string;
-  start: number;
-  end: number;
+  text: string; start: number; end: number;
 }>;
+type TaggedToken = WinkPosToken & Readonly<{ start: number; end: number }>;
+type TokenRange = Readonly<{ startIndex: number; endIndex: number }>;
+const tagger = winkPosTaggerFactory();
 
-type ProseToken = Readonly<{
-  surface: string;
-  canonical: string;
-  start: number;
-  end: number;
-}>;
+const ORGANIZATION_ABBREVIATION_PATTERN = /\b(?:Co|Corp|Inc|Ltd|LLC|PLC|GmbH)\.$/u;
+const DOTTED_INITIALISM_PATTERN = /(?:\b\p{Lu}\.){2,}$/u;
+const TITLE_ABBREVIATION_PATTERN = /\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|No|Fig)\.$/u;
+const CONTEXTUAL_ABBREVIATION_PATTERN = /\b(?:e\.g|i\.e|etc|vs|approx|dept)\.$/iu;
+const RELATIVE_MARKER_PATTERN = /^(?:that|which|who)$/iu;
+const FINITE_POS_PATTERN = /^(?:MD|VBD|VBP|VBZ)$/u;
+const NOMINAL_POS_PATTERN = /^(?:NN|NNS|NNP|NNPS|PRP)$/u;
+const INITIAL_PARTICIPLE_POS_PATTERN = /^(?:VBD|VBN)$/u;
+const PUNCTUATION_POS_PATTERN = /^(?:[,.!?;:]|-LRB-|-RRB-)$/u;
 
-type TokenRange = Readonly<{
-  startIndex: number;
-  endIndex: number;
-}>;
-
-type SubjectAgreement =
-  | "base"
-  | "third_person_singular"
-  | "unknown";
-
-const TITLE_PERIOD_ABBREVIATION_PATTERN =
-  /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
-const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
-  /\b(?:etc|vs|approx|dept|co|corp|inc|ltd|llc|plc|gmbh|e\.g|i\.e|u\.s|u\.k)\.$/iu;
-const DOTTED_INITIALISM_CONTINUATION_PATTERN = /\b(?:[A-Z]\.){2,}$/u;
-const DOTTED_INITIALISM_ENTITY_PREFIX_PATTERN =
-  /\b(?:at|for|from|to|with|joined|consulted)\s+(?:[A-Z]\.){2,}$/u;
-const LOWERCASE_STYLED_SENTENCE_STARTERS = new Set(["npm"]);
-
-const VERB_LED_PARTICIPLES = new Set([
-  "built",
-  "coordinated",
-  "created",
-  "documented",
-  "handled",
-  "improved",
-  "led",
-  "maintained",
-  "managed",
-  "reduced",
-  "reported",
-  "supported",
-  "tracked",
-  "worked",
-]);
-
-const FINITE_AUXILIARIES = new Set([
-  "am",
-  "are",
-  "can",
-  "could",
-  "did",
-  "do",
-  "does",
-  "had",
-  "has",
-  "have",
-  "is",
-  "may",
-  "might",
-  "must",
-  "shall",
-  "should",
-  "was",
-  "were",
-  "will",
-  "would",
-]);
-const INFINITIVE_AUXILIARIES = new Set(["be", "do", "have"]);
-
-const FINITE_LEXICAL_FORMS = new Set([
-  "built",
-  "coordinate",
-  "coordinated",
-  "coordinates",
-  "deliver",
-  "delivered",
-  "delivers",
-  "depend",
-  "depends",
-  "drive",
-  "drives",
-  "enable",
-  "enables",
-  "ensure",
-  "ensures",
-  "grew",
-  "help",
-  "helps",
-  "improve",
-  "improved",
-  "improves",
-  "keep",
-  "keeps",
-  "led",
-  "manage",
-  "managed",
-  "manages",
-  "matter",
-  "matters",
-  "remain",
-  "remains",
-  "review",
-  "reviewed",
-  "reviews",
-  "scale",
-  "scales",
-  "ship",
-  "shipped",
-  "ships",
-  "support",
-  "supported",
-  "supports",
-  "sustain",
-  "sustains",
-  "work",
-  "worked",
-  "works",
-  "adapts",
-  "emphasizes",
-  "foster",
-  "flourished",
-  "offer",
-  "strengthened",
-  "sustained",
-  "thrive",
-  "yield",
-]);
-
-const BASE_INFINITIVE_VERBS = new Set([
-  "build",
-  "coordinate",
-  "deliver",
-  "drive",
-  "enable",
-  "ensure",
-  "grow",
-  "help",
-  "improve",
-  "keep",
-  "make",
-  "manage",
-  "reduce",
-  "report",
-  "review",
-  "scale",
-  "ship",
-  "support",
-  "sustain",
-  "work",
-]);
-
-const ADDITIONAL_FINITE_BASE_FORMS = new Set([
-  "depend",
-  "foster",
-  "matter",
-  "offer",
-  "remain",
-  "thrive",
-  "yield",
-]);
-
-const IMPERATIVE_VERBS = new Set([
-  "apply",
-  "bring",
-  "consider",
-  "coordinate",
-  "deliver",
-  "ensure",
-  "keep",
-  "review",
-  "share",
-  "submit",
-  "support",
-]);
-
-const RELATIVE_MARKERS = new Set(["that", "which", "who"]);
-const CLAUSE_COORDINATORS = new Set(["and", "but", "or", "yet"]);
-const INFINITIVE_BOUNDARIES = new Set([
-  "although",
-  "because",
-  "if",
-  "unless",
-  "when",
-  "whereas",
-  "while",
-]);
-const SUBJECT_DETERMINERS = new Set([
-  "a",
-  "an",
-  "her",
-  "his",
-  "its",
-  "my",
-  "our",
-  "the",
-  "their",
-  "this",
-  "those",
-  "your",
-]);
-const SUBJECT_PRONOUNS = new Set([
-  "he",
-  "i",
-  "it",
-  "she",
-  "they",
-  "we",
-  "you",
-]);
-const UNPUNCTUATED_DEMONSTRATIVE_SUBJECTS = new Set([
-  "this",
-  "these",
-  "those",
-]);
-const OBJECT_CASE_PRONOUNS = new Set([
-  "her",
-  "him",
-  "me",
-  "them",
-  "us",
-]);
-const VERB_PARTICLES = new Set([
-  "away",
-  "back",
-  "down",
-  "in",
-  "off",
-  "on",
-  "out",
-  "over",
-  "through",
-  "up",
-]);
-const PREPOSITIONAL_FRAGMENT_STARTERS = new Set([
-  "across",
-  "at",
-  "by",
-  "for",
-  "from",
-  "in",
-  "into",
-  "of",
-  "on",
-  "over",
-  "through",
-  "to",
-  "under",
-  "with",
-]);
-
-function buildSentenceSegment(
+function buildSegment(
   value: string,
   start: number,
   end: number,
@@ -322,685 +66,143 @@ function buildSentenceSegment(
   };
 }
 
-function startsWithLowercaseStyledProperNoun(value: string): boolean {
-  const token =
-    value
-      .trimStart()
-      .match(/^[A-Za-z][A-Za-z0-9+#.-]*/u)?.[0] ?? "";
-  return (
-    /^[a-z]+[A-Z]/u.test(token) ||
-    LOWERCASE_STYLED_SENTENCE_STARTERS.has(token.toLowerCase())
+function isProtectedPeriod(value: string, periodIndex: number): boolean {
+  const throughPeriod = value.slice(0, periodIndex + 1);
+  const remaining = value.slice(periodIndex + 1);
+  const nextWord = remaining.match(/^\s*(\S+)/u)?.[1] ?? "";
+  const lowercaseStyled = /^(?:[a-z]+[A-Z][A-Za-z]*|npm)\b/u.test(
+    nextWord,
   );
-}
-
-function continuesContextualAbbreviation(args: {
-  textThroughPunctuation: string;
-  remainingText: string;
-}): boolean {
-  if (/\b(?:e\.g|i\.e)\.$/iu.test(args.textThroughPunctuation)) return true;
-  if (startsWithLowercaseStyledProperNoun(args.remainingText)) return false;
-  return (
-    /\b(?:u\.s|u\.k)\.$/iu.test(args.textThroughPunctuation) &&
-    /^\s*(?:(?:Bank|Bancorp|Airways|Airlines|Army|Navy|Department|Government|Steel)\b|[a-z]+\b)/u.test(
-      args.remainingText,
-    )
-  );
-}
-
-function continuesDottedInitialism(args: {
-  textThroughPunctuation: string;
-  remainingText: string;
-}): boolean {
-  if (
-    !DOTTED_INITIALISM_CONTINUATION_PATTERN.test(
-      args.textThroughPunctuation,
-    )
-  ) {
-    return false;
+  if (TITLE_ABBREVIATION_PATTERN.test(throughPeriod)) return true;
+  if (/\b(?:e\.g|i\.e)\.$/iu.test(throughPeriod)) return true;
+  if (CONTEXTUAL_ABBREVIATION_PATTERN.test(throughPeriod)) {
+    return !/^[\p{Lu}\p{N}"'“‘(]/u.test(nextWord);
   }
-  return (
-    (DOTTED_INITIALISM_ENTITY_PREFIX_PATTERN.test(
-      args.textThroughPunctuation,
-    ) &&
-      /^\s*[A-Z][A-Za-z]+\b/u.test(args.remainingText)) ||
-    /^\s*[A-Z][A-Za-z]+\s+[A-Z][A-Za-z]+\b/u.test(args.remainingText)
-  );
-}
-
-function isContextualPeriodSentenceBoundary(args: {
-  textThroughPunctuation: string;
-  remainingText: string;
-  nextCharacter: string;
-}): boolean {
-  if (continuesContextualAbbreviation(args)) return false;
-  return (
-    /[\p{Lu}\p{N}"'“‘(]/u.test(args.nextCharacter) ||
-    startsWithLowercaseStyledProperNoun(args.remainingText)
-  );
-}
-
-function isSentenceBoundary(args: {
-  value: string;
-  punctuationIndex: number;
-  punctuationSurface: string;
-}): boolean {
-  const end = args.punctuationIndex + args.punctuationSurface.length;
-  const nextCharacter = args.value.slice(end).match(/\S/u)?.[0];
-  if (!nextCharacter || /[!?]/u.test(args.punctuationSurface)) return true;
-  const punctuationLength =
-    args.punctuationSurface.match(/^[.!?]+/u)?.[0].length ?? 0;
-  const textThroughPunctuation = args.value.slice(
-    0,
-    args.punctuationIndex + punctuationLength,
-  );
-  if (TITLE_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return false;
+  if (ORGANIZATION_ABBREVIATION_PATTERN.test(throughPeriod)) {
+    return !lowercaseStyled;
   }
-  if (CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return isContextualPeriodSentenceBoundary({
-      textThroughPunctuation,
-      remainingText: args.value.slice(end),
-      nextCharacter,
-    });
+  if (DOTTED_INITIALISM_PATTERN.test(throughPeriod)) {
+    if (lowercaseStyled) return false;
+    if (/^\s*[a-z]/u.test(remaining)) return true;
+    return (
+      /\b(?:at|for|from|to|with|joined|consulted)\s+(?:\p{Lu}\.){2,}$/u.test(
+        throughPeriod,
+      ) &&
+      /^\s*\p{Lu}[\p{L}-]+\b/u.test(remaining)
+    );
   }
-  if (
-    continuesDottedInitialism({
-      textThroughPunctuation,
-      remainingText: args.value.slice(end),
-    })
-  ) {
-    return false;
-  }
-  return true;
+  return false;
 }
 
 function segmentSentences(value: string): SentenceSegment[] {
   const segments: SentenceSegment[] = [];
   let start = 0;
-  for (const match of value.matchAll(
-    /[.!?]+(?:["'”’»)\]}]+)?(?=\s|$)/gu,
-  )) {
-    const punctuationIndex = match.index ?? start;
+  for (const match of value.matchAll(/[.!?]+(?:["'”’»)}\]]+)?(?=\s|$)/gu)) {
+    const punctuationIndex = match.index ?? 0;
     if (
-      !isSentenceBoundary({
-        value,
-        punctuationIndex,
-        punctuationSurface: match[0],
-      })
-    )
+      match[0].startsWith(".") &&
+      isProtectedPeriod(value, punctuationIndex)
+    ) {
       continue;
+    }
     const end = punctuationIndex + match[0].length;
-    const segment = buildSentenceSegment(value, start, end);
+    const segment = buildSegment(value, start, end);
     if (segment) segments.push(segment);
     start = end;
   }
-  const trailing = buildSentenceSegment(value, start, value.length);
+  const trailing = buildSegment(value, start, value.length);
   if (trailing) segments.push(trailing);
   return segments;
 }
 
-function tokenize(segment: SentenceSegment): ProseToken[] {
-  const tokens: ProseToken[] = [];
-  for (const match of segment.text.matchAll(
-    /(?:Co|Corp|Inc|Ltd|LLC)\.|(?:[A-Za-z]\.){2,}|[A-Za-z]+(?:[-’'][A-Za-z]+)*(?:[’'])?/giu,
-  )) {
-    const localStart = match.index ?? 0;
-    const surface = match[0];
-    tokens.push({
-      surface,
-      canonical: surface.normalize("NFKC").toLowerCase(),
-      start: segment.start + localStart,
-      end: segment.start + localStart + surface.length,
+function tagSegment(segment: SentenceSegment): TaggedToken[] {
+  const tagged: TaggedToken[] = [];
+  let cursor = 0;
+  for (const token of tagger.tagSentence(segment.text)) {
+    const localStart = segment.text.indexOf(token.value, cursor);
+    if (localStart < 0) continue;
+    const start = segment.start + localStart;
+    tagged.push({
+      ...token,
+      start,
+      end: start + token.value.length,
     });
+    cursor = localStart + token.value.length;
   }
-  return tokens;
+  return tagged;
 }
 
-function isFiniteVerbForm(
-  tokens: readonly ProseToken[],
-  index: number,
-): boolean {
-  const token = tokens[index];
-  if (!token) return false;
-  const previous = tokens[index - 1]?.canonical ?? "";
-  if (previous === "to") return false;
-  if (
-    FINITE_AUXILIARIES.has(token.canonical) ||
-    FINITE_LEXICAL_FORMS.has(token.canonical) ||
-    isFiniteBaseForm(token.canonical)
-  ) {
-    return true;
-  }
-  if (index === 0 || !/ed$/u.test(token.canonical)) return false;
-  return (
-    !SUBJECT_DETERMINERS.has(previous) &&
-    !PREPOSITIONAL_FRAGMENT_STARTERS.has(previous)
-  );
+function contentTokens(tokens: readonly TaggedToken[]): TaggedToken[] {
+  return tokens.filter((token) => !PUNCTUATION_POS_PATTERN.test(token.pos));
 }
 
-function isInfinitiveHead(canonical: string): boolean {
-  return (
-    BASE_INFINITIVE_VERBS.has(canonical) ||
-    INFINITIVE_AUXILIARIES.has(canonical)
-  );
-}
-
-function isFiniteBaseForm(canonical: string): boolean {
-  return (
-    BASE_INFINITIVE_VERBS.has(canonical) ||
-    ADDITIONAL_FINITE_BASE_FORMS.has(canonical)
-  );
-}
-
-function isThirdPersonSingularFiniteForm(canonical: string): boolean {
-  return (
-    FINITE_LEXICAL_FORMS.has(canonical) &&
-    canonical.endsWith("s") &&
-    !/(?:ss|us|is)$/u.test(canonical)
-  );
-}
-
-function hasPossessiveEnding(canonical: string): boolean {
-  return /(?:['’]s|['’])$/u.test(canonical);
-}
-
-function subjectAgreementTokens(
-  subjectTokens: readonly ProseToken[],
-): readonly ProseToken[] {
-  let endIndex = subjectTokens.length;
-  while (
-    endIndex > 0 &&
-    /ly$/u.test(subjectTokens[endIndex - 1]?.canonical ?? "")
-  ) {
-    endIndex -= 1;
-  }
-  return subjectTokens.slice(0, endIndex);
-}
-
-function inferSubjectAgreement(
-  subjectTokens: readonly ProseToken[],
-): SubjectAgreement {
-  const agreementTokens = subjectAgreementTokens(subjectTokens);
-  const subjectHead = agreementTokens.at(-1);
-  if (!subjectHead || hasPossessiveEnding(subjectHead.canonical)) {
-    return "unknown";
-  }
-  const coordinatorIndex = agreementTokens.findIndex(
-    (token) => token.canonical === "and",
-  );
-  if (
-    coordinatorIndex > 0 &&
-    coordinatorIndex < agreementTokens.length - 1
-  ) {
-    return "base";
-  }
-  if (
-    ["i", "you", "we", "they"].includes(subjectHead.canonical)
-  ) {
-    return "base";
-  }
-  if (["he", "it", "she"].includes(subjectHead.canonical)) {
-    return "third_person_singular";
-  }
-  if (subjectHead.canonical === "this") {
-    return "third_person_singular";
-  }
-  if (["these", "those"].includes(subjectHead.canonical)) {
-    return "base";
-  }
-  const subjectDeterminers = agreementTokens
-    .slice(0, -1)
-    .map((token) => token.canonical);
-  if (
-    subjectDeterminers.some((canonical) =>
-      ["a", "an", "this"].includes(canonical),
-    )
-  ) {
-    return "third_person_singular";
-  }
-  if (
-    subjectDeterminers.some((canonical) => canonical === "those")
-  ) {
-    return "base";
-  }
-  if (/ics$/u.test(subjectHead.canonical)) return "unknown";
-  if (
-    subjectHead.canonical.endsWith("s") &&
-    !/(?:['’]s|ss|us|is)$/u.test(subjectHead.canonical)
-  ) {
-    return "base";
-  }
-  return "third_person_singular";
-}
-
-function hasPlausibleSubjectTokens(args: {
-  subjectTokens: readonly ProseToken[];
-  predicateCanonical: string;
-}): boolean {
-  if (args.subjectTokens.length === 0) return false;
-  if (
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(
-      args.subjectTokens[0]?.canonical ?? "",
-    )
-  ) {
-    return false;
-  }
-  const agreementTokens = subjectAgreementTokens(args.subjectTokens);
-  const subjectHead = agreementTokens.at(-1);
-  if (
-    !subjectHead ||
-    CLAUSE_COORDINATORS.has(subjectHead.canonical)
-  ) {
-    return false;
-  }
-  const contentTokens = args.subjectTokens.filter(
-    (token) =>
-      !SUBJECT_DETERMINERS.has(token.canonical) &&
-      !PREPOSITIONAL_FRAGMENT_STARTERS.has(token.canonical) &&
-      !RELATIVE_MARKERS.has(token.canonical) &&
-      !CLAUSE_COORDINATORS.has(token.canonical),
-  );
-  const isStandaloneDemonstrativeSubject =
-    args.subjectTokens.length === 1 &&
-    UNPUNCTUATED_DEMONSTRATIVE_SUBJECTS.has(
-      args.subjectTokens[0]?.canonical ?? "",
-    );
-  if (
-    contentTokens.length === 0 &&
-    !isStandaloneDemonstrativeSubject
-  ) {
-    return false;
-  }
-  if (hasPossessiveEnding(subjectHead.canonical)) return false;
-  const agreement = inferSubjectAgreement(args.subjectTokens);
-  if (isFiniteBaseForm(args.predicateCanonical)) {
-    return agreement === "base";
-  }
-  if (isThirdPersonSingularFiniteForm(args.predicateCanonical)) {
-    return agreement === "third_person_singular";
-  }
-  return true;
-}
-
-function hasPlausibleRelativeSubject(args: {
-  tokens: readonly ProseToken[];
-  markerIndex: number;
-  predicateIndex: number;
-}): boolean {
-  if (args.predicateIndex === args.markerIndex + 1) return true;
-  if (args.predicateIndex <= args.markerIndex + 1) return false;
-  return hasPlausibleSubjectTokens({
-    subjectTokens: args.tokens.slice(
-      args.markerIndex + 1,
-      args.predicateIndex,
-    ),
-    predicateCanonical:
-      args.tokens[args.predicateIndex]?.canonical ?? "",
-  });
-}
-
-function hasPlausibleClauseStartingAt(args: {
-  tokens: readonly ProseToken[];
-  startIndex: number;
-}): boolean {
-  const subjectStartIndex = CLAUSE_COORDINATORS.has(
-    args.tokens[args.startIndex]?.canonical ?? "",
-  )
-    ? args.startIndex + 1
-    : args.startIndex;
-  for (
-    let predicateIndex = subjectStartIndex + 1;
-    predicateIndex < args.tokens.length;
-    predicateIndex += 1
-  ) {
-    if (!isFiniteVerbForm(args.tokens, predicateIndex)) continue;
+function findInfinitiveEnd(
+  tokens: readonly TaggedToken[],
+  startIndex: number,
+): number {
+  const offset = tokens.slice(startIndex + 2).findIndex((token, offset) => {
+    const cursor = startIndex + 2 + offset;
+    if (token.pos === "MD" || token.pos === "CC") return true;
     if (
-      hasPlausibleSubjectTokens({
-        subjectTokens: args.tokens.slice(
-          subjectStartIndex,
-          predicateIndex,
-        ),
-        predicateCanonical:
-          args.tokens[predicateIndex]?.canonical ?? "",
-      })
+      token.pos === "IN" &&
+      NOMINAL_POS_PATTERN.test(tokens[cursor + 1]?.pos ?? "") &&
+      FINITE_POS_PATTERN.test(tokens[cursor + 2]?.pos ?? "")
     ) {
       return true;
     }
-  }
-  return false;
+    if (!FINITE_POS_PATTERN.test(token.pos)) return false;
+    if (cursor === tokens.length - 1) return false;
+    return !tokens
+      .slice(cursor + 1)
+      .some((candidate) => FINITE_POS_PATTERN.test(candidate.pos));
+  });
+  return offset < 0 ? tokens.length - 1 : startIndex + 1 + offset;
 }
-
-function findInfinitiveRanges(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): TokenRange[] {
+function findInfinitiveRanges(tokens: readonly TaggedToken[]): TokenRange[] {
   const ranges: TokenRange[] = [];
-  for (let index = 0; index < args.tokens.length - 1; index += 1) {
+  for (let index = 0; index < tokens.length - 1; index += 1) {
     if (
-      args.tokens[index]?.canonical !== "to" ||
-      !isInfinitiveHead(
-        args.tokens[index + 1]?.canonical ?? "",
-      )
+      tokens[index]?.pos !== "TO" ||
+      tokens[index + 1]?.pos !== "VB"
     ) {
       continue;
     }
-    let endIndex = args.tokens.length - 1;
-    let infinitivePredicateIndex = index + 1;
-    for (
-      let cursor = index + 2;
-      cursor < args.tokens.length;
-      cursor += 1
-    ) {
-      const token = args.tokens[cursor];
-      if (!token) continue;
-      if (INFINITIVE_BOUNDARIES.has(token.canonical)) {
-        endIndex = cursor - 1;
-        break;
-      }
-      if (
-        CLAUSE_COORDINATORS.has(token.canonical) &&
-        hasPlausibleClauseStartingAt({
-          tokens: args.tokens,
-          startIndex: cursor,
-        })
-      ) {
-        endIndex = cursor - 1;
-        break;
-      }
-      if (FINITE_AUXILIARIES.has(token.canonical)) {
-        endIndex = cursor - 1;
-        break;
-      }
-      if (
-        cursor === index + 2 &&
-        INFINITIVE_AUXILIARIES.has(
-          args.tokens[index + 1]?.canonical ?? "",
-        )
-      ) {
-        infinitivePredicateIndex = cursor;
-        continue;
-      }
-      const subjectTokensBeforeInfinitive = args.tokens.slice(0, index);
-      if (
-        isFiniteVerbForm(args.tokens, cursor) &&
-        !CLAUSE_COORDINATORS.has(
-          args.tokens[cursor - 1]?.canonical ?? "",
-        )
-      ) {
-        const localSubjectTokens = args.tokens.slice(
-          infinitivePredicateIndex + 1,
-          cursor,
-        );
-        if (
-          hasPlausibleSubjectTokens({
-            subjectTokens: localSubjectTokens,
-            predicateCanonical: token.canonical,
-          })
-        ) {
-          infinitivePredicateIndex = cursor;
-          continue;
-        }
-        if (
-          hasPlausibleSubjectTokens({
-            subjectTokens: subjectTokensBeforeInfinitive,
-            predicateCanonical: token.canonical,
-          })
-        ) {
-          endIndex = cursor - 1;
-          break;
-        }
-      }
-      const previousToken = args.tokens[cursor - 1];
-      const punctuationGap = previousToken
-        ? args.segment.text.slice(
-            previousToken.end - args.segment.start,
-            token.start - args.segment.start,
-          )
-        : "";
-      if (
-        punctuationGap.includes(",") &&
-        hasPlausibleClauseStartingAt({
-          tokens: args.tokens,
-          startIndex: cursor,
-        })
-      ) {
-        endIndex = cursor - 1;
-        break;
-      }
-    }
+    const endIndex = findInfinitiveEnd(tokens, index);
     ranges.push({ startIndex: index, endIndex });
     index = endIndex;
   }
   return ranges;
 }
 
-function tokenIndexIsInRanges(
-  index: number,
-  ranges: readonly TokenRange[],
-): boolean {
+function indexInRanges(index: number, ranges: readonly TokenRange[]): boolean {
   return ranges.some(
     (range) => index >= range.startIndex && index <= range.endIndex,
   );
 }
 
-function findExplicitSubjectIndex(args: {
-  tokens: readonly ProseToken[];
-  predicateIndex: number;
-  minimumIndex?: number;
-}): number {
-  let explicitSubjectIndex = -1;
-  for (
-    let index = args.minimumIndex ?? 1;
-    index < args.predicateIndex;
-    index += 1
-  ) {
-    const canonical = args.tokens[index]?.canonical ?? "";
-    if (
-      SUBJECT_PRONOUNS.has(canonical) ||
-      UNPUNCTUATED_DEMONSTRATIVE_SUBJECTS.has(canonical)
-    ) {
-      explicitSubjectIndex = index;
-    }
-  }
-  return explicitSubjectIndex;
-}
-
-function findFrontedCommaRange(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): TokenRange | null {
-  let endIndex = -1;
-  for (let index = 0; index < args.tokens.length - 1; index += 1) {
-    const token = args.tokens[index];
-    const nextToken = args.tokens[index + 1];
-    const punctuationGap =
-      token && nextToken
-        ? args.segment.text.slice(
-            token.end - args.segment.start,
-            nextToken.start - args.segment.start,
-          )
-        : "";
-    if (punctuationGap.includes(",")) {
-      endIndex = index;
-      break;
-    }
-  }
-  return endIndex < 1 ? null : { startIndex: 0, endIndex };
-}
-
-function findFrontedFiniteSubordinateRange(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): TokenRange | null {
-  if (
-    !INFINITIVE_BOUNDARIES.has(
-      args.tokens[0]?.canonical ?? "",
-    )
-  ) {
-    return null;
-  }
-  const commaRange = findFrontedCommaRange(args);
-  if (!commaRange) {
-    const explicitSubjectIndex = findExplicitSubjectIndex({
-      tokens: args.tokens,
-      predicateIndex: args.tokens.length,
-      minimumIndex: 2,
-    });
-    return explicitSubjectIndex >= 2 &&
-      explicitSubjectIndex < args.tokens.length - 1
-      ? { startIndex: 0, endIndex: explicitSubjectIndex - 1 }
-      : null;
-  }
-  if (commaRange.endIndex < 2) return null;
-  for (
-    let predicateIndex = 2;
-    predicateIndex <= commaRange.endIndex;
-    predicateIndex += 1
-  ) {
-    if (!isFiniteVerbForm(args.tokens, predicateIndex)) continue;
-    if (
-      hasPlausibleSubjectTokens({
-        subjectTokens: args.tokens.slice(1, predicateIndex),
-        predicateCanonical:
-          args.tokens[predicateIndex]?.canonical ?? "",
-      })
-    ) {
-      return commaRange;
-    }
-  }
-  return null;
-}
-
-function findImperativePredicateIndex(args: {
-  tokens: readonly ProseToken[];
-  frontedSubordinateRange: TokenRange | null;
-}): number | null {
-  const candidateIndex = args.frontedSubordinateRange
-    ? args.frontedSubordinateRange.endIndex + 1
-    : 0;
-  const candidate = args.tokens[candidateIndex];
-  const following = args.tokens[candidateIndex + 1];
-  if (
-    !candidate ||
-    !IMPERATIVE_VERBS.has(candidate.canonical) ||
-    SUBJECT_PRONOUNS.has(candidate.canonical) ||
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(following?.canonical ?? "")
-  ) {
-    return null;
-  }
-  return candidateIndex;
-}
-
-function startsWithSubordinateMarker(
-  tokens: readonly ProseToken[],
-): boolean {
-  return INFINITIVE_BOUNDARIES.has(tokens[0]?.canonical ?? "");
-}
-
-function isCertainLeadingPrepositionalPseudoSubject(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): boolean {
-  if (
-    !PREPOSITIONAL_FRAGMENT_STARTERS.has(
-      args.tokens[0]?.canonical ?? "",
-    ) ||
-    args.segment.text.includes(",")
-  ) {
-    return false;
-  }
-  const predicateIndex = args.tokens.findIndex((_, index) =>
-    isFiniteVerbForm(args.tokens, index),
-  );
-  if (
-    predicateIndex < 2 ||
-    findExplicitSubjectIndex({
-      tokens: args.tokens,
-      predicateIndex,
-    }) >= 0
-  ) {
-    return false;
-  }
-  const possibleNominalSubject = args.tokens[predicateIndex];
-  const followingPredicate = args.tokens[predicateIndex + 1];
-  if (
-    possibleNominalSubject &&
-    followingPredicate &&
-    isFiniteVerbForm(args.tokens, predicateIndex + 1) &&
-    hasPlausibleSubjectTokens({
-      subjectTokens: [possibleNominalSubject],
-      predicateCanonical: followingPredicate.canonical,
-    })
-  ) {
-    return false;
-  }
-  return (
-    predicateIndex <= 3 &&
-    args.tokens
-      .slice(1, predicateIndex)
-      .some((token) => SUBJECT_DETERMINERS.has(token.canonical))
-  );
-}
-
-function findRelativePredicateIndexes(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-  infinitiveRanges: readonly TokenRange[];
-  frontedSubordinateRange: TokenRange | null;
-}): number[] {
+function findRelativePredicateIndexes(
+  tokens: readonly TaggedToken[],
+  infinitiveRanges: readonly TokenRange[],
+): number[] {
   const indexes: number[] = [];
-  for (let index = 0; index < args.tokens.length; index += 1) {
-    const marker = args.tokens[index];
-    const previousToken = args.tokens[index - 1];
-    const precedingGap =
-      marker && previousToken
-        ? args.segment.text.slice(
-            previousToken.end - args.segment.start,
-            marker.start - args.segment.start,
-          )
-        : "";
+  for (let markerIndex = 1; markerIndex < tokens.length; markerIndex += 1) {
     if (
-      index === 0 ||
-      !RELATIVE_MARKERS.has(marker?.canonical ?? "") ||
-      (marker?.canonical === "that" &&
-        /[,;:—–]/u.test(precedingGap))
-    )
-      continue;
-    const candidateLimit =
-      args.frontedSubordinateRange &&
-      tokenIndexIsInRanges(index, [
-        args.frontedSubordinateRange,
-      ])
-        ? args.frontedSubordinateRange.endIndex + 1
-        : args.tokens.length;
-    for (
-      let candidateIndex = index + 1;
-      candidateIndex < candidateLimit;
-      candidateIndex += 1
+      !RELATIVE_MARKER_PATTERN.test(
+        tokens[markerIndex]?.normal ?? "",
+      )
     ) {
-      const previousToken = args.tokens[candidateIndex - 1];
-      const candidateToken = args.tokens[candidateIndex];
-      const punctuationGap =
-        previousToken && candidateToken
-          ? args.segment.text.slice(
-              previousToken.end - args.segment.start,
-              candidateToken.start - args.segment.start,
-            )
-          : "";
-      if (/[,;:—–]/u.test(punctuationGap)) break;
+      continue;
+    }
+    for (
+      let index = markerIndex + 1;
+      index < tokens.length;
+      index += 1
+    ) {
       if (
-        !tokenIndexIsInRanges(
-          candidateIndex,
-          args.infinitiveRanges,
-        ) &&
-        isFiniteVerbForm(args.tokens, candidateIndex) &&
-        hasPlausibleRelativeSubject({
-          tokens: args.tokens,
-          markerIndex: index,
-          predicateIndex: candidateIndex,
-        })
+        !indexInRanges(index, infinitiveRanges) &&
+        FINITE_POS_PATTERN.test(tokens[index]?.pos ?? "")
       ) {
-        indexes.push(candidateIndex);
+        indexes.push(index);
         break;
       }
     }
@@ -1008,33 +210,22 @@ function findRelativePredicateIndexes(args: {
   return indexes;
 }
 
-function findMainFinitePredicateIndex(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
+function findMainPredicateIndex(args: {
+  tokens: readonly TaggedToken[];
   infinitiveRanges: readonly TokenRange[];
   relativePredicateIndexes: readonly number[];
-  frontedSubordinateRange: TokenRange | null;
 }): number | null {
   for (let index = 0; index < args.tokens.length; index += 1) {
     const token = args.tokens[index];
-    if (!token || !isFiniteVerbForm(args.tokens, index)) continue;
     if (
-      args.frontedSubordinateRange &&
-      tokenIndexIsInRanges(index, [args.frontedSubordinateRange])
+      !token ||
+      !FINITE_POS_PATTERN.test(token.pos) ||
+      indexInRanges(index, args.infinitiveRanges) ||
+      args.relativePredicateIndexes.includes(index)
     ) {
       continue;
     }
-    if (tokenIndexIsInRanges(index, args.infinitiveRanges)) continue;
-    if (args.relativePredicateIndexes.includes(index)) continue;
-    if (index === 0 && VERB_LED_PARTICIPLES.has(token.canonical)) continue;
-    if (
-      !hasPlausibleMainSubject({
-        tokens: args.tokens,
-        segment: args.segment,
-        predicateIndex: index,
-        infinitiveRanges: args.infinitiveRanges,
-      })
-    ) {
+    if (index === 0 && INITIAL_PARTICIPLE_POS_PATTERN.test(token.pos)) {
       continue;
     }
     return index;
@@ -1042,8 +233,8 @@ function findMainFinitePredicateIndex(args: {
   return null;
 }
 
-function spanForTokenRange(
-  tokens: readonly ProseToken[],
+function spanForRange(
+  tokens: readonly TaggedToken[],
   range: TokenRange,
 ): PremiumCoverLetterEnglishProseSpan {
   return {
@@ -1053,770 +244,237 @@ function spanForTokenRange(
 }
 
 function subjectEndIndex(args: {
-  tokens: readonly ProseToken[];
-  subjectStartIndex: number;
+  tokens: readonly TaggedToken[];
   predicateIndex: number;
   infinitiveRanges: readonly TokenRange[];
+  relativePredicateIndexes: readonly number[];
 }): number {
   const relativeMarkerIndex = args.tokens.findIndex(
     (token, index) =>
-      index >= args.subjectStartIndex &&
-      RELATIVE_MARKERS.has(token.canonical),
+      index < args.predicateIndex &&
+      RELATIVE_MARKER_PATTERN.test(token.normal),
   );
-  if (
-    relativeMarkerIndex > args.subjectStartIndex &&
-    relativeMarkerIndex < args.predicateIndex
-  ) {
-    return relativeMarkerIndex - 1;
-  }
-  const firstInfinitive = args.infinitiveRanges.find(
-    (range) =>
-      range.startIndex > args.subjectStartIndex &&
-      range.startIndex < args.predicateIndex,
+  if (relativeMarkerIndex > 0) return relativeMarkerIndex - 1;
+  const infinitive = args.infinitiveRanges.find(
+    (range) => range.startIndex < args.predicateIndex,
   );
-  if (firstInfinitive) {
-    return firstInfinitive.startIndex - 1;
-  }
+  if (infinitive) return infinitive.startIndex - 1;
   return args.predicateIndex - 1;
 }
-
-function subjectStartIndex(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-  predicateIndex: number;
-}): number {
-  const predicate = args.tokens[args.predicateIndex];
-  if (!predicate) return 0;
-  const predicateLocalStart = predicate.start - args.segment.start;
-  const commaIndex = args.segment.text.lastIndexOf(
-    ",",
-    predicateLocalStart,
-  );
-  if (commaIndex < 0) {
-    if (
-      PREPOSITIONAL_FRAGMENT_STARTERS.has(
-        args.tokens[0]?.canonical ?? "",
-      ) ||
-      startsWithSubordinateMarker(args.tokens)
-    ) {
-      const explicitSubjectIndex = findExplicitSubjectIndex({
-        tokens: args.tokens,
-        predicateIndex: args.predicateIndex,
-      });
-      if (explicitSubjectIndex >= 0) return explicitSubjectIndex;
-      const possibleNominalSubjectIndex =
-        args.predicateIndex - 1;
-      const possibleNominalSubject =
-        args.tokens[possibleNominalSubjectIndex];
-      if (
-        possibleNominalSubjectIndex > 0 &&
-        possibleNominalSubject &&
-        isFiniteVerbForm(
-          args.tokens,
-          possibleNominalSubjectIndex,
-        ) &&
-        hasPlausibleSubjectTokens({
-          subjectTokens: [possibleNominalSubject],
-          predicateCanonical: predicate.canonical,
-        })
-      ) {
-        return possibleNominalSubjectIndex;
-      }
-    }
-    return 0;
+function subjectReason(subjectTokens: readonly TaggedToken[]):
+  "coordinated_subject" | "modified_subject" | "simple_subject" {
+  if (subjectTokens.some((token) => token.pos === "CC")) {
+    return "coordinated_subject";
   }
-  const boundary = args.segment.start + commaIndex;
-  const firstTokenAfterComma = args.tokens.findIndex(
-    (token, index) =>
-      index < args.predicateIndex && token.start > boundary,
-  );
-  return firstTokenAfterComma >= 0 ? firstTokenAfterComma : 0;
+  return subjectTokens.length === 1
+    ? "simple_subject"
+    : "modified_subject";
 }
-
-function looksLikeReducedParticipleContinuation(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-  subjectStartIndex: number;
-  subjectEndIndex: number;
-  predicateIndex: number;
-}): boolean {
-  const subjectTokens = args.tokens.slice(
-    args.subjectStartIndex,
-    args.subjectEndIndex + 1,
-  );
-  const predicateCanonical =
-    args.tokens[args.predicateIndex]?.canonical ?? "";
-  const followingCanonical =
-    args.tokens[args.predicateIndex + 1]?.canonical ?? "";
-  const followingToken = args.tokens[args.predicateIndex + 1];
-  const followingText = followingToken
-    ? args.segment.text.slice(
-        followingToken.end - args.segment.start,
-      )
-    : "";
-  const hasMeasuredByComplement =
-    followingCanonical === "by" &&
-    /^\s*[+-]?\d+(?:[.,]\d+)?\s*%?/u.test(followingText);
-  const startsWithVerbLedParticiple =
-    args.subjectStartIndex === 0 &&
-    VERB_LED_PARTICIPLES.has(subjectTokens[0]?.canonical ?? "");
-  const predicateIsParticiple = /(?:ed|en)$/u.test(predicateCanonical);
-  const hasExplicitVerbObject =
-    SUBJECT_DETERMINERS.has(
-      args.tokens[args.subjectStartIndex + 1]?.canonical ?? "",
-    ) &&
-    args.predicateIndex > args.subjectStartIndex + 2;
-  return (
-    startsWithVerbLedParticiple &&
-    predicateIsParticiple &&
-    (args.predicateIndex === args.subjectStartIndex + 1 ||
-      (followingCanonical === "by" &&
-        !hasMeasuredByComplement) ||
-      (hasExplicitVerbObject &&
-        PREPOSITIONAL_FRAGMENT_STARTERS.has(followingCanonical)))
-  );
-}
-
-function hasPlausibleMainSubject(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-  predicateIndex: number;
-  infinitiveRanges: readonly TokenRange[];
-}): boolean {
-  const startIndex = subjectStartIndex(args);
-  const endIndex = subjectEndIndex({
-    tokens: args.tokens,
-    subjectStartIndex: startIndex,
-    predicateIndex: args.predicateIndex,
-    infinitiveRanges: args.infinitiveRanges,
-  });
-  if (endIndex < startIndex) return false;
-  const predicateCanonical =
-    args.tokens[args.predicateIndex]?.canonical ?? "";
-  const subjectTokens = args.tokens.slice(startIndex, endIndex + 1);
-  return (
-    hasPlausibleSubjectTokens({
-      subjectTokens,
-      predicateCanonical,
-    }) &&
-    !looksLikeReducedParticipleContinuation({
-      tokens: args.tokens,
-      segment: args.segment,
-      subjectStartIndex: startIndex,
-      subjectEndIndex: endIndex,
-      predicateIndex: args.predicateIndex,
-    })
-  );
-}
-
-function inferSubject(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-  predicateIndex: number;
-  infinitiveRanges: readonly TokenRange[];
-}): Readonly<{
-  span: PremiumCoverLetterEnglishProseSpan | null;
-  reasonCode:
-    | "coordinated_subject"
-    | "modified_subject"
-    | "simple_subject"
-    | null;
-}> {
-  const startIndex = subjectStartIndex(args);
-  const endIndex = subjectEndIndex({
-    tokens: args.tokens,
-    subjectStartIndex: startIndex,
-    predicateIndex: args.predicateIndex,
-    infinitiveRanges: args.infinitiveRanges,
-  });
-  if (endIndex < startIndex) return { span: null, reasonCode: null };
-  const subjectTokens = args.tokens.slice(startIndex, endIndex + 1);
-  if (subjectTokens.length === 0) return { span: null, reasonCode: null };
-  const span = {
-    start: subjectTokens[0]?.start ?? 0,
-    end: subjectTokens.at(-1)?.end ?? 0,
+type AnalysisEvidence = Readonly<{
+  section: ClaimPlanSection; segment: SentenceSegment;
+  infinitiveSpans: readonly PremiumCoverLetterEnglishProseSpan[];
+  relativePredicateSpans: readonly PremiumCoverLetterEnglishProseSpan[];
+}>;
+function unknownAnalysis(args: AnalysisEvidence):
+  PremiumCoverLetterEnglishProseAnalysis {
+  return {
+    section: args.section,
+    text: args.segment.text,
+    sentenceSpan: { start: args.segment.start, end: args.segment.end },
+    classification: "UNKNOWN",
+    confidence: "low",
+    reasonCodes: ["ambiguous_clause_structure"],
+    subjectSpan: null,
+    finitePredicateSpan: null,
+    infinitiveSpans: args.infinitiveSpans,
+    relativePredicateSpans: args.relativePredicateSpans,
+    sentenceForm: "unknown",
   };
-  if (subjectTokens.some((token) => token.canonical === "and")) {
-    return { span, reasonCode: "coordinated_subject" };
-  }
-  if (
-    subjectTokens.length === 1 &&
-    (SUBJECT_PRONOUNS.has(subjectTokens[0]?.canonical ?? "") ||
-      UNPUNCTUATED_DEMONSTRATIVE_SUBJECTS.has(
-        subjectTokens[0]?.canonical ?? "",
-      ) ||
-      !SUBJECT_DETERMINERS.has(subjectTokens[0]?.canonical ?? ""))
-  ) {
-    return { span, reasonCode: "simple_subject" };
-  }
-  return { span, reasonCode: "modified_subject" };
 }
-
-function hasSubjectContent(
-  subjectTokens: readonly ProseToken[],
-): boolean {
-  return subjectTokens.some(
-    (token) =>
-      !SUBJECT_DETERMINERS.has(token.canonical) &&
-      !PREPOSITIONAL_FRAGMENT_STARTERS.has(token.canonical) &&
-      !RELATIVE_MARKERS.has(token.canonical) &&
-      !CLAUSE_COORDINATORS.has(token.canonical),
-  );
+function invalidAnalysis(
+  evidence: AnalysisEvidence,
+  reasonCodes: readonly PremiumCoverLetterEnglishProseReasonCode[],
+): PremiumCoverLetterEnglishProseAnalysis {
+  return {
+    ...unknownAnalysis(evidence),
+    classification: "INVALID",
+    confidence: "high",
+    reasonCodes,
+    sentenceForm: "fragment",
+  };
 }
-
-function postCommaClauseTokens(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): readonly ProseToken[] {
-  let clauseStartIndex = -1;
-  for (let index = 1; index < args.tokens.length; index += 1) {
-    const previousToken = args.tokens[index - 1];
-    const token = args.tokens[index];
-    const punctuationGap =
-      previousToken && token
-        ? args.segment.text.slice(
-            previousToken.end - args.segment.start,
-            token.start - args.segment.start,
-          )
-        : "";
-    if (punctuationGap.includes(",")) clauseStartIndex = index;
-  }
-  return clauseStartIndex < 0
-    ? []
-    : args.tokens.slice(clauseStartIndex);
-}
-
-function hasUnsupportedPresentClauseShape(args: {
-  tokens: readonly ProseToken[];
-  infinitiveRanges: readonly TokenRange[];
-  startIndex?: number;
-  includeTerminalCandidate?: boolean;
-}): boolean {
-  for (
-    let index = args.startIndex ?? 2;
-    index <
-    args.tokens.length -
-      (args.includeTerminalCandidate ? 0 : 1);
-    index += 1
-  ) {
-    const candidate = args.tokens[index];
-    const following = args.tokens[index + 1];
-    const followingCanonical = following?.canonical ?? "";
-    const afterFollowing = args.tokens[index + 2];
-    const subjectTokens = args.tokens.slice(0, index);
-    const subjectHead = subjectAgreementTokens(subjectTokens).at(-1);
-    const subjectAgreement = inferSubjectAgreement(subjectTokens);
-    const hasAmbiguousIrregularNumberMorphology =
-      /(?:ren|men|ple)$/u.test(subjectHead?.canonical ?? "") &&
-      isFiniteBaseForm(candidate?.canonical ?? "");
-    const candidateAgreement: SubjectAgreement =
-      candidate?.canonical.endsWith("s") &&
-      !/(?:ss|us|is)$/u.test(candidate.canonical)
-        ? "third_person_singular"
-        : "base";
-    const candidateHasPresentShape =
-      candidateAgreement === "third_person_singular" ||
-      (/^[a-z]+$/u.test(candidate?.canonical ?? "") &&
-        !/(?:ed|en|ing|ly|s)$/u.test(candidate?.canonical ?? ""));
-    if (
-      !candidate ||
-      !subjectHead ||
-      tokenIndexIsInRanges(index, args.infinitiveRanges) ||
-      (isFiniteVerbForm(args.tokens, index) &&
-        subjectAgreement !== "unknown" &&
-        !hasAmbiguousIrregularNumberMorphology) ||
-      hasPossessiveEnding(subjectHead.canonical) ||
-      SUBJECT_DETERMINERS.has(candidate.canonical) ||
-      PREPOSITIONAL_FRAGMENT_STARTERS.has(candidate.canonical) ||
-      RELATIVE_MARKERS.has(candidate.canonical) ||
-      CLAUSE_COORDINATORS.has(candidate.canonical) ||
-      subjectTokens.some((token) =>
-        PREPOSITIONAL_FRAGMENT_STARTERS.has(token.canonical),
-      ) ||
-      (VERB_LED_PARTICIPLES.has(
-        args.tokens[0]?.canonical ?? "",
-      ) &&
-        subjectTokens
-          .slice(1)
-          .some((token) => token.canonical.includes("-")) &&
-        PREPOSITIONAL_FRAGMENT_STARTERS.has(followingCanonical)) ||
-      (VERB_LED_PARTICIPLES.has(
-        args.tokens[0]?.canonical ?? "",
-      ) &&
-        /(?:ed|en)$/u.test(followingCanonical) &&
-        PREPOSITIONAL_FRAGMENT_STARTERS.has(
-          afterFollowing?.canonical ?? "",
-        )) ||
-      !candidateHasPresentShape
-    ) {
-      continue;
-    }
-    return true;
-  }
-  return false;
-}
-
-function hasClausePredicateEvidence(
-  clauseTokens: readonly ProseToken[],
-  includeTerminalCandidate = false,
-): boolean {
-  for (let index = 1; index < clauseTokens.length; index += 1) {
-    const subjectTokens = clauseTokens.slice(0, index);
-    const subjectHead = subjectAgreementTokens(subjectTokens).at(-1);
-    if (
-      isFiniteVerbForm(clauseTokens, index) &&
-      subjectHead &&
-      !hasPossessiveEnding(subjectHead.canonical) &&
-      hasSubjectContent(subjectTokens)
-    ) {
-      return true;
-    }
-  }
-  return hasUnsupportedPresentClauseShape({
-    tokens: clauseTokens,
-    infinitiveRanges: [],
-    startIndex: 1,
-    includeTerminalCandidate,
-  });
-}
-
-function hasPostCommaPredicateEvidence(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): boolean {
-  return hasClausePredicateEvidence(
-    postCommaClauseTokens(args),
-    true,
-  );
-}
-
-function hasFrontedMainPredicateEvidence(args: {
-  tokens: readonly ProseToken[];
-  frontedSubordinateRange: TokenRange;
-  includeTerminalCandidate: boolean;
-}): boolean {
-  return hasClausePredicateEvidence(
-    args.tokens.slice(args.frontedSubordinateRange.endIndex + 1),
-    args.includeTerminalCandidate,
-  );
-}
-
-function hasTerminalPluralNominalShape(
-  token: ProseToken,
-): boolean {
-  return (
-    token.canonical.endsWith("s") &&
-    !/(?:['’]s|ss|us|is)$/u.test(token.canonical)
-  );
-}
-
-function hasPossibleUnlistedTerminalPredicate(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): boolean {
-  const clauseTokens = postCommaClauseTokens(args);
-  if (clauseTokens.length !== 2) return false;
-  const subject = clauseTokens[0];
-  const candidate = clauseTokens[1];
-  return (
-    subject !== undefined &&
-    candidate !== undefined &&
-    /^[a-z]+$/u.test(subject.canonical) &&
-    !hasPossessiveEnding(subject.canonical) &&
-    !SUBJECT_DETERMINERS.has(subject.canonical) &&
-    !PREPOSITIONAL_FRAGMENT_STARTERS.has(subject.canonical) &&
-    !RELATIVE_MARKERS.has(subject.canonical) &&
-    !CLAUSE_COORDINATORS.has(subject.canonical) &&
-    !isFiniteVerbForm(clauseTokens, 1) &&
-    /^[a-z]+$/u.test(candidate.canonical) &&
-    !hasTerminalPluralNominalShape(candidate)
-  );
-}
-
-function hasPossibleUnsupportedPostSubordinateImperative(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): boolean {
-  const clauseTokens = postCommaClauseTokens(args);
-  const candidate = clauseTokens[0];
-  const following = clauseTokens[1];
-  if (
-    !candidate ||
-    !following ||
-    isFiniteBaseForm(candidate.canonical) ||
-    SUBJECT_DETERMINERS.has(candidate.canonical) ||
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(candidate.canonical) ||
-    CLAUSE_COORDINATORS.has(candidate.canonical)
-  ) {
-    return false;
-  }
-  return (
-    OBJECT_CASE_PRONOUNS.has(following.canonical) ||
-    VERB_PARTICLES.has(following.canonical) ||
-    SUBJECT_DETERMINERS.has(following.canonical) ||
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(following.canonical) ||
-    /ly$/u.test(following.canonical)
-  );
-}
-
-function isVerbLedFragmentCategory(args: {
-  tokens: readonly ProseToken[];
-  infinitiveRanges: readonly TokenRange[];
-  mainFinitePredicateIndex: number | null;
-  segment: SentenceSegment;
-}): boolean {
-  const firstToken = args.tokens[0];
-  if (
-    !firstToken ||
-    !VERB_LED_PARTICIPLES.has(firstToken.canonical)
-  ) {
-    return false;
-  }
-  if (
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(
-      args.tokens[1]?.canonical ?? "",
-    ) &&
-    !args.segment.text.includes(",") &&
-    !args.tokens
-      .slice(2)
-      .some((token) => SUBJECT_PRONOUNS.has(token.canonical))
-  ) {
-    return true;
-  }
-  if (args.mainFinitePredicateIndex !== null) return false;
-  if (
-    hasPostCommaPredicateEvidence({
-      tokens: args.tokens,
-      segment: args.segment,
-    })
-  ) {
-    return false;
-  }
-  if (
-    hasUnsupportedPresentClauseShape({
-      tokens: args.tokens,
-      infinitiveRanges: args.infinitiveRanges,
-    })
-  ) {
-    return false;
-  }
-  const firstInfinitive = args.infinitiveRanges[0];
-  if (!firstInfinitive) return true;
-  const nominalHead = args.tokens[firstInfinitive.startIndex - 1];
-  if (!nominalHead) return true;
-  if (/(?:ing)$/u.test(nominalHead.canonical)) return true;
-  return firstInfinitive.startIndex !== 2 || !nominalHead.canonical.endsWith("s");
-}
-
-type SemicolonClauseValidation = "valid" | "invalid" | "unknown";
-
-function isCertainPrepositionalParticipleFragment(args: {
-  tokens: readonly ProseToken[];
-  segment: SentenceSegment;
-}): boolean {
-  return (
-    findFrontedCommaRange(args) === null &&
-    /(?:ed|en)$/u.test(args.tokens[0]?.canonical ?? "") &&
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(
-      args.tokens[1]?.canonical ?? "",
-    )
-  );
-}
-
-function validateSemicolonClauses(
-  segment: SentenceSegment,
-): SemicolonClauseValidation {
-  if (!segment.text.includes(";")) return "valid";
-  let validation: SemicolonClauseValidation = "valid";
+function analyzeSemicolon(evidence: AnalysisEvidence):
+  PremiumCoverLetterEnglishProseAnalysis {
   let localOffset = 0;
-  for (const surface of segment.text.split(";")) {
+  for (const surface of evidence.segment.text.split(";")) {
     const text = surface.trim();
-    const trimOffset = surface.indexOf(text);
-    if (!text) {
-      localOffset += surface.length + 1;
-      continue;
-    }
-    const clause: SentenceSegment = {
-      text,
-      start: segment.start + localOffset + Math.max(trimOffset, 0),
-      end: segment.start + localOffset + Math.max(trimOffset, 0) + text.length,
-    };
-    const tokens = tokenize(clause);
-    const infinitiveRanges = findInfinitiveRanges({
-      tokens,
-      segment: clause,
+    const leading = Math.max(surface.indexOf(text), 0);
+    const start = evidence.segment.start + localOffset + leading;
+    const clause = analyzeSentence({
+      section: evidence.section,
+      segment: { text, start, end: start + text.length },
     });
-    const frontedSubordinateRange =
-      findFrontedFiniteSubordinateRange({
-        tokens,
-        segment: clause,
-      });
-    const relativePredicateIndexes = findRelativePredicateIndexes({
-      tokens,
-      segment: clause,
-      infinitiveRanges,
-      frontedSubordinateRange,
-    });
-    const frontedCommaRange = findFrontedCommaRange({
-      tokens,
-      segment: clause,
-    });
-    const imperativePredicateIndex = findImperativePredicateIndex({
-      tokens,
-      frontedSubordinateRange,
-    });
-    const mainFinitePredicateIndex = findMainFinitePredicateIndex({
-      tokens,
-      segment: clause,
-      infinitiveRanges,
-      relativePredicateIndexes,
-      frontedSubordinateRange,
-    });
-    const isStandaloneSubordinate =
-      startsWithSubordinateMarker(tokens) &&
-      frontedCommaRange === null &&
-      frontedSubordinateRange === null;
-    const hasUnrecognizedFrontedSubordinate =
-      startsWithSubordinateMarker(tokens) &&
-      frontedCommaRange !== null &&
-      frontedSubordinateRange === null;
-    const isPrepositionalFragment =
-      isCertainLeadingPrepositionalPseudoSubject({
-        tokens,
-        segment: clause,
-      });
-    if (isStandaloneSubordinate || isPrepositionalFragment) {
-      return "invalid";
-    }
-    if (hasUnrecognizedFrontedSubordinate) {
-      validation = "unknown";
-      localOffset += surface.length + 1;
-      continue;
-    }
-    if (
-      imperativePredicateIndex === null &&
-      mainFinitePredicateIndex === null
-    ) {
-      const hasUnsupportedPredicate =
-        hasUnsupportedPresentClauseShape({
-          tokens,
-          infinitiveRanges,
-          startIndex: 1,
-        });
-      if (
-        isVerbLedFragmentCategory({
-          tokens,
-          infinitiveRanges,
-          mainFinitePredicateIndex,
-          segment: clause,
-        }) ||
-        isCertainPrepositionalParticipleFragment({
-          tokens,
-          segment: clause,
-        }) ||
-        (SUBJECT_DETERMINERS.has(
-          tokens[0]?.canonical ?? "",
-        ) &&
-          !hasUnsupportedPredicate)
-      ) {
-        return "invalid";
-      }
-      validation = "unknown";
+    if (clause.classification === "INVALID") {
+      return invalidAnalysis(evidence, [
+        "semicolon_clause_fragment",
+        "missing_finite_predicate",
+      ]);
     }
     localOffset += surface.length + 1;
   }
-  return validation;
+  return unknownAnalysis(evidence);
 }
-
-function analyzeSentence(args: {
-  section: ClaimPlanSection;
+function imperativeAnalysis(evidence: AnalysisEvidence, predicate: TaggedToken):
+  PremiumCoverLetterEnglishProseAnalysis {
+  return {
+    ...unknownAnalysis(evidence),
+    classification: "VALID",
+    confidence: "high",
+    reasonCodes: ["imperative_form"],
+    finitePredicateSpan: { start: predicate.start, end: predicate.end },
+    sentenceForm: "imperative",
+  };
+}
+function isProvenVerbLedFragment(args: {
+  tokens: readonly TaggedToken[];
   segment: SentenceSegment;
-}): PremiumCoverLetterEnglishProseAnalysis {
-  const tokens = tokenize(args.segment);
-  const infinitiveRanges = findInfinitiveRanges({
-    tokens,
-    segment: args.segment,
-  });
-  const infinitiveSpans = infinitiveRanges.map((range) =>
-    spanForTokenRange(tokens, range),
-  );
-  const frontedSubordinateRange =
-    findFrontedFiniteSubordinateRange({
-      tokens,
-      segment: args.segment,
-    });
-  const relativePredicateIndexes = findRelativePredicateIndexes({
-    tokens,
-    segment: args.segment,
-    infinitiveRanges,
-    frontedSubordinateRange,
-  });
-  const relativePredicateSpans = relativePredicateIndexes.map((index) =>
-    spanForTokenRange(tokens, { startIndex: index, endIndex: index }),
-  );
-  const frontedCommaRange = findFrontedCommaRange({
-    tokens,
-    segment: args.segment,
-  });
-  const imperativePredicateIndex = findImperativePredicateIndex({
-    tokens,
-    frontedSubordinateRange,
-  });
-  const isImperative = imperativePredicateIndex !== null;
-  const mainFinitePredicateIndex = isImperative
-    ? imperativePredicateIndex
-    : findMainFinitePredicateIndex({
-        tokens,
-        segment: args.segment,
-        infinitiveRanges,
-        relativePredicateIndexes,
-        frontedSubordinateRange,
-      });
-  const isIncompleteFrontedSubordinate =
-    frontedSubordinateRange !== null &&
-    mainFinitePredicateIndex === null &&
-    !hasFrontedMainPredicateEvidence({
-      tokens,
-      frontedSubordinateRange,
-      includeTerminalCandidate: frontedCommaRange === null,
-    }) &&
-    !hasPossibleUnlistedTerminalPredicate({
-      tokens,
-      segment: args.segment,
-    }) &&
-    !hasPossibleUnsupportedPostSubordinateImperative({
-      tokens,
-      segment: args.segment,
-    });
-  const isStandaloneSubordinate =
-    startsWithSubordinateMarker(tokens) &&
-    frontedCommaRange === null &&
-    frontedSubordinateRange === null;
-  const hasUnrecognizedFrontedSubordinate =
-    startsWithSubordinateMarker(tokens) &&
-    frontedCommaRange !== null &&
-    frontedSubordinateRange === null;
-  const isPrepositionalSubjectFragment =
-    isCertainLeadingPrepositionalPseudoSubject({
-      tokens,
-      segment: args.segment,
-    });
-  const semicolonClauseValidation = validateSemicolonClauses(
-    args.segment,
-  );
-  const isInvalidFragment =
-    isIncompleteFrontedSubordinate ||
-    isStandaloneSubordinate ||
-    isPrepositionalSubjectFragment ||
-    semicolonClauseValidation === "invalid" ||
-    isVerbLedFragmentCategory({
-      tokens,
-      infinitiveRanges,
-      mainFinitePredicateIndex,
-      segment: args.segment,
-    });
-
-  if (isInvalidFragment) {
-    return {
-      section: args.section,
-      text: args.segment.text,
-      sentenceSpan: { start: args.segment.start, end: args.segment.end },
-      classification: "INVALID",
-      confidence: "high",
-      reasonCodes: isIncompleteFrontedSubordinate
-        ? ["fronted_subordinate_fragment", "missing_finite_predicate"]
-        : isStandaloneSubordinate
-          ? [
-              "standalone_subordinate_fragment",
-              "missing_finite_predicate",
-            ]
-          : isPrepositionalSubjectFragment
-            ? [
-                "prepositional_subject_fragment",
-                "missing_finite_predicate",
-              ]
-            : semicolonClauseValidation === "invalid"
-              ? [
-                  "semicolon_clause_fragment",
-                  "missing_finite_predicate",
-                ]
-              : ["verb_led_fragment", "missing_finite_predicate"],
-      subjectSpan: null,
-      finitePredicateSpan: null,
-      infinitiveSpans,
-      relativePredicateSpans,
-      sentenceForm: "fragment",
-    };
-  }
-
+  infinitiveRanges: readonly TokenRange[];
+  mainPredicateIndex: number | null;
+}): boolean {
+  const first = args.tokens[0];
   if (
-    mainFinitePredicateIndex === null ||
-    hasUnrecognizedFrontedSubordinate ||
-    semicolonClauseValidation === "unknown"
+    args.mainPredicateIndex !== null ||
+    !first ||
+    !INITIAL_PARTICIPLE_POS_PATTERN.test(first.pos) ||
+    args.segment.text.includes(",")
   ) {
-    return {
-      section: args.section,
-      text: args.segment.text,
-      sentenceSpan: { start: args.segment.start, end: args.segment.end },
-      classification: "UNKNOWN",
-      confidence: "low",
-      reasonCodes: ["ambiguous_clause_structure"],
-      subjectSpan: null,
-      finitePredicateSpan: null,
-      infinitiveSpans,
-      relativePredicateSpans,
-      sentenceForm: "unknown",
-    };
+    return false;
   }
-
-  const finitePredicateSpan = spanForTokenRange(tokens, {
-    startIndex: mainFinitePredicateIndex,
-    endIndex: mainFinitePredicateIndex,
+  if (args.tokens[1]?.pos === "DT") return true;
+  const hasGerund = args.tokens.slice(1).some((token) => token.pos === "VBG");
+  const hasOtherPredicate = args.tokens.slice(1).some(
+    (token, index) =>
+      !indexInRanges(index + 1, args.infinitiveRanges) &&
+      /^(?:MD|VBD|VBN|VBP|VBZ)$/u.test(token.pos),
+  );
+  return hasGerund && !hasOtherPredicate;
+}
+function hasUncertainLead(
+  first: TaggedToken, segment: SentenceSegment, predicate: TaggedToken,
+): boolean {
+  if (/^(?:IN|WRB|RB)$/u.test(first.pos)) return true;
+  return (
+    INITIAL_PARTICIPLE_POS_PATTERN.test(first.pos) &&
+    segment.text
+      .slice(0, predicate.start - segment.start)
+      .includes(",")
+  );
+}
+function declarativeAnalysis(args: {
+  evidence: AnalysisEvidence;
+  tokens: readonly TaggedToken[];
+  predicateIndex: number;
+  infinitiveRanges: readonly TokenRange[];
+  relativePredicateIndexes: readonly number[];
+}): PremiumCoverLetterEnglishProseAnalysis | null {
+  const endIndex = subjectEndIndex({
+    tokens: args.tokens,
+    predicateIndex: args.predicateIndex,
+    infinitiveRanges: args.infinitiveRanges,
+    relativePredicateIndexes: args.relativePredicateIndexes,
   });
-  const subject = isImperative
-    ? { span: null, reasonCode: null }
-    : inferSubject({
-        tokens,
-        segment: args.segment,
-        predicateIndex: mainFinitePredicateIndex,
-        infinitiveRanges,
-      });
-  const reasonCodes: PremiumCoverLetterEnglishProseReasonCode[] = [];
-  if (isImperative) {
-    reasonCodes.push("imperative_form");
-  } else {
-    reasonCodes.push("finite_predicate");
-    if (subject.reasonCode) reasonCodes.push(subject.reasonCode);
+  const subjectTokens = args.tokens.slice(0, endIndex + 1);
+  if (
+    subjectTokens.length === 0 ||
+    !subjectTokens.some((token) => NOMINAL_POS_PATTERN.test(token.pos))
+  ) {
+    return null;
   }
-  if (relativePredicateIndexes.length > 0) {
-    reasonCodes.push("relative_clause");
-  }
-  if (infinitiveRanges.length > 0) {
+  const reasonCodes: PremiumCoverLetterEnglishProseReasonCode[] = [
+    "finite_predicate",
+    subjectReason(subjectTokens),
+  ];
+  if (args.relativePredicateIndexes.length > 0) reasonCodes.push("relative_clause");
+  if (args.infinitiveRanges.length > 0) {
     reasonCodes.push("bounded_infinitive");
     if (
-      infinitiveRanges.some(
-        (range) => mainFinitePredicateIndex > range.endIndex,
+      args.infinitiveRanges.some(
+        (range) => args.predicateIndex > range.endIndex,
       )
     ) {
       reasonCodes.push("main_finite_predicate_after_infinitive");
     }
   }
-
+  const predicate = args.tokens[args.predicateIndex];
+  if (!predicate) return null;
   return {
-    section: args.section,
-    text: args.segment.text,
-    sentenceSpan: { start: args.segment.start, end: args.segment.end },
+    ...unknownAnalysis(args.evidence),
     classification: "VALID",
     confidence: "high",
     reasonCodes,
-    subjectSpan: subject.span,
-    finitePredicateSpan,
-    infinitiveSpans,
-    relativePredicateSpans,
-    sentenceForm: isImperative ? "imperative" : "declarative",
+    subjectSpan: {
+      start: subjectTokens[0]?.start ?? 0,
+      end: subjectTokens.at(-1)?.end ?? 0,
+    },
+    finitePredicateSpan: { start: predicate.start, end: predicate.end },
+    sentenceForm: "declarative",
   };
 }
-
+function analyzeSentence(args: {
+  section: ClaimPlanSection;
+  segment: SentenceSegment;
+}): PremiumCoverLetterEnglishProseAnalysis {
+  const tokens = contentTokens(tagSegment(args.segment));
+  const infinitiveRanges = findInfinitiveRanges(tokens);
+  const relativePredicateIndexes = findRelativePredicateIndexes(
+    tokens,
+    infinitiveRanges,
+  );
+  const evidence: AnalysisEvidence = {
+    section: args.section,
+    segment: args.segment,
+    infinitiveSpans: infinitiveRanges.map((range) =>
+      spanForRange(tokens, range),
+    ),
+    relativePredicateSpans: relativePredicateIndexes.map((index) =>
+      spanForRange(tokens, { startIndex: index, endIndex: index }),
+    ),
+  };
+  const first = tokens[0];
+  if (!first) return unknownAnalysis(evidence);
+  if (args.segment.text.includes(";")) return analyzeSemicolon(evidence);
+  if (first.pos === "VB") return imperativeAnalysis(evidence, first);
+  const mainPredicateIndex = findMainPredicateIndex({
+    tokens,
+    infinitiveRanges,
+    relativePredicateIndexes,
+  });
+  if (
+    isProvenVerbLedFragment({
+      tokens,
+      segment: args.segment,
+      infinitiveRanges,
+      mainPredicateIndex,
+    })
+  ) {
+    return invalidAnalysis(evidence, [
+      "verb_led_fragment",
+      "missing_finite_predicate",
+    ]);
+  }
+  if (mainPredicateIndex === null) return unknownAnalysis(evidence);
+  const predicate = tokens[mainPredicateIndex];
+  if (!predicate || hasUncertainLead(first, args.segment, predicate)) {
+    return unknownAnalysis(evidence);
+  }
+  return declarativeAnalysis({
+    evidence,
+    tokens,
+    predicateIndex: mainPredicateIndex,
+    infinitiveRanges,
+    relativePredicateIndexes,
+  }) ?? unknownAnalysis(evidence);
+}
 export function analyzePremiumCoverLetterEnglishProseSection(args: {
   section: ClaimPlanSection;
   text: string;

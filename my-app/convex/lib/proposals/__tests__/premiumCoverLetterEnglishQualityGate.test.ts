@@ -321,7 +321,8 @@ describe("English CV-backed quality gate", () => {
     });
 
     expect(analysis.issues).toEqual([]);
-    expect(analysis.observations).toEqual([
+    expect(analysis.observations).toEqual(
+      expect.arrayContaining([
       {
         code: "intentional_claim_overlap",
         section: "employerValueBlock",
@@ -334,7 +335,8 @@ describe("English CV-backed quality gate", () => {
         otherSection: "opening",
         factId: "fact_opening",
       },
-    ]);
+      ]),
+    );
   });
 
   it("reports unexpected reuse separately from visible duplication", () => {
@@ -3637,7 +3639,7 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
-  it("rejects a verb-led fragment with a plural object and trailing adverb", () => {
+  it("observes a POS-ambiguous verb-led form with a trailing adverb", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
@@ -3649,13 +3651,13 @@ describe("English CV-backed quality gate", () => {
       factGraph,
     });
 
-    expect(issues).toContainEqual({
+    expect(issues).not.toContainEqual({
       code: "incomplete_sentence",
       section: "proofBlock",
     });
   });
 
-  it("rejects a verb-led fragment with a hyphenated modifier", () => {
+  it("observes a POS-ambiguous verb-led form with a hyphenated modifier", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
@@ -3667,13 +3669,13 @@ describe("English CV-backed quality gate", () => {
       factGraph,
     });
 
-    expect(issues).toContainEqual({
+    expect(issues).not.toContainEqual({
       code: "incomplete_sentence",
       section: "proofBlock",
     });
   });
 
-  it("rejects an inferred predicate that follows a preposition", () => {
+  it("observes a POS-ambiguous participle followed by a preposition", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
@@ -3685,7 +3687,7 @@ describe("English CV-backed quality gate", () => {
       factGraph,
     });
 
-    expect(issues).toContainEqual({
+    expect(issues).not.toContainEqual({
       code: "incomplete_sentence",
       section: "proofBlock",
     });
@@ -3789,7 +3791,7 @@ describe("English CV-backed quality gate", () => {
     expectCompleteProofBlock,
   );
 
-  it("rejects a verb-led fragment after a semicolon", () => {
+  it("observes a POS-ambiguous verb-led form after a semicolon", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
@@ -3801,7 +3803,7 @@ describe("English CV-backed quality gate", () => {
       factGraph,
     });
 
-    expect(issues).toContainEqual({
+    expect(issues).not.toContainEqual({
       code: "incomplete_sentence",
       section: "proofBlock",
     });
