@@ -586,6 +586,55 @@ describe("premium cover-letter English prose module", () => {
   });
 
   it.each([
+    "When teams were ready, results rose.",
+    "When teams were ready, costs fell.",
+    "When I planned, revenue sank.",
+    "When teams planned, demand gruve.",
+    "When leaders planned, morale flarn.",
+  ])(
+    "keeps an unlisted irregular terminal predicate after a fronted subordinate conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          sentenceForm: "unknown",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    {
+      text: "When teams planned, demand grew.",
+      subjectSpan: { start: 20, end: 26 },
+      finitePredicateSpan: { start: 27, end: 31 },
+    },
+    {
+      text: "When leaders planned, morale soared.",
+      subjectSpan: { start: 22, end: 28 },
+      finitePredicateSpan: { start: 29, end: 35 },
+    },
+  ])(
+    "preserves structurally recognized terminal predicates after a fronted subordinate: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "declarative",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining(["finite_predicate"]),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
     {
       text: "When you are ready, submit reports.",
       finitePredicateSpan: { start: 20, end: 26 },
@@ -625,6 +674,27 @@ describe("premium cover-letter English prose module", () => {
       }),
     ]);
   });
+
+  it.each([
+    "When you are ready, contact me.",
+    "When you are ready, reach out.",
+    "When you are ready, apply for this role.",
+    "If teams are ready, notify us.",
+  ])(
+    "keeps an unsupported post-subordinate imperative conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          sentenceForm: "unknown",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
 
   it.each([
     "Because teams deliver results.",
@@ -1162,6 +1232,25 @@ describe("premium cover-letter English prose module", () => {
     },
   );
 
+  it.each([
+    "Managed children support teams.",
+    "Built people support delivery.",
+    "Managed women support teams.",
+  ])(
+    "keeps an irregular plural head before a base predicate conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
   it("does not let an infinitive capture a finite verb from another clause", () => {
     const [result] = analyze(
       "Teams work to improve delivery while managers review results.",
@@ -1356,6 +1445,16 @@ describe("premium cover-letter English prose module", () => {
       subjectSpan: { start: 12, end: 16 },
       finitePredicateSpan: { start: 17, end: 22 },
     },
+    {
+      text: "In a crisis support matters.",
+      subjectSpan: { start: 12, end: 19 },
+      finitePredicateSpan: { start: 20, end: 27 },
+    },
+    {
+      text: "In a crisis work matters.",
+      subjectSpan: { start: 12, end: 16 },
+      finitePredicateSpan: { start: 17, end: 24 },
+    },
   ])(
     "finds an explicit subject after an unpunctuated introductory prepositional phrase: $text",
     ({ text, subjectSpan, finitePredicateSpan }) => {
@@ -1465,6 +1564,21 @@ describe("premium cover-letter English prose module", () => {
       text: "Built systems partnered with clients.",
       subjectSpan: { start: 0, end: 13 },
       finitePredicateSpan: { start: 14, end: 23 },
+    },
+    {
+      text: "Supported teams improved by 20%.",
+      subjectSpan: { start: 0, end: 15 },
+      finitePredicateSpan: { start: 16, end: 24 },
+    },
+    {
+      text: "Managed teams improved by 20%.",
+      subjectSpan: { start: 0, end: 13 },
+      finitePredicateSpan: { start: 14, end: 22 },
+    },
+    {
+      text: "Built systems improved by 15%.",
+      subjectSpan: { start: 0, end: 13 },
+      finitePredicateSpan: { start: 14, end: 22 },
     },
   ])(
     "preserves a genuine past predicate before a prepositional complement: $text",
@@ -1651,6 +1765,25 @@ describe("premium cover-letter English prose module", () => {
       "Because of them they can contribute.",
       "Because of that he can contribute.",
       "Because of them we can contribute.",
+      "When teams were ready, results rose.",
+      "When teams were ready, costs fell.",
+      "When I planned, revenue sank.",
+      "When teams planned, demand gruve.",
+      "When leaders planned, morale flarn.",
+      "When teams planned, demand grew.",
+      "When leaders planned, morale soared.",
+      "When you are ready, contact me.",
+      "When you are ready, reach out.",
+      "When you are ready, apply for this role.",
+      "If teams are ready, notify us.",
+      "Managed children support teams.",
+      "Built people support delivery.",
+      "Managed women support teams.",
+      "In a crisis support matters.",
+      "In a crisis work matters.",
+      "Supported teams improved by 20%.",
+      "Managed teams improved by 20%.",
+      "Built systems improved by 15%.",
       "Teams work to improve delivery and managers review results.",
       "With a manager supports delivery.",
       "In my role I managed client reporting.",
