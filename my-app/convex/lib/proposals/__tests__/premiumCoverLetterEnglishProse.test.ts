@@ -232,6 +232,51 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it("keeps a multi-token proper name attached across an initialism", () => {
+    expect(
+      analyze(
+        "I worked for U.S. Department of Defense and improved reporting.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I worked for U.S. Department of Defense and improved reporting.",
+        sentenceSpan: { start: 0, end: 63 },
+      }),
+    ]);
+  });
+
+  it("splits before a coordinated nominal subject with a finite predicate", () => {
+    expect(
+      analyze(
+        "I worked in the U.S. Salesforce and improved reporting were priorities.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I worked in the U.S.",
+        sentenceSpan: { start: 0, end: 20 },
+      }),
+      expect.objectContaining({
+        text: "Salesforce and improved reporting were priorities.",
+        sentenceSpan: { start: 21, end: 71 },
+      }),
+    ]);
+  });
+
+  it("looks through an organization abbreviation for the next predicate", () => {
+    expect(
+      analyze("I worked in the U.S. Acme Inc. filed the report."),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I worked in the U.S.",
+        sentenceSpan: { start: 0, end: 20 },
+      }),
+      expect.objectContaining({
+        text: "Acme Inc. filed the report.",
+        sentenceSpan: { start: 21, end: 48 },
+      }),
+    ]);
+  });
+
   it("preserves Unicode offsets in subject and predicate spans", () => {
     expect(analyze("Élodie delivers results.")[0]).toEqual(
       expect.objectContaining({
@@ -278,5 +323,8 @@ describe("premium cover-letter English prose module", () => {
     );
     expect(source).not.toContain("Army");
     expect(source).not.toContain("Tomorrow");
+    expect(source).not.toContain("Department of Defense");
+    expect(source).not.toContain("Salesforce");
+    expect(source).not.toContain("Acme Inc.");
   });
 });

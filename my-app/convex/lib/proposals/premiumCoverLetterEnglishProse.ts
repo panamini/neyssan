@@ -49,6 +49,8 @@ const FINITE_POS_PATTERN = /^(?:MD|VBD|VBP|VBZ)$/u;
 const NOMINAL_POS_PATTERN = /^(?:NN|NNS|NNP|NNPS|PRP)$/u;
 const INITIAL_PARTICIPLE_POS_PATTERN = /^(?:VBD|VBN)$/u;
 const PUNCTUATION_POS_PATTERN = /^(?:[,.!?;:]|-LRB-|-RRB-)$/u;
+const SENTENCE_BOUNDARY_PATTERN =
+  /[.!?]+(?:["'”’»)}\]]+)?(?=\s|$)/gu;
 function isRelativeMarker(token: TaggedToken | undefined): boolean {
   return Boolean(
     token &&
@@ -56,33 +58,70 @@ function isRelativeMarker(token: TaggedToken | undefined): boolean {
     RELATIVE_MARKER_POS_PATTERN.test(token.pos),
   );
 }
+function firstPosIndexAfterName(
+  tokens: readonly WinkPosToken[],
+  pattern: RegExp,
+): number {
+  return tokens.findIndex(
+    (token, index) => index > 0 && pattern.test(token.pos),
+  );
+}
+function isCoordinatedContinuationPredicate(args: {
+  tokens: readonly WinkPosToken[];
+  conjunctionIndex: number;
+  predicateIndex: number;
+  finite: boolean;
+}): boolean {
+  if (
+    args.conjunctionIndex < 0 ||
+    args.conjunctionIndex >= args.predicateIndex
+  ) {
+    return false;
+  }
+  if (args.finite) {
+    return args.predicateIndex === args.conjunctionIndex + 1;
+  }
+  return !args.tokens
+    .slice(args.conjunctionIndex + 1, args.predicateIndex)
+    .some((token) => NOMINAL_POS_PATTERN.test(token.pos));
+}
 function isProperNameInitialismContinuation(
   remaining: string,
   segmentPrefix: string,
 ): boolean {
-  const candidate = remaining.match(
-    /^\s*[\s\S]*?[.!?]+(?:["'”’»)}\]]+)?(?=\s|$)/u,
-  )?.[0] ?? remaining;
+  const candidate = firstSentenceSegment(remaining)?.text ?? remaining;
   const tokens = tagger.tagSentence(candidate).filter(
     (token) => !PUNCTUATION_POS_PATTERN.test(token.pos),
   );
   if (tokens[0]?.pos !== "NNP") return false;
   if (/^(?:\p{Lu}\.){2,}$/u.test(segmentPrefix)) return true;
-  const predicateIndex = tokens.findIndex(
-    (token, index) =>
-      index > 0 &&
-      (
-        FINITE_POS_PATTERN.test(token.pos) ||
-        INITIAL_PARTICIPLE_POS_PATTERN.test(token.pos)
-      ),
+  const conjunctionIndex = firstPosIndexAfterName(
+    tokens,
+    /^CC$/u,
   );
-  if (predicateIndex < 0) return true;
-  return (
-    tokens[1]?.pos === "CC" &&
-    !tokens
-      .slice(2, predicateIndex)
-      .some((token) => NOMINAL_POS_PATTERN.test(token.pos))
+  const finitePredicateIndex = firstPosIndexAfterName(
+    tokens,
+    FINITE_POS_PATTERN,
   );
+  if (finitePredicateIndex >= 0) {
+    return isCoordinatedContinuationPredicate({
+      tokens,
+      conjunctionIndex,
+      predicateIndex: finitePredicateIndex,
+      finite: true,
+    });
+  }
+  const participleIndex = firstPosIndexAfterName(
+    tokens,
+    INITIAL_PARTICIPLE_POS_PATTERN,
+  );
+  if (participleIndex < 0) return true;
+  return isCoordinatedContinuationPredicate({
+    tokens,
+    conjunctionIndex,
+    predicateIndex: participleIndex,
+    finite: false,
+  });
 }
 function hasCommaBetween(
   segment: SentenceSegment, previous: TaggedToken, marker: TaggedToken,
@@ -101,6 +140,23 @@ function buildSegment(value: string, start: number, end: number): SentenceSegmen
     start: start + leadingWhitespace,
     end: start + leadingWhitespace + text.length,
   };
+}
+function firstSentenceSegment(value: string): SentenceSegment | null {
+  for (const match of value.matchAll(SENTENCE_BOUNDARY_PATTERN)) {
+    const punctuationIndex = match.index ?? 0;
+    if (
+      match[0].startsWith(".") &&
+      isProtectedPeriod(value, punctuationIndex, 0)
+    ) {
+      continue;
+    }
+    return buildSegment(
+      value,
+      0,
+      punctuationIndex + match[0].length,
+    );
+  }
+  return buildSegment(value, 0, value.length);
 }
 function isProtectedPeriod(value: string, periodIndex: number, segmentStart: number): boolean {
   const throughPeriod = value.slice(0, periodIndex + 1);
@@ -129,7 +185,7 @@ function isProtectedPeriod(value: string, periodIndex: number, segmentStart: num
 function segmentSentences(value: string): SentenceSegment[] {
   const segments: SentenceSegment[] = [];
   let start = 0;
-  for (const match of value.matchAll(/[.!?]+(?:["'”’»)}\]]+)?(?=\s|$)/gu)) {
+  for (const match of value.matchAll(SENTENCE_BOUNDARY_PATTERN)) {
     const punctuationIndex = match.index ?? 0;
     if (
       match[0].startsWith(".") &&
