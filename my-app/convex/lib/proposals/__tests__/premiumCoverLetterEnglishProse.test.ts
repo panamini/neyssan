@@ -168,6 +168,39 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it("keeps a comma-bounded participial modifier conservative inside a semicolon clause", () => {
+    const text =
+      "Teams deliver results; aligned with clear goals, people excel.";
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "UNKNOWN",
+        confidence: "low",
+        sentenceForm: "unknown",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
+  it("accepts a comma-bounded participial modifier with a recognized semicolon-clause predicate", () => {
+    const text =
+      "Teams deliver results; aligned with clear goals, teams support delivery.";
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 0, end: 5 },
+        finitePredicateSpan: { start: 6, end: 13 },
+        reasonCodes: expect.arrayContaining(["finite_predicate"]),
+      }),
+    ]);
+  });
+
   it.each([
     "Review the data; update the records.",
     "Submit the report; archive the evidence.",
@@ -476,6 +509,25 @@ describe("premium cover-letter English prose module", () => {
   );
 
   it.each([
+    "Built on research, performance excels.",
+    "Supported by evidence, delivery thrives.",
+  ])(
+    "keeps a two-token post-comma clause with an unlisted predicate conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          sentenceForm: "unknown",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
     {
       text: "When I managed reporting, delivery improves.",
       subjectSpan: { start: 26, end: 34 },
@@ -578,6 +630,7 @@ describe("premium cover-letter English prose module", () => {
     "Because teams deliver results.",
     "When teams deliver results.",
     "If systems work reliably.",
+    "If needed.",
   ])("rejects a standalone leading finite subordinate: %s", (text) => {
     expect(analyze(text)).toEqual([
       expect.objectContaining({
@@ -593,6 +646,90 @@ describe("premium cover-letter English prose module", () => {
       }),
     ]);
   });
+
+  it.each([
+    {
+      text: "If needed I can support teams.",
+      subjectSpan: { start: 10, end: 11 },
+      finitePredicateSpan: { start: 12, end: 15 },
+    },
+    {
+      text: "Because of this I can contribute to delivery.",
+      subjectSpan: { start: 16, end: 17 },
+      finitePredicateSpan: { start: 18, end: 21 },
+    },
+  ])(
+    "finds an explicit main clause after an unpunctuated subordinate opener: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "declarative",
+          subjectSpan,
+          finitePredicateSpan,
+          reasonCodes: expect.arrayContaining([
+            "finite_predicate",
+            "simple_subject",
+          ]),
+        }),
+      ]);
+    },
+  );
+
+  it("keeps an unpunctuated subordinate opener conservative when the later predicate is unlisted", () => {
+    expect(analyze("If needed this excels.")).toEqual([
+      expect.objectContaining({
+        classification: "UNKNOWN",
+        confidence: "low",
+        sentenceForm: "unknown",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: ["ambiguous_clause_structure"],
+      }),
+    ]);
+  });
+
+  it.each([
+    {
+      text: "Because of that they can contribute.",
+      subjectSpan: { start: 16, end: 20 },
+      finitePredicateSpan: { start: 21, end: 24 },
+    },
+    {
+      text: "Because of them they can contribute.",
+      subjectSpan: { start: 16, end: 20 },
+      finitePredicateSpan: { start: 21, end: 24 },
+    },
+    {
+      text: "Because of that he can contribute.",
+      subjectSpan: { start: 16, end: 18 },
+      finitePredicateSpan: { start: 19, end: 22 },
+    },
+    {
+      text: "Because of them we can contribute.",
+      subjectSpan: { start: 16, end: 18 },
+      finitePredicateSpan: { start: 19, end: 22 },
+    },
+  ])(
+    "does not attach an opener token to the explicit main predicate: $text",
+    ({ text, subjectSpan, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          sentenceForm: "declarative",
+          subjectSpan,
+          finitePredicateSpan,
+          relativePredicateSpans: [],
+          reasonCodes: expect.arrayContaining([
+            "finite_predicate",
+            "simple_subject",
+          ]),
+        }),
+      ]);
+    },
+  );
 
   it.each([
     "When I spoke with clients, I improved delivery.",
@@ -1209,6 +1346,16 @@ describe("premium cover-letter English prose module", () => {
       subjectSpan: { start: 17, end: 18 },
       finitePredicateSpan: { start: 19, end: 28 },
     },
+    {
+      text: "At Acme this matters.",
+      subjectSpan: { start: 8, end: 12 },
+      finitePredicateSpan: { start: 13, end: 20 },
+    },
+    {
+      text: "In practice this works.",
+      subjectSpan: { start: 12, end: 16 },
+      finitePredicateSpan: { start: 17, end: 22 },
+    },
   ])(
     "finds an explicit subject after an unpunctuated introductory prepositional phrase: $text",
     ({ text, subjectSpan, finitePredicateSpan }) => {
@@ -1488,17 +1635,29 @@ describe("premium cover-letter English prose module", () => {
       "Teams deliver results; Because managers review outcomes.",
       "Teams deliver results; With a manager supports delivery.",
       "Teams deliver results; Managers create outcomes.",
+      "Teams deliver results; aligned with clear goals, people excel.",
+      "Teams deliver results; aligned with clear goals, teams support delivery.",
       "Review the data; update the records.",
       "Submit the report; archive the evidence.",
       "Review the data; The records.",
       "When you are ready, submit reports.",
       "When you are ready, support for delivery.",
       "Because teams deliver results.",
+      "If needed.",
+      "If needed I can support teams.",
+      "Because of this I can contribute to delivery.",
+      "If needed this excels.",
+      "Because of that they can contribute.",
+      "Because of them they can contribute.",
+      "Because of that he can contribute.",
+      "Because of them we can contribute.",
       "Teams work to improve delivery and managers review results.",
       "With a manager supports delivery.",
       "In my role I managed client reporting.",
       "With clear goals I delivered results.",
       "In my role teams delivered results.",
+      "At Acme this matters.",
+      "In practice this works.",
       "Managed analytics supports delivery.",
       "Built economics support planning.",
       "When I spoke with clients, I improved delivery.",
@@ -1512,6 +1671,8 @@ describe("premium cover-letter English prose module", () => {
       "Managed service quality improved with feedback.",
       "Improved systems collaborated with teams.",
       "Built systems partnered with clients.",
+      "Built on research, performance excels.",
+      "Supported by evidence, delivery thrives.",
     ]) {
       expect(source).not.toContain(fixture);
     }
@@ -1538,6 +1699,8 @@ describe("premium cover-letter English prose module", () => {
       '"update"',
       '"archive"',
       '"driven"',
+      '"excels"',
+      '"thrives"',
     ]) {
       expect(source).not.toContain(fixtureLexeme);
     }
