@@ -215,6 +215,8 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["klientų", "client"],
   ["kunde", "client"],
   ["kunden", "client"],
+  ["mètre", "meter"],
+  ["mètres", "meter"],
   ["omzet", "revenue"],
   ["projet", "project"],
   ["projets", "project"],
@@ -245,6 +247,25 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["إيرادات", "revenue"],
   ["تحويل", "conversion"],
   ["عملاء", "client"],
+]);
+const JOB_LEVEL_QUALIFIER_ALIASES = new Map([
+  ["grade", "grade"],
+  ["level", "level"],
+  ["tier", "tier"],
+]);
+const TRANSLATED_JOB_LEVEL_QUALIFIER_ALIASES = new Map([
+  ["niveau", "level"],
+  ["nivel", "level"],
+  ["stufe", "level"],
+  ["livello", "level"],
+  ["nível", "level"],
+  ["poziom", "level"],
+  ["επίπεδο", "level"],
+  ["szint", "level"],
+  ["lygis", "level"],
+  ["tase", "level"],
+  ["уровень", "level"],
+  ["مستوى", "level"],
 ]);
 const TRANSLATED_METRIC_MEASUREMENT_CONNECTORS = new Set([
   "a",
@@ -811,9 +832,7 @@ function isIgnoredNumericOccurrence(args: {
   currency: MetricCurrency | null;
 }): boolean {
   return (
-    /\b(?:(?:iso|iec|soc|rfc)(?:\s+|\s*[-–—]\s*)|no\.\s*)$/iu.test(
-      args.prefix,
-    ) ||
+    /\b(?:iso|iec|soc|rfc)(?:\s+|\s*[-–—]\s*)$/iu.test(args.prefix) ||
     isPlainToolVersion(args)
   );
 }
@@ -1260,7 +1279,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB](?![\p{L}\p{N}])|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?(?![A-Za-z0-9])/giu,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (!occurrence) continue;
@@ -1281,7 +1300,7 @@ function numericOccurrenceSurfaceEnd(
 ): number {
   const tail = value.slice(occurrence.index);
   const surface = tail.match(
-    /^(?:(?:[+−-]|minus\b|negative\b|plus\b|positive\b)?\s*(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*\d[\d,]*(?:\.\d+)?\s*(?:percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*(?:(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?|(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[-\s]+(?:and|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)){0,6}(?:\s+percent\b)?)/iu,
+    /^(?:(?:[+−-]|minus\b|negative\b|plus\b|positive\b)?\s*(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*\d[\d,]*(?:\.\d+)?\s*(?:percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB](?![\p{L}\p{N}])|thousand\b|million\b|billion\b|[x×])?(?:\s*(?:(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?|(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[-\s]+(?:and|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)){0,6}(?:\s+percent\b)?)/iu,
   )?.[0];
   return occurrence.index + (surface?.length ?? occurrence.metric.length);
 }
@@ -1628,13 +1647,30 @@ function hasDateContextForOccurrence(
   );
 }
 
+function jobLevelQualifierForOccurrence(
+  value: string,
+  occurrence: NumericOccurrence,
+  allowMeasurementTranslation = false,
+): string | undefined {
+  const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
+  const qualifier = prefix
+    .match(/([\p{L}]+)\s*[-–—:]?\s*$/u)?.[1]
+    ?.toLocaleLowerCase("en-US");
+  if (!qualifier) return undefined;
+  return (
+    JOB_LEVEL_QUALIFIER_ALIASES.get(qualifier) ??
+    (allowMeasurementTranslation
+      ? TRANSLATED_JOB_LEVEL_QUALIFIER_ALIASES.get(qualifier)
+      : undefined)
+  );
+}
+
 function explicitContextRoleForOccurrence(
   value: string,
   occurrence: NumericOccurrence,
 ): PremiumCoverLetterNumericEvidenceRole | undefined {
   if (durationUnitForOccurrence(value, occurrence)) return "DURATION";
-  const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
-  if (/\b(?:level|grade|tier)\s*[-–—:]?\s*$/iu.test(prefix)) {
+  if (jobLevelQualifierForOccurrence(value, occurrence)) {
     return "JOB_LEVEL";
   }
   if (versionQualifierForOccurrence(value, occurrence)) return "VERSION";
@@ -1652,14 +1688,13 @@ function classifyRole(args: {
   role: PremiumCoverLetterNumericEvidenceRole;
   reason: PremiumCoverLetterNumericEvidenceReasonCode;
 } {
-  const prefix = args.value.slice(Math.max(0, args.occurrence.index - 32), args.occurrence.index);
   const suffix = args.value.slice(args.occurrence.end, args.occurrence.end + 32);
   const immediateMeasurement =
     suffix.match(/^\s*[-–—]?\s*([A-Za-z]+)/u)?.[1]?.toLocaleLowerCase("en-US") ?? "";
   if (DURATION_UNITS.has(immediateMeasurement)) {
     return { role: "DURATION", reason: "duration_context" };
   }
-  if (/\b(?:level|grade|tier)\s*[-–—:]?\s*$/iu.test(prefix)) {
+  if (jobLevelQualifierForOccurrence(args.value, args.occurrence)) {
     return { role: "JOB_LEVEL", reason: "job_level_context" };
   }
   if (versionQualifierForOccurrence(args.value, args.occurrence)) {
@@ -1712,6 +1747,8 @@ function sourceFromOccurrence(args: {
       ? versionQualifierForOccurrence(args.value, args.occurrence)
       : classification.role === "DURATION"
         ? durationUnitForOccurrence(args.value, args.occurrence)
+        : classification.role === "JOB_LEVEL"
+          ? jobLevelQualifierForOccurrence(args.value, args.occurrence)
         : undefined;
   return {
     sourceId: args.sourceId,
@@ -1907,10 +1944,6 @@ function sourceMatchesOccurrence(
   if (source.baseKey !== occurrence.baseKey && !signedPercentageMatch) {
     return false;
   }
-  const prefix = visibleText.slice(
-    Math.max(0, occurrence.index - 32),
-    occurrence.index,
-  );
   if (source.role === "EMPLOYER") return true;
   if (source.role === "PROPER_NAME") {
     return Boolean(
@@ -1936,7 +1969,16 @@ function sourceMatchesOccurrence(
     );
   }
   if (source.role === "JOB_LEVEL") {
-    return /\b(?:level|grade|tier)\s*[-–—:]?\s*$/iu.test(prefix);
+    const visibleQualifier = jobLevelQualifierForOccurrence(
+      visibleText,
+      occurrence,
+      allowMeasurementTranslation,
+    );
+    return Boolean(
+      source.contextQualifier &&
+        visibleQualifier &&
+        source.contextQualifier === visibleQualifier,
+    );
   }
   if (source.role === "VERSION") {
     const visibleQualifier = versionQualifierForOccurrence(visibleText, occurrence);

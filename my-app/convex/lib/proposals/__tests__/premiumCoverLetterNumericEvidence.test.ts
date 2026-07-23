@@ -1489,4 +1489,148 @@ describe("premium cover-letter numeric evidence", () => {
       expect.objectContaining({ role: "DURATION", factId: "fact_duration" }),
     );
   });
+
+  it("uses a Unicode-safe magnitude boundary for translated measurements", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        { id: "fact_span", source: "cv", text: "Measured 5 meters." },
+        { id: "fact_scale", source: "cv", text: "Managed a 5M portfolio." },
+        {
+          id: "fact_storage",
+          source: "cv",
+          text: "Reduced the payload to 5 MB.",
+        },
+      ]),
+    });
+    const match = (visibleText: string, factId: string) =>
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText,
+        section: "proofBlock",
+        factIds: [factId],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      });
+
+    expect(evidence.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factId: "fact_span",
+          normalizedValue: "5",
+          measurement: "meter",
+        }),
+        expect.objectContaining({
+          factId: "fact_scale",
+          normalizedValue: "5000000",
+        }),
+        expect.objectContaining({
+          factId: "fact_storage",
+          normalizedValue: "5",
+          measurement: "mb",
+        }),
+      ]),
+    );
+    expect(match("J’ai mesuré 5 mètres.", "fact_span").unsupported).toEqual([]);
+    expect(match("Managed a 5M portfolio.", "fact_scale").unsupported).toEqual([]);
+    expect(match("Reduced the payload to 5 MB.", "fact_storage").unsupported).toEqual([]);
+  });
+
+  it("matches a finite localized job-level alias only in translation mode", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_level",
+          source: "job_post",
+          text: "Engineer Level 3.",
+        },
+      ]),
+    });
+    const match = (
+      visibleText: string,
+      allowMeasurementTranslation: boolean,
+      requiredOwner: "CANDIDATE" | "JOB_CONTEXT" = "JOB_CONTEXT",
+    ) =>
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText,
+        section: "proofBlock",
+        factIds: ["fact_level"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation,
+        requiredOwner,
+      });
+
+    expect(match("Ingénieur de niveau 3.", true).unsupported).toEqual([]);
+    expect(match("Ingénieur de niveau 3.", false).unsupported).not.toEqual([]);
+    expect(match("Ingénieur de niveau 4.", true).unsupported).not.toEqual([]);
+    expect(
+      match("Ingénieur de niveau 3.", true, "CANDIDATE").unsupported,
+    ).toContainEqual(
+      expect.objectContaining({
+        reasonCodes: expect.arrayContaining(["owner_mismatch"]),
+      }),
+    );
+  });
+
+  it("treats No. N rankings as numeric evidence unless a structured identity proves them", () => {
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({}),
+        visibleText: "I ranked No. 1 in sales.",
+        section: "proofBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+
+    const ranked = projection({
+      factGraph: factGraph([
+        { id: "fact_rank", source: "cv", text: "Ranked No. 1 in sales." },
+      ]),
+    });
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: ranked,
+        visibleText: "I ranked No. 1 in sales.",
+        section: "proofBlock",
+        factIds: ["fact_rank"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: ranked,
+        visibleText: "I ranked No. 2 in sales.",
+        section: "proofBlock",
+        factIds: ["fact_rank"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+
+    const identity = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_identity",
+          source: "cv",
+          text: "Managed the No. 7 brand.",
+          entities: ["No. 7"],
+        },
+      ]),
+    });
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: identity,
+        visibleText: "I managed the No. 7 brand.",
+        section: "proofBlock",
+        factIds: ["fact_identity"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
 });
