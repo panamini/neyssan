@@ -497,3 +497,21 @@ export function analyzePremiumCoverLetterEnglishProseSection(args: {
     analyzeSentence({ section: args.section, segment }),
   );
 }
+
+export type PremiumCoverLetterEnglishProseSectionInput = Readonly<{
+  section: ClaimPlanSection;
+  text: string;
+}>;
+
+/**
+ * Analyze the retained cover-letter sections through one module boundary.
+ * The section-level function remains available for focused module tests and
+ * callers that need one section in isolation.
+ */
+export function analyzePremiumCoverLetterEnglishProseSections(args: {
+  sections: readonly PremiumCoverLetterEnglishProseSectionInput[];
+}): readonly PremiumCoverLetterEnglishProseAnalysis[] {
+  return args.sections.flatMap((section) =>
+    analyzePremiumCoverLetterEnglishProseSection(section),
+  );
+}

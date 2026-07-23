@@ -11,13 +11,11 @@ import {
   type TargetEmployerResolution,
 } from "./premiumCoverLetterTargetEmployer";
 import {
-  buildPremiumCoverLetterNumericEvidenceProjection,
-  isPremiumCoverLetterNumericLexeme,
-  matchPremiumCoverLetterNumericEvidence,
+  evaluatePremiumCoverLetterNumericEvidence,
   type PremiumCoverLetterNumericEvidenceProjection,
 } from "./premiumCoverLetterNumericEvidence";
 import {
-  analyzePremiumCoverLetterEnglishProseSection,
+  analyzePremiumCoverLetterEnglishProseSections,
   type PremiumCoverLetterEnglishProseAnalysis,
 } from "./premiumCoverLetterEnglishProse";
 
@@ -69,6 +67,8 @@ export type EnglishCvBackedQualityGateAnalysis = Readonly<{
   issues: EnglishCvBackedQualityGateIssue[];
   observations: EnglishCvBackedQualityGateObservation[];
 }>;
+
+type EnglishQualityGateDisposition = "PASS" | "OBSERVE" | "BLOCK";
 
 const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "about",
@@ -159,6 +159,7 @@ function normalizeSentenceKey(value: string): string {
 function evidenceAnchorTokens(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
+  excludedTokens?: ReadonlySet<string>;
 }): Set<string> {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const facts = args.factIds
@@ -166,6 +167,7 @@ function evidenceAnchorTokens(args: {
     .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact));
   const tokens = evidenceAnchorTokensFromValues(
     facts.flatMap((fact) => [fact.text, ...fact.entities]),
+    args.excludedTokens,
   );
   for (const verb of facts.flatMap((fact) => fact.allowedVerbs)) {
     tokens.delete(canonicalizePremiumCoverLetterToken(verb));
@@ -176,6 +178,7 @@ function evidenceAnchorTokens(args: {
 function evidenceEntityAnchorTokens(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
+  excludedTokens?: ReadonlySet<string>;
 }): Set<string> {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   return evidenceAnchorTokensFromValues(
@@ -212,10 +215,14 @@ function evidenceEntityAnchorTokens(args: {
         );
       });
     }),
+    args.excludedTokens,
   );
 }
 
-function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> {
+function evidenceAnchorTokensFromValues(
+  values: readonly string[],
+  excludedTokens: ReadonlySet<string> = new Set(),
+): Set<string> {
   const technologyAnchors = values.flatMap((value) =>
     Array.from(
       value.matchAll(
@@ -238,7 +245,7 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
         .flatMap(({ source, normalized, shortAcronym }) =>
           (
             (normalized.length >= 4 || shortAcronym) &&
-            !isPremiumCoverLetterNumericLexeme(normalized) &&
+            !excludedTokens.has(canonicalizePremiumCoverLetterToken(source)) &&
             !isEvidenceActionWord(normalized) &&
             !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
           )
@@ -253,6 +260,7 @@ function hasExactSparseFactGrounding(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
   textTokens: ReadonlySet<string>;
+  excludedTokens?: ReadonlySet<string>;
 }): boolean {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   return args.factIds.some((factId) => {
@@ -261,6 +269,7 @@ function hasExactSparseFactGrounding(args: {
     const factAnchors = evidenceAnchorTokens({
       factIds: [factId],
       factGraph: args.factGraph,
+      excludedTokens: args.excludedTokens,
     });
     if (
       factAnchors.size !== 1 ||
@@ -274,22 +283,38 @@ function hasExactSparseFactGrounding(args: {
   });
 }
 
+function setsOverlap(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): boolean {
+  for (const value of left) {
+    if (right.has(value)) return true;
+  }
+  return false;
+}
 
 function attributedMetricFactIds(args: {
   visibleText: string;
   candidateFactIds: ReadonlySet<string>;
   factGraph: FactGraphV1;
+  excludedTokens?: ReadonlySet<string>;
 }): Set<string> {
   if (args.candidateFactIds.size <= 1) {
     return new Set(args.candidateFactIds);
   }
 
-  const visibleTokens = evidenceAnchorTokensFromValues([args.visibleText]);
+  const visibleTokens = evidenceAnchorTokensFromValues(
+    [args.visibleText],
+    args.excludedTokens,
+  );
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const scores = Array.from(args.candidateFactIds, (factId) => {
     const fact = factById.get(factId);
     const anchors = fact
-      ? evidenceAnchorTokensFromValues([fact.text, ...fact.entities])
+      ? evidenceAnchorTokensFromValues(
+          [fact.text, ...fact.entities],
+          args.excludedTokens,
+        )
       : new Set<string>();
     return {
       factId,
@@ -303,13 +328,6 @@ function attributedMetricFactIds(args: {
     return new Set();
   }
   return new Set([bestMatches[0].factId]);
-}
-
-function setsOverlap(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  for (const value of left) {
-    if (right.has(value)) return true;
-  }
-  return false;
 }
 
 function pushUnique<T>(items: T[], item: T): void {
@@ -358,60 +376,99 @@ function collectIntentionalClaimOverlapObservations(args: {
 }
 
 function collectEnglishProseUnknownObservations(
-  writerOutput: PremiumWriterOutputV1,
+  analyses: readonly PremiumCoverLetterEnglishProseAnalysis[],
 ): EnglishCvBackedQualityGateObservation[] {
-  return ENGLISH_CV_BACKED_SECTIONS.flatMap((section) =>
-    analyzePremiumCoverLetterEnglishProseSection({
-      section,
-      text: writerOutput.bodyParts[section].text.trim(),
-    })
-      .filter((analysis) => analysis.classification === "UNKNOWN")
-      .map((analysis) => ({
-        code: "english_prose_unknown" as const,
-        section,
-        analysis,
-      })),
-  );
+  return analyses
+    .filter((analysis) => proseDisposition(analysis) === "OBSERVE")
+    .map((analysis) => ({
+      code: "english_prose_unknown" as const,
+      section: analysis.section,
+      analysis,
+    }));
 }
 
-/**
- * Provider-free, text-preserving quality gate for English CV-backed output.
- *
- * Claim-authorized fact overlap is not blocking. Unexpected writer reuse
- * remains fail-closed. The gate never drops IDs, rewrites prose, or chooses a
- * replacement fact.
- */
-export function validateEnglishCvBackedQualityGate(args: {
+function proseDisposition(
+  analysis: PremiumCoverLetterEnglishProseAnalysis,
+): EnglishQualityGateDisposition {
+  if (
+    analysis.classification === "INVALID" &&
+    analysis.confidence === "high"
+  ) {
+    return "BLOCK";
+  }
+  if (analysis.classification === "UNKNOWN") return "OBSERVE";
+  return "PASS";
+}
+
+function numericEvidenceDisposition(args: {
+  unsupported: readonly unknown[];
+}): EnglishQualityGateDisposition {
+  return args.unsupported.length > 0 ? "BLOCK" : "PASS";
+}
+
+type EnglishQualityGateEvaluation = Readonly<{
+  issues: EnglishCvBackedQualityGateIssue[];
+  proseAnalyses: readonly PremiumCoverLetterEnglishProseAnalysis[];
+}>;
+
+function evaluateEnglishCvBackedQualityGate(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
   targetEmployer?: TargetEmployerResolution;
   numericEvidenceProjection?: PremiumCoverLetterNumericEvidenceProjection;
-}): EnglishCvBackedQualityGateIssue[] {
+}): EnglishQualityGateEvaluation {
   if (
     args.claimPlan.language !== "English" ||
     (args.claimPlan.contextClass !== "cv_direct" &&
       args.claimPlan.contextClass !== "cv_adjacent")
   ) {
-    return [];
+    return { issues: [], proseAnalyses: [] };
   }
 
-  const issues: EnglishCvBackedQualityGateIssue[] = [];
   const targetEmployer = args.targetEmployer ?? MISSING_TARGET_EMPLOYER;
-  const numericEvidenceProjection =
-    args.numericEvidenceProjection ??
-    buildPremiumCoverLetterNumericEvidenceProjection({
-      factGraph: args.factGraph,
-      claimPlan: args.claimPlan,
-      jobDemandGraph:
-        args.jobDemandGraph ?? {
-          version: "job_demand_graph_v1",
-          demands: [],
-          priorityTokens: [],
-        },
-      targetEmployer,
-    });
+  const sections = ENGLISH_CV_BACKED_SECTIONS.map((section) => {
+    const part = args.writerOutput.bodyParts[section];
+    return {
+      section,
+      visibleText: part.text.trim(),
+      factIds: part.factIds,
+      demandIds: part.demandIds,
+      claimIds: part.claimIds,
+    };
+  });
+  const numericEvidenceEvaluation = evaluatePremiumCoverLetterNumericEvidence({
+    factGraph: args.factGraph,
+    claimPlan: args.claimPlan,
+    jobDemandGraph: args.jobDemandGraph ?? {
+      version: "job_demand_graph_v1",
+      demands: [],
+      priorityTokens: [],
+    },
+    targetEmployer,
+    projection: args.numericEvidenceProjection,
+    sections,
+  });
+  const proseAnalyses = analyzePremiumCoverLetterEnglishProseSections({
+    sections: sections.map(({ section, visibleText }) => ({
+      section,
+      text: visibleText,
+    })),
+  });
+  const numericEvidenceBySection = new Map(
+    sections.map((section, index) => [
+      section.section,
+      numericEvidenceEvaluation.sectionResults[index] ?? {
+        matches: [],
+        unsupported: [],
+      },
+    ]),
+  );
+  const excludedNumericAnchorTokens =
+    numericEvidenceEvaluation.excludedAnchorTokens;
+
+  const issues: EnglishCvBackedQualityGateIssue[] = [];
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const claimBySection = new Map(
     args.claimPlan.claims.map((claim) => [claim.section, claim]),
@@ -422,6 +479,16 @@ export function validateEnglishCvBackedQualityGate(args: {
     string,
     Array<{ section: ClaimPlanSection; factIds: ReadonlySet<string> }>
   >();
+
+  const proseAnalysisBySection = new Map<
+    ClaimPlanSection,
+    PremiumCoverLetterEnglishProseAnalysis[]
+  >();
+  for (const analysis of proseAnalyses) {
+    const analyses = proseAnalysisBySection.get(analysis.section) ?? [];
+    analyses.push(analysis);
+    proseAnalysisBySection.set(analysis.section, analyses);
+  }
 
   for (const section of ENGLISH_CV_BACKED_SECTIONS) {
     const part = args.writerOutput.bodyParts[section];
@@ -506,16 +573,10 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
 
-    const proseAnalyses = analyzePremiumCoverLetterEnglishProseSection({
-      section,
-      text,
-    });
-    for (const proseAnalysis of proseAnalyses) {
+    const proseAnalysesForSection = proseAnalysisBySection.get(section) ?? [];
+    for (const proseAnalysis of proseAnalysesForSection) {
       const normalizedSentence = normalizeSentenceKey(proseAnalysis.text);
-      if (
-        proseAnalysis.classification === "INVALID" &&
-        proseAnalysis.confidence === "high"
-      ) {
+      if (proseDisposition(proseAnalysis) === "BLOCK") {
         pushUnique(issues, { code: "incomplete_sentence", section });
       }
       const previousSection = seenSentenceSections.get(normalizedSentence);
@@ -532,7 +593,6 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
 
-    const effectiveFactIds = part.factIds;
     const employerGroundingFactIds =
       part.factIds.length > 0 ? part.factIds : assignedClaim?.factIds ?? [];
     if (
@@ -542,12 +602,17 @@ export function validateEnglishCvBackedQualityGate(args: {
       const anchors = evidenceAnchorTokens({
         factIds: employerGroundingFactIds,
         factGraph: args.factGraph,
+        excludedTokens: excludedNumericAnchorTokens,
       });
       const entityAnchors = evidenceEntityAnchorTokens({
         factIds: employerGroundingFactIds,
         factGraph: args.factGraph,
+        excludedTokens: excludedNumericAnchorTokens,
       });
-      const textTokens = evidenceAnchorTokensFromValues([text]);
+      const textTokens = evidenceAnchorTokensFromValues(
+        [text],
+        excludedNumericAnchorTokens,
+      );
       const anchorOverlapCount = Array.from(textTokens).filter((token) =>
         anchors.has(token),
       ).length;
@@ -564,6 +629,7 @@ export function validateEnglishCvBackedQualityGate(args: {
         factIds: employerGroundingFactIds,
         factGraph: args.factGraph,
         textTokens,
+        excludedTokens: excludedNumericAnchorTokens,
       });
       if (
         anchorOverlapCount < 2 &&
@@ -577,20 +643,19 @@ export function validateEnglishCvBackedQualityGate(args: {
         });
       }
     }
-    const numericEvidence = matchPremiumCoverLetterNumericEvidence({
-      projection: numericEvidenceProjection,
-      visibleText: text,
-      section,
-      factIds: effectiveFactIds,
-      demandIds: part.demandIds,
-      claimIds: part.claimIds,
-    });
-    for (const unsupported of numericEvidence.unsupported) {
-      pushUnique(issues, {
-        code: "unsupported_visible_metric",
-        section,
-        metric: unsupported.normalizedValue,
-      });
+    const numericEvidence =
+      numericEvidenceBySection.get(section) ?? {
+        matches: [],
+        unsupported: [],
+      };
+    if (numericEvidenceDisposition(numericEvidence) === "BLOCK") {
+      for (const unsupported of numericEvidence.unsupported) {
+        pushUnique(issues, {
+          code: "unsupported_visible_metric",
+          section,
+          metric: unsupported.normalizedValue,
+        });
+      }
     }
     const matchesByOccurrence = new Map<
       string,
@@ -609,7 +674,7 @@ export function validateEnglishCvBackedQualityGate(args: {
         matches.flatMap((match) => (match.factId ? [match.factId] : [])),
       );
       const localText =
-        proseAnalyses.find(
+        proseAnalysesForSection.find(
           (analysis) =>
             firstMatch.visibleSpan.start >= analysis.sentenceSpan.start &&
             firstMatch.visibleSpan.start < analysis.sentenceSpan.end,
@@ -618,6 +683,7 @@ export function validateEnglishCvBackedQualityGate(args: {
         visibleText: localText,
         candidateFactIds: supportingFactIds,
         factGraph: args.factGraph,
+        excludedTokens: excludedNumericAnchorTokens,
       });
       const previousOccurrence = seenMetricSections
         .get(firstMatch.key)
@@ -638,7 +704,24 @@ export function validateEnglishCvBackedQualityGate(args: {
     }
   }
 
-  return issues;
+  return { issues, proseAnalyses };
+}
+
+/**
+ * Provider-free, text-preserving compatibility facade for English CV-backed
+ * output. Module reason codes are reduced to the existing issue/observation
+ * contract: PASS produces no result, OBSERVE produces an observation, and
+ * BLOCK produces a compatibility issue.
+ */
+export function validateEnglishCvBackedQualityGate(args: {
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  jobDemandGraph?: JobDemandGraphV1;
+  targetEmployer?: TargetEmployerResolution;
+  numericEvidenceProjection?: PremiumCoverLetterNumericEvidenceProjection;
+}): EnglishCvBackedQualityGateIssue[] {
+  return evaluateEnglishCvBackedQualityGate(args).issues;
 }
 
 /**
@@ -651,7 +734,8 @@ export function analyzeEnglishCvBackedQualityGate(args: {
   jobDemandGraph?: JobDemandGraphV1;
   targetEmployer?: TargetEmployerResolution;
 }): EnglishCvBackedQualityGateAnalysis {
-  const issues = validateEnglishCvBackedQualityGate(args);
+  const evaluation = evaluateEnglishCvBackedQualityGate(args);
+  const issues = evaluation.issues;
   if (
     args.claimPlan.language !== "English" ||
     (args.claimPlan.contextClass !== "cv_direct" &&
@@ -663,7 +747,7 @@ export function analyzeEnglishCvBackedQualityGate(args: {
     issues,
     observations: [
       ...collectIntentionalClaimOverlapObservations(args),
-      ...collectEnglishProseUnknownObservations(args.writerOutput),
+      ...collectEnglishProseUnknownObservations(evaluation.proseAnalyses),
     ],
   };
 }

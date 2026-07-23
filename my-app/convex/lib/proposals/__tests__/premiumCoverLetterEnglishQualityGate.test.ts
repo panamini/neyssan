@@ -3634,8 +3634,48 @@ describe("English CV-backed quality gate", () => {
     expect(source).not.toMatch(
       /\b(?:splitSentenceRanges|isVerbLedFragment|isFinitePredicateCandidate|FINITE_PREDICATE_TOKENS)\b/u,
     );
-    expect(source).toContain(
-      "analyzePremiumCoverLetterEnglishProseSection",
+    expect(source).toContain("analyzePremiumCoverLetterEnglishProseSections");
+    expect(source).toContain("evaluatePremiumCoverLetterNumericEvidence");
+    expect(source).not.toContain("buildPremiumCoverLetterNumericEvidenceProjection");
+    expect(source).not.toContain("matchPremiumCoverLetterNumericEvidence");
+    expect(source).not.toContain("analyzePremiumCoverLetterEnglishProseSection({");
+    expect(
+      source.match(/evaluatePremiumCoverLetterNumericEvidence\(/gu),
+    ).toHaveLength(1);
+    expect(
+      source.match(/analyzePremiumCoverLetterEnglishProseSections\(/gu),
+    ).toHaveLength(1);
+  });
+
+  it("keeps the facade free of competing module knowledge", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "convex/lib/proposals/premiumCoverLetterEnglishQualityGate.ts",
+      ),
+      "utf8",
+    );
+
+    expect(source).not.toMatch(
+      /\b(?:resolveTargetEmployerAuthorities|normalizeTargetEmployerName|targetEmployerAliasSpans|employerTokens|resolveSingleAuthority|compactAuthority|numericOccurrence|segmentSentences|findInfinitiveRanges|findMainPredicateIndex)\b/u,
+    );
+    expect(source).toMatch(/\b(?:PASS|OBSERVE|BLOCK)\b/u);
+  });
+
+  it("reuses one active Target Employer resolution for both gate validations", () => {
+    const source = readFileSync(
+      join(process.cwd(), "convex/lib/proposals/premiumCoverLetter.ts"),
+      "utf8",
+    );
+    expect(
+      source.match(/const targetEmployer = resolveTargetEmployerAuthorities\(/gu),
+    ).toHaveLength(1);
+    const gateCalls = [...source.matchAll(
+      /validateEnglishCvBackedQualityGate\(\{([\s\S]*?)\n\s+\}\);/gu,
+    )].map((match) => match[1] ?? "");
+    expect(gateCalls).toHaveLength(2);
+    expect(gateCalls.every((call) => call.includes("targetEmployer,"))).toBe(
+      true,
     );
   });
 
