@@ -361,6 +361,62 @@ describe("premium cover-letter numeric evidence", () => {
     ).toEqual([]);
   });
 
+  it("does not let a nearby month turn an ordinary count into a date", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_monthly_user_scale",
+          source: "cv",
+          text: "In January, I supported 2,000 users.",
+        },
+      ]),
+    });
+
+    expect(
+      evidence.sources.find(
+        (source) => source.factId === "fact_monthly_user_scale",
+      ),
+    ).toEqual(expect.objectContaining({ role: "METRIC" }));
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I supported 2,000 users.",
+        section: "proofBlock",
+        factIds: ["fact_monthly_user_scale"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("classifies an open-ended CV year range as a date", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_open_role_dates",
+          source: "cv",
+          text: "Engineer — 2020–Present",
+        },
+      ]),
+    });
+
+    expect(
+      evidence.sources.find(
+        (source) => source.factId === "fact_open_role_dates",
+      ),
+    ).toEqual(expect.objectContaining({ role: "DATE" }));
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I have worked as an engineer since 2020.",
+        section: "proofBlock",
+        factIds: ["fact_open_role_dates"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
   it("matches a French duration unit when measurement translation is allowed", () => {
     const evidence = projection({
       factGraph: factGraph([
@@ -405,6 +461,68 @@ describe("premium cover-letter numeric evidence", () => {
         demandIds: [],
         claimIds: [],
         allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("does not treat unrelated French metric nouns as translations", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_customer_count",
+          source: "cv",
+          text: "Supported 5 customers through onboarding.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "J’ai dirigé 5 équipes.",
+        section: "proofBlock",
+        factIds: ["fact_customer_count"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "J’ai accompagné 5 clients.",
+        section: "proofBlock",
+        factIds: ["fact_customer_count"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("does not ignore numeric versions for supported tool qualifiers", () => {
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({}),
+        visibleText: "I delivered Docker 99 applications.",
+        section: "proofBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("ignores qualitative written-number prose", () => {
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({}),
+        visibleText:
+          "One practical way I could contribute is by documenting handoffs.",
+        section: "employerValueBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
       }).unsupported,
     ).toEqual([]);
   });

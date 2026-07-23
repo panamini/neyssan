@@ -114,28 +114,6 @@ export type PremiumCoverLetterNumericEvidenceMatchResult = Readonly<{
   unsupported: readonly PremiumCoverLetterUnsupportedNumericEvidence[];
 }>;
 
-const EVIDENCE_IRREGULAR_ACTION_WORDS = new Set([
-  "built",
-  "brought",
-  "drove",
-  "grew",
-  "led",
-  "made",
-  "oversaw",
-  "ran",
-  "sought",
-  "taught",
-  "won",
-  "wrote",
-]);
-
-function isEvidenceActionWord(value: string): boolean {
-  return (
-    EVIDENCE_IRREGULAR_ACTION_WORDS.has(value) ||
-    (value.length > 4 && value.endsWith("ed"))
-  );
-}
-
 const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "a",
   "across",
@@ -180,6 +158,7 @@ const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "than",
   "that",
   "the",
+  "through",
   "to",
   "under",
   "was",
@@ -195,7 +174,54 @@ const METRIC_MEASUREMENT_STOP_WORDS = new Set([
 ]);
 const METRIC_MEASUREMENT_ALIASES = new Map([
   ["customer", "client"],
+  ["squad", "team"],
 ]);
+const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
+  ["chiffre", "revenue"],
+  ["client", "client"],
+  ["clients", "client"],
+  ["conversion", "conversion"],
+  ["équipe", "team"],
+  ["équipes", "team"],
+  ["projet", "project"],
+  ["projets", "project"],
+  ["revenu", "revenue"],
+  ["revenus", "revenue"],
+  ["utilisateur", "user"],
+  ["utilisateurs", "user"],
+]);
+const TOOL_VERSION_QUALIFIERS = new Set([
+  "android",
+  "angular",
+  "aws",
+  "azure",
+  "debian",
+  "docker",
+  "excel",
+  "gcp",
+  "ios",
+  "iso",
+  "java",
+  "kubernetes",
+  "macos",
+  "mongodb",
+  "mysql",
+  "node",
+  "office",
+  "postgres",
+  "python",
+  "react",
+  "redis",
+  "rfc",
+  "rhel",
+  "terraform",
+  "typescript",
+  "ubuntu",
+  "vue",
+  "windows",
+]);
+const CONTEXTUAL_NUMERIC_OCCURRENCE_PATTERN =
+  /\b([A-Za-z][A-Za-z.]*|level|grade|tier)\s*[-–—:]?\s*(\d+(?:\.\d+)*)\b/giu;
 type MetricCurrency =
   | "usd"
   | "eur"
@@ -356,7 +382,7 @@ const WRITTEN_NUMBER_PATTERN =
 const NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN =
   /\b(?:one-on-one|one-to-one|two-way)\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_PHRASE_PATTERN =
-  /\b(?:as\s+one\s+(?:team|unit)|one\s+source\s+of\s+truth)\b/giu;
+  /\b(?:as\s+one\s+(?:team|unit)|one\s+source\s+of\s+truth|one(?:\s+\p{L}[\p{L}-]*){0,2}\s+(?:example|priority|reason|thing|way))\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -533,6 +559,26 @@ function canonicalMetricMeasurement(value: string): string {
   return METRIC_MEASUREMENT_ALIASES.get(canonical) ?? canonical;
 }
 
+function translatedMetricMeasurementForOccurrence(
+  visibleText: string,
+  occurrence: NumericOccurrence,
+): string | undefined {
+  const direct = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(
+    occurrence.measurement,
+  );
+  if (direct) return direct;
+  const contextTokens = visibleText
+    .slice(Math.max(0, occurrence.index - 64), occurrence.end + 64)
+    .toLocaleLowerCase("fr-FR")
+    .split(/[^\p{L}]+/u)
+    .filter(Boolean);
+  for (const token of contextTokens) {
+    const translated = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(token);
+    if (translated) return translated;
+  }
+  return undefined;
+}
+
 function metricCurrency(symbol: string): MetricCurrency | null {
   return METRIC_CURRENCIES.get(symbol.trim().toLowerCase()) ?? null;
 }
@@ -554,6 +600,24 @@ function numericOccurrenceCurrency(args: {
   );
 }
 
+function versionQualifierFromPrefix(prefix: string): string | undefined {
+  const qualifier = prefix.match(
+    /\b([A-Za-z][A-Za-z.]*)(?:\s*(?:version|ver|v))?\s*[-–—:]?\s*$/iu,
+  )?.[1];
+  if (!qualifier) return undefined;
+  const normalized = qualifier.toLocaleLowerCase("en-US");
+  if (normalized === "version" || normalized === "ver" || normalized === "v") {
+    return "version";
+  }
+  const canonical =
+    normalized === "node.js"
+      ? "node"
+      : normalized === "postgresql"
+        ? "postgres"
+        : normalized;
+  return TOOL_VERSION_QUALIFIERS.has(canonical) ? canonical : undefined;
+}
+
 function isPlainToolVersion(args: {
   prefix: string;
   sign: string;
@@ -561,9 +625,7 @@ function isPlainToolVersion(args: {
   currency: MetricCurrency | null;
 }): boolean {
   if (args.sign || args.suffix || args.currency) return false;
-  return /\b(?:version|ver|v|windows|python|node(?:\.js)?|java|typescript|react|angular|vue|ios|android|macos|ubuntu|debian|rhel|postgres(?:ql)?|mysql|redis|mongodb|kubernetes|docker|terraform|aws|azure|gcp|excel|office)\s*$/iu.test(
-    args.prefix,
-  );
+  return Boolean(versionQualifierFromPrefix(args.prefix));
 }
 
 function isIgnoredNumericOccurrence(args: {
@@ -721,11 +783,9 @@ function metricMeasurement(args: {
   const percentageMeasurement = precedingPercentageMeasurement(args);
   if (percentageMeasurement !== null) return percentageMeasurement;
   const measurementSurface =
-    args.value
-      .slice(args.end)
-      .match(
-        /^\s*(?:[+-]\s*)?([A-Za-z][A-Za-z-]*(?:\s+[A-Za-z][A-Za-z-]*){0,3})/u,
-      )?.[1] ?? "";
+    args.value.slice(args.end).match(
+      /^\s*(?:[+-]\s*)?(?:(?:in|of|for|with|across|through|de|du|des|d['’])\s*)?(\p{L}[\p{L}'’-]*(?:\s+\p{L}[\p{L}'’-]*){0,3})/u,
+    )?.[1] ?? "";
   const measurementTokens = measurementSurface.split(/\s+/u);
   const stopIndex = measurementTokens.findIndex((token) =>
     METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()),
@@ -896,14 +956,6 @@ function writtenNumberValue(value: string): number | null {
   return total + current;
 }
 
-function isWrittenNumberLexeme(value: string): boolean {
-  return (
-    WRITTEN_NUMBER_UNITS.has(value) ||
-    WRITTEN_NUMBER_TENS.has(value) ||
-    WRITTEN_NUMBER_SCALES.has(value)
-  );
-}
-
 function isNonQuantitativeWrittenNumberMeasurement(args: {
   measurement: string;
   immediateMeasurement: string;
@@ -1057,11 +1109,18 @@ function numericOccurrences(value: string): NumericOccurrence[] {
     end: numericOccurrenceSurfaceEnd(value, occurrence),
   }));
   const contextual: NumericOccurrence[] = [];
-  for (const match of value.matchAll(
-    /\b(?:version|ver|v|react|angular|vue|node(?:\.js)?|python|java|typescript|ios|android|rfc|iso|level|grade|tier)\s*[-–—:]?\s*(\d+(?:\.\d+)*)\b/giu,
-  )) {
-    const raw = match[1];
+  for (const match of value.matchAll(CONTEXTUAL_NUMERIC_OCCURRENCE_PATTERN)) {
+    const qualifier = match[1]?.toLocaleLowerCase("en-US");
+    const raw = match[2];
     if (!raw || match.index === undefined) continue;
+    if (
+      qualifier !== "level" &&
+      qualifier !== "grade" &&
+      qualifier !== "tier" &&
+      !versionQualifierFromPrefix(match[1])
+    ) {
+      continue;
+    }
     const relativeIndex = match[0].lastIndexOf(raw);
     const index = match.index + relativeIndex;
     const end = index + raw.length;
@@ -1160,19 +1219,7 @@ function versionQualifierForOccurrence(
   occurrence: NumericOccurrence,
 ): string | undefined {
   const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
-  const technologyQualifier = prefix.match(
-    /\b(react|angular|vue|node(?:\.js)?|python|java|typescript|ios|android|rfc|iso)(?:\s*(?:version|ver|v))?\s*[-–—:]?\s*$/iu,
-  )?.[1];
-  const qualifier =
-    technologyQualifier ??
-    prefix.match(/\b(version|ver|v)\s*[-–—:]?\s*$/iu)?.[1];
-  if (!qualifier) return undefined;
-  const normalized = qualifier.toLocaleLowerCase("en-US");
-  if (normalized === "version" || normalized === "ver" || normalized === "v") {
-    return "version";
-  }
-  if (normalized === "node.js") return "node";
-  return normalized;
+  return versionQualifierFromPrefix(prefix);
 }
 
 function isCalendarYearOccurrence(occurrence: NumericOccurrence): boolean {
@@ -1191,11 +1238,15 @@ function hasDateContextForOccurrence(
   return (
     /\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
     /\b(?:19|20|21)\d{2}\s+to\s*$/iu.test(prefix) ||
-    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
-      `${prefix} ${suffix}`,
+    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+\d{1,2}(?:st|nd|rd|th)?)?,?\s*$/iu.test(
+      prefix,
+    ) ||
+    /^\s*(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
+      suffix,
     ) ||
     /\b(?:19|20|21)\d{2}\s*[-–—]\s*$/u.test(prefix) ||
     /^\s*[-–—]\s*(?:19|20|21)\d{2}\b/u.test(suffix) ||
+    /^\s*[-–—]\s*(?:present|current|now)\b/iu.test(suffix) ||
     (/\b(?:19|20|21)\d{2}\s*$/u.test(prefix) &&
       /^\s*[-–—]\s*(?:19|20|21)\d{2}\b/u.test(surface))
   );
@@ -1235,11 +1286,7 @@ function classifyRole(args: {
   if (/\b(?:level|grade|tier)\s*[-–—:]?\s*$/iu.test(prefix)) {
     return { role: "JOB_LEVEL", reason: "job_level_context" };
   }
-  if (
-    /\b(?:version|ver|v|react|angular|vue|node(?:\.js)?|python|java|typescript|ios|android|rfc|iso)\s*[-–—:]?\s*$/iu.test(
-      prefix,
-    )
-  ) {
+  if (versionQualifierForOccurrence(args.value, args.occurrence)) {
     return { role: "VERSION", reason: "version_context" };
   }
   if (hasDateContextForOccurrence(args.value, args.occurrence)) {
@@ -1467,7 +1514,13 @@ function sourceMatchesOccurrence(
     return hasDateContextForOccurrence(visibleText, occurrence);
   }
   if (source.key === occurrence.key) return true;
-  if (allowMeasurementTranslation) return true;
+  if (allowMeasurementTranslation) {
+    return Boolean(
+      source.measurement &&
+        translatedMetricMeasurementForOccurrence(visibleText, occurrence) ===
+          source.measurement,
+    );
+  }
   if (!source.measurement || !occurrence.measurement) return true;
   return false;
 }

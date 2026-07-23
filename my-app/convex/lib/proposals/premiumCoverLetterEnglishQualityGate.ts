@@ -5,10 +5,7 @@ import type {
   JobDemandGraphV1,
   PremiumWriterOutputV1,
 } from "./premiumCoverLetter";
-import {
-  canonicalizePremiumCoverLetterNoun,
-  canonicalizePremiumCoverLetterToken,
-} from "./premiumCoverLetterTokenNormalization";
+import { canonicalizePremiumCoverLetterToken } from "./premiumCoverLetterTokenNormalization";
 import {
   MISSING_TARGET_EMPLOYER,
   type TargetEmployerResolution,
