@@ -1031,7 +1031,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -1045,7 +1045,7 @@ function numericOccurrenceSurfaceEnd(
 ): number {
   const tail = value.slice(occurrence.index);
   const surface = tail.match(
-    /^(?:(?:[+−-]|minus\b|negative\b|plus\b|positive\b)?\s*(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*\d[\d,]*(?:\.\d+)?\s*(?:percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b))?|(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[-\s]+(?:and|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)){0,6}(?:\s+percent\b)?)/iu,
+    /^(?:(?:[+−-]|minus\b|negative\b|plus\b|positive\b)?\s*(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*\d[\d,]*(?:\.\d+)?\s*(?:percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*(?:(?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?|(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[-\s]+(?:and|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)){0,6}(?:\s+percent\b)?)/iu,
   )?.[0];
   return occurrence.index + (surface?.length ?? occurrence.metric.length);
 }
@@ -1116,6 +1116,19 @@ const DURATION_UNITS = new Set([
   "year",
   "years",
 ]);
+const TRANSLATED_DURATION_UNITS = new Map([
+  ["jour", "day"],
+  ["jours", "day"],
+  ["semaine", "week"],
+  ["semaines", "week"],
+  ["mois", "month"],
+  ["trimestre", "quarter"],
+  ["trimestres", "quarter"],
+  ["an", "year"],
+  ["ans", "year"],
+  ["année", "year"],
+  ["années", "year"],
+]);
 
 function durationUnitForOccurrence(
   value: string,
@@ -1128,6 +1141,18 @@ function durationUnitForOccurrence(
     ) ?? "";
   if (!DURATION_UNITS.has(unit)) return undefined;
   return unit.endsWith("s") ? unit.slice(0, -1) : unit;
+}
+
+function translatedDurationUnitForOccurrence(
+  value: string,
+  occurrence: NumericOccurrence,
+): string | undefined {
+  const suffix = value.slice(occurrence.end, occurrence.end + 32);
+  const unit =
+    suffix
+      .match(/^\s*[-–—]?\s*([\p{L}]+)/u)?.[1]
+      ?.toLocaleLowerCase("fr-FR") ?? "";
+  return TRANSLATED_DURATION_UNITS.get(unit);
 }
 
 function versionQualifierForOccurrence(
@@ -1164,7 +1189,8 @@ function hasDateContextForOccurrence(
   const suffix = value.slice(occurrence.end, occurrence.end + 32);
   const surface = value.slice(occurrence.index, occurrence.end);
   return (
-    /\b(?:in|since|during|from|until|through|to)\s*$/iu.test(prefix) ||
+    /\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
+    /\b(?:19|20|21)\d{2}\s+to\s*$/iu.test(prefix) ||
     /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/iu.test(
       `${prefix} ${suffix}`,
     ) ||
@@ -1415,7 +1441,11 @@ function sourceMatchesOccurrence(
   );
   if (explicitVisibleRole && explicitVisibleRole !== source.role) return false;
   if (source.role === "DURATION") {
-    const visibleUnit = durationUnitForOccurrence(visibleText, occurrence);
+    const visibleUnit =
+      durationUnitForOccurrence(visibleText, occurrence) ??
+      (allowMeasurementTranslation
+        ? translatedDurationUnitForOccurrence(visibleText, occurrence)
+        : undefined);
     return Boolean(
       source.contextQualifier &&
         visibleUnit &&

@@ -335,6 +335,80 @@ describe("premium cover-letter numeric evidence", () => {
     ).toEqual([]);
   });
 
+  it("does not classify an ordinary count in the calendar-year range as a date", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_user_scale",
+          source: "cv",
+          text: "Scaled the platform to 2,000 users.",
+        },
+      ]),
+    });
+
+    expect(
+      evidence.sources.find((source) => source.factId === "fact_user_scale"),
+    ).toEqual(expect.objectContaining({ role: "METRIC" }));
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I supported 2,000 users.",
+        section: "proofBlock",
+        factIds: ["fact_user_scale"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("matches a French duration unit when measurement translation is allowed", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_duration_translation",
+          source: "cv",
+          text: "Worked on the platform for 3 years.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "J’ai travaillé sur la plateforme pendant 3 ans.",
+        section: "proofBlock",
+        factIds: ["fact_duration_translation"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("matches a localized trailing currency symbol", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_currency_translation",
+          source: "cv",
+          text: "Managed $1M in annual revenue.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "J’ai géré 1 M$ de chiffre d’affaires annuel.",
+        section: "proofBlock",
+        factIds: ["fact_currency_translation"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
   it.each([
     ["7-Eleven Inc.", "7-Eleven offers reliable delivery."],
     ["99", "At 99, reporting supports delivery."],
