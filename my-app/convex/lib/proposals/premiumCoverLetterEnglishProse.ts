@@ -39,22 +39,40 @@ type SentenceSegment = Readonly<{
 type TaggedToken = WinkPosToken & Readonly<{ start: number; end: number }>;
 type TokenRange = Readonly<{ startIndex: number; endIndex: number }>;
 const tagger = winkPosTaggerFactory();
-
 const ORGANIZATION_ABBREVIATION_PATTERN = /\b(?:Co|Corp|Inc|Ltd|LLC|PLC|GmbH)\.$/u;
 const DOTTED_INITIALISM_PATTERN = /(?:\b\p{Lu}\.){2,}$/u;
 const TITLE_ABBREVIATION_PATTERN = /\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|No|Fig)\.$/u;
 const CONTEXTUAL_ABBREVIATION_PATTERN = /\b(?:e\.g|i\.e|etc|vs|approx|dept)\.$/iu;
 const RELATIVE_MARKER_PATTERN = /^(?:that|which|who)$/iu;
+const RELATIVE_MARKER_POS_PATTERN = /^(?:WDT|WP|WP\$)$/u;
 const FINITE_POS_PATTERN = /^(?:MD|VBD|VBP|VBZ)$/u;
 const NOMINAL_POS_PATTERN = /^(?:NN|NNS|NNP|NNPS|PRP)$/u;
 const INITIAL_PARTICIPLE_POS_PATTERN = /^(?:VBD|VBN)$/u;
 const PUNCTUATION_POS_PATTERN = /^(?:[,.!?;:]|-LRB-|-RRB-)$/u;
-
-function buildSegment(
-  value: string,
-  start: number,
-  end: number,
-): SentenceSegment | null {
+function isRelativeMarker(token: TaggedToken | undefined): boolean {
+  return Boolean(
+    token &&
+    RELATIVE_MARKER_PATTERN.test(token.normal) &&
+    RELATIVE_MARKER_POS_PATTERN.test(token.pos),
+  );
+}
+function isProperNameInitialismContinuation(
+  nextWord: string, segmentPrefix: string, throughPeriod: string,
+): boolean {
+  if (tagger.tagSentence(nextWord)[0]?.pos !== "NNP") return false;
+  return /^(?:\p{Lu}\.){2,}$/u.test(segmentPrefix) ||
+    /\b(?:at|for|from|to|with|joined|consulted)\s+(?:\p{Lu}\.){2,}$/u.test(
+      throughPeriod,
+    );
+}
+function hasCommaBetween(
+  segment: SentenceSegment, previous: TaggedToken, marker: TaggedToken,
+): boolean {
+  return segment.text
+    .slice(previous.end - segment.start, marker.start - segment.start)
+    .includes(",");
+}
+function buildSegment(value: string, start: number, end: number): SentenceSegment | null {
   const surface = value.slice(start, end);
   const leadingWhitespace = surface.match(/^\s*/u)?.[0].length ?? 0;
   const text = surface.trim();
@@ -65,14 +83,12 @@ function buildSegment(
     end: start + leadingWhitespace + text.length,
   };
 }
-
-function isProtectedPeriod(value: string, periodIndex: number): boolean {
+function isProtectedPeriod(value: string, periodIndex: number, segmentStart: number): boolean {
   const throughPeriod = value.slice(0, periodIndex + 1);
+  const segmentPrefix = value.slice(segmentStart, periodIndex + 1).trim();
   const remaining = value.slice(periodIndex + 1);
   const nextWord = remaining.match(/^\s*(\S+)/u)?.[1] ?? "";
-  const lowercaseStyled = /^(?:[a-z]+[A-Z][A-Za-z]*|npm)\b/u.test(
-    nextWord,
-  );
+  const lowercaseStyled = /^(?:[a-z]+[A-Z][A-Za-z]*|npm)\b/u.test(nextWord);
   if (TITLE_ABBREVIATION_PATTERN.test(throughPeriod)) return true;
   if (/\b(?:e\.g|i\.e)\.$/iu.test(throughPeriod)) return true;
   if (CONTEXTUAL_ABBREVIATION_PATTERN.test(throughPeriod)) {
@@ -84,16 +100,12 @@ function isProtectedPeriod(value: string, periodIndex: number): boolean {
   if (DOTTED_INITIALISM_PATTERN.test(throughPeriod)) {
     if (lowercaseStyled) return false;
     if (/^\s*[a-z]/u.test(remaining)) return true;
-    return (
-      /\b(?:at|for|from|to|with|joined|consulted)\s+(?:\p{Lu}\.){2,}$/u.test(
-        throughPeriod,
-      ) &&
-      /^\s*\p{Lu}[\p{L}-]+\b/u.test(remaining)
+    return isProperNameInitialismContinuation(
+      nextWord, segmentPrefix, throughPeriod,
     );
   }
   return false;
 }
-
 function segmentSentences(value: string): SentenceSegment[] {
   const segments: SentenceSegment[] = [];
   let start = 0;
@@ -101,7 +113,7 @@ function segmentSentences(value: string): SentenceSegment[] {
     const punctuationIndex = match.index ?? 0;
     if (
       match[0].startsWith(".") &&
-      isProtectedPeriod(value, punctuationIndex)
+      isProtectedPeriod(value, punctuationIndex, start)
     ) {
       continue;
     }
@@ -114,7 +126,6 @@ function segmentSentences(value: string): SentenceSegment[] {
   if (trailing) segments.push(trailing);
   return segments;
 }
-
 function tagSegment(segment: SentenceSegment): TaggedToken[] {
   const tagged: TaggedToken[] = [];
   let cursor = 0;
@@ -131,7 +142,6 @@ function tagSegment(segment: SentenceSegment): TaggedToken[] {
   }
   return tagged;
 }
-
 function contentTokens(tokens: readonly TaggedToken[]): TaggedToken[] {
   return tokens.filter((token) => !PUNCTUATION_POS_PATTERN.test(token.pos));
 }
@@ -142,7 +152,8 @@ function findInfinitiveEnd(
 ): number {
   const offset = tokens.slice(startIndex + 2).findIndex((token, offset) => {
     const cursor = startIndex + 2 + offset;
-    if (token.pos === "MD" || token.pos === "CC") return true;
+    if (token.pos === "MD") return true;
+    if (token.pos === "CC") return tokens[cursor + 1]?.pos !== "VB";
     if (
       token.pos === "IN" &&
       NOMINAL_POS_PATTERN.test(tokens[cursor + 1]?.pos ?? "") &&
@@ -189,18 +200,8 @@ function findRelativePredicateIndexes(
   for (let markerIndex = 1; markerIndex < tokens.length; markerIndex += 1) {
     const marker = tokens[markerIndex];
     const previous = tokens[markerIndex - 1];
-    if (!RELATIVE_MARKER_PATTERN.test(marker?.normal ?? "")) {
-      continue;
-    }
-    if (
-      marker &&
-      previous &&
-      segment.text
-        .slice(previous.end - segment.start, marker.start - segment.start)
-        .includes(",")
-    ) {
-      continue;
-    }
+    if (!isRelativeMarker(marker)) continue;
+    if (marker && previous && hasCommaBetween(segment, previous, marker)) continue;
     for (
       let index = markerIndex + 1;
       index < tokens.length;
@@ -263,7 +264,7 @@ function subjectEndIndex(args: {
       firstRelativePredicateIndex !== undefined &&
       index < args.predicateIndex &&
       index < firstRelativePredicateIndex &&
-      RELATIVE_MARKER_PATTERN.test(token.normal),
+      isRelativeMarker(token),
   );
   if (relativeMarkerIndex > 0) return relativeMarkerIndex - 1;
   const infinitive = args.infinitiveRanges.find(

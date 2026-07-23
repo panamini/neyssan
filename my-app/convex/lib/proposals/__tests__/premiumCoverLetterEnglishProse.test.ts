@@ -129,6 +129,15 @@ describe("premium cover-letter English prose module", () => {
     );
   });
 
+  it("keeps a demonstrative determiner out of relative-clause evidence", () => {
+    expect(analyze("The skills from that role are useful.")[0]).toEqual(
+      expect.objectContaining({
+        classification: "VALID",
+        relativePredicateSpans: [],
+      }),
+    );
+  });
+
   it("bounds an infinitive before a structurally tagged subordinate clause", () => {
     expect(
       analyze(
@@ -138,6 +147,16 @@ describe("premium cover-letter English prose module", () => {
       expect.objectContaining({
         classification: "VALID",
         infinitiveSpans: [{ start: 11, end: 30 }],
+      }),
+    );
+  });
+
+  it("keeps coordinated verbs inside the same infinitive span", () => {
+    expect(
+      analyze("The team plans to build and deliver reliable systems.")[0],
+    ).toEqual(
+      expect.objectContaining({
+        infinitiveSpans: [{ start: 15, end: 52 }],
       }),
     );
   });
@@ -179,6 +198,14 @@ describe("premium cover-letter English prose module", () => {
     )).toEqual([
       "I joined Acme Corp.",
       "I improved reporting.",
+    ]);
+  });
+
+  it("preserves a dotted initialism inside a proper company name", () => {
+    expect(analyze("U.S. Bank supports delivery.")).toEqual([
+      expect.objectContaining({
+        text: "U.S. Bank supports delivery.",
+      }),
     ]);
   });
 
