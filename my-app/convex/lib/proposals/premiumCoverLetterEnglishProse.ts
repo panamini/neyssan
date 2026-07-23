@@ -79,7 +79,7 @@ function isProtectedPeriod(value: string, periodIndex: number): boolean {
     return !/^[\p{Lu}\p{N}"'“‘(]/u.test(nextWord);
   }
   if (ORGANIZATION_ABBREVIATION_PATTERN.test(throughPeriod)) {
-    return !lowercaseStyled;
+    return /^[a-z]/u.test(nextWord) && !lowercaseStyled;
   }
   if (DOTTED_INITIALISM_PATTERN.test(throughPeriod)) {
     if (lowercaseStyled) return false;
@@ -357,6 +357,7 @@ function isProvenVerbLedFragment(args: {
     args.mainPredicateIndex !== null ||
     !first ||
     !INITIAL_PARTICIPLE_POS_PATTERN.test(first.pos) ||
+    args.segment.text.endsWith("?") ||
     args.segment.text.includes(",")
   ) {
     return false;

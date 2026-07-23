@@ -66,6 +66,8 @@ describe("premium cover-letter English prose module", () => {
     "If needed our team can help.",
     "Across teams collaboration flourishes.",
     "Aligned with clear goals, people excel.",
+    "Did the project succeed?",
+    "Was the rollout effective?",
   ])("observes an uncertain structure instead of blocking it: %s", (text) => {
     expect(analyze(text)[0]).toEqual(
       expect.objectContaining({
@@ -168,6 +170,15 @@ describe("premium cover-letter English prose module", () => {
         text: "npm supports reliable delivery.",
         sentenceSpan: { start: 21, end: 52 },
       }),
+    ]);
+  });
+
+  it("splits after a terminal organization abbreviation", () => {
+    expect(analyze("I joined Acme Corp. I improved reporting.").map(
+      ({ text }) => text,
+    )).toEqual([
+      "I joined Acme Corp.",
+      "I improved reporting.",
     ]);
   });
 
