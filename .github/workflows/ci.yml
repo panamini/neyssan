@@ -130,6 +130,7 @@ jobs:
         run: |
           ./node_modules/.bin/vitest --run \
             convex/lib/proposals/__tests__/coverLetterPolicyCandidate.test.ts \
+            convex/lib/proposals/__tests__/premiumCoverLetterEnglishProse.test.ts \
             convex/lib/proposals/__tests__/premiumCoverLetterEnglishQualityGate.test.ts \
             convex/lib/proposals/__tests__/premiumCoverLetterNumericEvidence.test.ts \
             convex/lib/proposals/__tests__/proposalWriterPrompt.test.ts \

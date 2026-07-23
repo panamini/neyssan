@@ -16,6 +16,10 @@ import {
   matchPremiumCoverLetterNumericEvidence,
   type PremiumCoverLetterNumericEvidenceProjection,
 } from "./premiumCoverLetterNumericEvidence";
+import {
+  analyzePremiumCoverLetterEnglishProseSection,
+  type PremiumCoverLetterEnglishProseAnalysis,
+} from "./premiumCoverLetterEnglishProse";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -48,12 +52,18 @@ export type EnglishCvBackedQualityGateIssue = Readonly<{
   metric?: string;
 }>;
 
-export type EnglishCvBackedQualityGateObservation = Readonly<{
-  code: "intentional_claim_overlap";
-  section: ClaimPlanSection;
-  otherSection: ClaimPlanSection;
-  factId: string;
-}>;
+export type EnglishCvBackedQualityGateObservation =
+  | Readonly<{
+      code: "intentional_claim_overlap";
+      section: ClaimPlanSection;
+      otherSection: ClaimPlanSection;
+      factId: string;
+    }>
+  | Readonly<{
+      code: "english_prose_unknown";
+      section: ClaimPlanSection;
+      analysis: PremiumCoverLetterEnglishProseAnalysis;
+    }>;
 
 export type EnglishCvBackedQualityGateAnalysis = Readonly<{
   issues: EnglishCvBackedQualityGateIssue[];
@@ -135,107 +145,6 @@ const GENERIC_SINGLE_EVIDENCE_ANCHORS = new Set([
   "support",
   "workflow",
 ]);
-const VERB_LED_FRAGMENT_PATTERN =
-  /^(?:managed|maintained|documented|coordinated|reduced|tracked|supported|handled|worked|led|built|improved|created|reported)\b/u;
-const FINITE_PREDICATE_TOKENS = new Set([
-  "am",
-  "are",
-  "be",
-  "been",
-  "being",
-  "built",
-  "can",
-  "could",
-  "depend",
-  "did",
-  "do",
-  "does",
-  "drive",
-  "enable",
-  "ensure",
-  "grew",
-  "had",
-  "has",
-  "have",
-  "help",
-  "is",
-  "keep",
-  "led",
-  "matter",
-  "may",
-  "might",
-  "must",
-  "remain",
-  "scale",
-  "shall",
-  "should",
-  "sustain",
-  "was",
-  "were",
-  "will",
-  "would",
-]);
-const FINITE_PREDICATE_BLOCKERS = new Set([
-  "across",
-  "and",
-  "as",
-  "at",
-  "by",
-  "delivery",
-  "for",
-  "from",
-  "in",
-  "into",
-  "of",
-  "on",
-  "or",
-  "over",
-  "through",
-  "to",
-  "under",
-  "with",
-]);
-const PREPOSITIONAL_FRAGMENT_STARTERS = new Set([
-  "across",
-  "at",
-  "by",
-  "for",
-  "from",
-  "in",
-  "into",
-  "of",
-  "on",
-  "over",
-  "through",
-  "to",
-  "under",
-  "with",
-]);
-const FINITE_PREDICATE_SUBJECT_TOKENS = new Set([
-  "he",
-  "i",
-  "it",
-  "she",
-  "that",
-  "they",
-  "we",
-  "which",
-  "who",
-  "you",
-]);
-const FINITE_PREDICATE_SUBJECT_DETERMINERS = new Set([
-  "a",
-  "an",
-  "her",
-  "his",
-  "its",
-  "my",
-  "our",
-  "the",
-  "their",
-  "this",
-  "your",
-]);
 function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -247,145 +156,6 @@ function normalizeSentenceKey(value: string): string {
     .trim();
 }
 
-type SentenceRange = Readonly<{
-  text: string;
-  start: number;
-  end: number;
-}>;
-
-const TITLE_PERIOD_ABBREVIATION_PATTERN =
-  /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
-const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
-  /\b(?:etc|vs|approx|dept|co|corp|inc|ltd|llc|plc|gmbh|e\.g|i\.e|u\.s|u\.k)\.$/iu;
-const DOTTED_INITIALISM_CONTINUATION_PATTERN = /\b(?:[A-Z]\.){2,}$/u;
-const DOTTED_INITIALISM_ENTITY_PREFIX_PATTERN =
-  /\b(?:at|for|from|to|with|joined|consulted)\s+(?:[A-Z]\.){2,}$/u;
-const LOWERCASE_STYLED_SENTENCE_STARTERS = new Set(["npm"]);
-
-function startsWithLowercaseStyledProperNoun(value: string): boolean {
-  const token =
-    value
-      .trimStart()
-      .match(/^[A-Za-z][A-Za-z0-9+#.-]*/u)?.[0] ?? "";
-  return (
-    /^[a-z]+[A-Z]/u.test(token) ||
-    LOWERCASE_STYLED_SENTENCE_STARTERS.has(token.toLowerCase())
-  );
-}
-
-function continuesContextualAbbreviation(args: {
-  textThroughPunctuation: string;
-  remainingText: string;
-}): boolean {
-  if (/\b(?:e\.g|i\.e)\.$/iu.test(args.textThroughPunctuation)) return true;
-  return (
-    /\b(?:u\.s|u\.k)\.$/iu.test(args.textThroughPunctuation) &&
-    /^\s*(?:Bank|Bancorp|Airways|Airlines|Army|Navy|Department|Government|Steel)\b/u.test(
-      args.remainingText,
-    )
-  );
-}
-
-function continuesDottedInitialism(args: {
-  textThroughPunctuation: string;
-  remainingText: string;
-}): boolean {
-  if (
-    !DOTTED_INITIALISM_CONTINUATION_PATTERN.test(
-      args.textThroughPunctuation,
-    )
-  ) {
-    return false;
-  }
-  return (
-    (DOTTED_INITIALISM_ENTITY_PREFIX_PATTERN.test(
-      args.textThroughPunctuation,
-    ) &&
-      /^\s*[A-Z][A-Za-z]+\b/u.test(args.remainingText)) ||
-    /^\s*[A-Z][A-Za-z]+\s+[A-Z][A-Za-z]+\b/u.test(args.remainingText)
-  );
-}
-
-function isContextualPeriodSentenceBoundary(args: {
-  textThroughPunctuation: string;
-  remainingText: string;
-  nextCharacter: string;
-}): boolean {
-  if (continuesContextualAbbreviation(args)) return false;
-  return (
-    /[\p{Lu}\p{N}"'“‘(]/u.test(args.nextCharacter) ||
-    startsWithLowercaseStyledProperNoun(args.remainingText)
-  );
-}
-
-function buildSentenceRange(
-  value: string,
-  start: number,
-  end: number,
-): SentenceRange | null {
-  const surface = value.slice(start, end);
-  const text = surface.trim();
-  if (!text) return null;
-  return {
-    text,
-    start: start + (surface.match(/^\s*/u)?.[0].length ?? 0),
-    end,
-  };
-}
-
-function isSentenceBoundary(args: {
-  value: string;
-  match: RegExpMatchArray;
-  start: number;
-}): boolean {
-  const matchIndex = args.match.index ?? args.start;
-  const end = matchIndex + args.match[0].length;
-  const nextCharacter = args.value.slice(end).match(/\S/u)?.[0];
-  if (!nextCharacter || /[!?]/u.test(args.match[0])) return true;
-
-  const punctuationLength =
-    args.match[0].match(/^[.!?]+/u)?.[0].length ?? 0;
-  const textThroughPunctuation = args.value.slice(
-    0,
-    matchIndex + punctuationLength,
-  );
-  if (TITLE_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return false;
-  }
-  if (CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return isContextualPeriodSentenceBoundary({
-      textThroughPunctuation,
-      remainingText: args.value.slice(end),
-      nextCharacter,
-    });
-  }
-  if (
-    continuesDottedInitialism({
-      textThroughPunctuation,
-      remainingText: args.value.slice(end),
-    })
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function splitSentenceRanges(value: string): SentenceRange[] {
-  const sentences: SentenceRange[] = [];
-  let start = 0;
-  for (const match of value.matchAll(
-    /[.!?]+(?:["'”’»)\]}]+)?(?=\s|$)/gu,
-  )) {
-    const end = (match.index ?? start) + match[0].length;
-    if (!isSentenceBoundary({ value, match, start })) continue;
-    const sentence = buildSentenceRange(value, start, end);
-    if (sentence) sentences.push(sentence);
-    start = end;
-  }
-  const trailing = buildSentenceRange(value, start, value.length);
-  if (trailing) sentences.push(trailing);
-  return sentences;
-}
 function evidenceAnchorTokens(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
@@ -505,181 +275,6 @@ function hasExactSparseFactGrounding(args: {
 }
 
 
-function hasPluralSubjectForUnlistedPredicate(args: {
-  tokens: readonly string[];
-  token: string;
-  index: number;
-}): boolean {
-  return (
-    args.tokens[args.index - 1]?.endsWith("s") === true &&
-    /^[a-z]+$/u.test(args.token)
-  );
-}
-
-function hasNounPhraseSubjectForUnlistedPredicate(args: {
-  tokens: readonly string[];
-  index: number;
-}): boolean {
-  return (
-    args.index >= 2 &&
-    FINITE_PREDICATE_SUBJECT_DETERMINERS.has(
-      args.tokens[args.index - 2] ?? "",
-    ) &&
-    /^[a-z][a-z-]*$/u.test(args.tokens[args.index - 1] ?? "")
-  );
-}
-
-function hasMultiwordNounSubjectAfterLeadingParticiple(args: {
-  tokens: readonly string[];
-  index: number;
-}): boolean {
-  const subjectTokens = args.tokens.slice(1, args.index);
-  const followingToken = args.tokens[args.index + 1];
-  return (
-    subjectTokens.length >= 2 &&
-    subjectTokens.every(
-      (token) =>
-        /^[a-z][a-z-]*$/u.test(token) &&
-        !FINITE_PREDICATE_BLOCKERS.has(token),
-    ) &&
-    (!followingToken || !FINITE_PREDICATE_BLOCKERS.has(followingToken))
-  );
-}
-
-function hasSupportedSubjectForUnlistedPredicate(args: {
-  tokens: readonly string[];
-  index: number;
-  hasFrontedClause: boolean;
-}): boolean {
-  return (
-    args.index === 2 ||
-    hasNounPhraseSubjectForUnlistedPredicate(args) ||
-    hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
-    hasFrontedBareNounSubject(args)
-  );
-}
-
-function isTerminalUnlistedFinitePredicate(args: {
-  tokens: readonly string[];
-  token: string;
-  index: number;
-  hasFrontedClause: boolean;
-}): boolean {
-  return (
-    /(?:e|s|ify|ise|ize|ate)$/u.test(args.token) &&
-    (hasNounPhraseSubjectForUnlistedPredicate(args) ||
-      hasFrontedBareNounSubject(args))
-  );
-}
-
-function isLikelyUnlistedFinitePredicate(args: {
-  tokens: readonly string[];
-  token: string;
-  index: number;
-  hasFrontedClause: boolean;
-}): boolean {
-  if (
-    !hasSupportedSubjectForUnlistedPredicate(args) ||
-    args.tokens.length < 4
-  ) {
-    return false;
-  }
-  if (args.token.includes("-")) return false;
-  if (FINITE_PREDICATE_BLOCKERS.has(args.token)) return false;
-  if (
-    /(?:ing|tion|ment|ity|ness|ance|ence|ship|ure|age|ery|ory|ism)$/u.test(
-      args.token,
-    )
-  ) {
-    return false;
-  }
-  const followingToken = args.tokens[args.index + 1];
-  const hasPredicateShape = /(?:e|s|ify|ise|ize|ate)$/u.test(args.token);
-  if (!followingToken) {
-    return isTerminalUnlistedFinitePredicate(args);
-  }
-  if (FINITE_PREDICATE_BLOCKERS.has(followingToken)) {
-    return false;
-  }
-  if (hasPredicateShape) return true;
-  return hasPluralSubjectForUnlistedPredicate(args);
-}
-
-function hasFrontedBareNounSubject(args: {
-  tokens: readonly string[];
-  index: number;
-  hasFrontedClause: boolean;
-}): boolean {
-  const subject = args.tokens[args.index - 1] ?? "";
-  return (
-    args.hasFrontedClause &&
-    args.index >= 4 &&
-    /^[a-z][a-z-]*$/u.test(subject) &&
-    !FINITE_PREDICATE_BLOCKERS.has(subject)
-  );
-}
-
-function hasSupportedSubjectForRegularPastPredicate(args: {
-  tokens: readonly string[];
-  index: number;
-  hasFrontedClause: boolean;
-}): boolean {
-  return (
-    args.index === 2 ||
-    ["i", "we", "you", "they", "he", "she", "it"].includes(
-      args.tokens[args.index - 1],
-    ) ||
-    hasNounPhraseSubjectForUnlistedPredicate(args) ||
-    hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
-    hasFrontedBareNounSubject(args) ||
-    args.tokens[args.index - 1]?.endsWith("s") === true ||
-    ["that", "which", "who"].includes(args.tokens[args.index + 1])
-  );
-}
-
-function isFinitePredicateCandidate(args: {
-  tokens: readonly string[];
-  token: string;
-  index: number;
-  hasFrontedClause: boolean;
-}): boolean {
-  if (args.tokens[args.index - 1] === "to") return false;
-  const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
-  if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
-  if (
-    /(?:ed|en)$/u.test(args.token) &&
-    hasSupportedSubjectForRegularPastPredicate(args)
-  ) {
-    return true;
-  }
-  return isLikelyUnlistedFinitePredicate(args);
-}
-
-function isVerbLedFragment(normalizedSentence: string): boolean {
-  if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
-  const tokens = normalizedSentence.split(/[^a-z0-9-]+/u).filter(Boolean);
-  if (
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(tokens[1] ?? "") &&
-    !normalizedSentence.includes(",") &&
-    !tokens
-      .slice(2)
-      .some((token) => FINITE_PREDICATE_SUBJECT_TOKENS.has(token))
-  ) {
-    return true;
-  }
-  const hasLaterFinitePredicate = tokens.some(
-    (token, index) =>
-      index >= 2 &&
-      isFinitePredicateCandidate({
-        tokens,
-        token,
-        index,
-        hasFrontedClause: normalizedSentence.includes(","),
-      }),
-  );
-  return !hasLaterFinitePredicate;
-}
-
 function attributedMetricFactIds(args: {
   visibleText: string;
   candidateFactIds: ReadonlySet<string>;
@@ -760,6 +355,23 @@ function collectIntentionalClaimOverlapObservations(args: {
     }
   }
   return observations;
+}
+
+function collectEnglishProseUnknownObservations(
+  writerOutput: PremiumWriterOutputV1,
+): EnglishCvBackedQualityGateObservation[] {
+  return ENGLISH_CV_BACKED_SECTIONS.flatMap((section) =>
+    analyzePremiumCoverLetterEnglishProseSection({
+      section,
+      text: writerOutput.bodyParts[section].text.trim(),
+    })
+      .filter((analysis) => analysis.classification === "UNKNOWN")
+      .map((analysis) => ({
+        code: "english_prose_unknown" as const,
+        section,
+        analysis,
+      })),
+  );
 }
 
 /**
@@ -894,13 +506,16 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
 
-    const sentenceRanges = splitSentenceRanges(text);
-    for (const { text: sentence } of sentenceRanges) {
-      const normalizedSentence = normalizeSentenceKey(sentence);
-      const hasVerbLedFragment = sentence
-        .split(";")
-        .some((clause) => isVerbLedFragment(normalizeSentenceKey(clause)));
-      if (hasVerbLedFragment) {
+    const proseAnalyses = analyzePremiumCoverLetterEnglishProseSection({
+      section,
+      text,
+    });
+    for (const proseAnalysis of proseAnalyses) {
+      const normalizedSentence = normalizeSentenceKey(proseAnalysis.text);
+      if (
+        proseAnalysis.classification === "INVALID" &&
+        proseAnalysis.confidence === "high"
+      ) {
         pushUnique(issues, { code: "incomplete_sentence", section });
       }
       const previousSection = seenSentenceSections.get(normalizedSentence);
@@ -994,10 +609,10 @@ export function validateEnglishCvBackedQualityGate(args: {
         matches.flatMap((match) => (match.factId ? [match.factId] : [])),
       );
       const localText =
-        sentenceRanges.find(
-          (sentence) =>
-            firstMatch.visibleSpan.start >= sentence.start &&
-            firstMatch.visibleSpan.start < sentence.end,
+        proseAnalyses.find(
+          (analysis) =>
+            firstMatch.visibleSpan.start >= analysis.sentenceSpan.start &&
+            firstMatch.visibleSpan.start < analysis.sentenceSpan.end,
         )?.text ?? text;
       const metricFactIds = attributedMetricFactIds({
         visibleText: localText,
@@ -1046,6 +661,9 @@ export function analyzeEnglishCvBackedQualityGate(args: {
   }
   return {
     issues,
-    observations: collectIntentionalClaimOverlapObservations(args),
+    observations: [
+      ...collectIntentionalClaimOverlapObservations(args),
+      ...collectEnglishProseUnknownObservations(args.writerOutput),
+    ],
   };
 }

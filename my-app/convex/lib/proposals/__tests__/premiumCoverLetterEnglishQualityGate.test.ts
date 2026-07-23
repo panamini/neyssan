@@ -16,6 +16,7 @@ import {
   analyzeEnglishCvBackedQualityGate,
   validateEnglishCvBackedQualityGate,
 } from "../premiumCoverLetterEnglishQualityGate";
+import { analyzePremiumCoverLetterEnglishProseSection } from "../premiumCoverLetterEnglishProse";
 import {
   canonicalizePremiumCoverLetterNoun,
   canonicalizePremiumCoverLetterToken,
@@ -30,6 +31,7 @@ import {
   ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS,
   type EnglishQualityGateCharacterizationCase,
   type EnglishQualityGateKnownFailureId,
+  type EnglishProseCharacterizationCase,
   type NumericEvidenceCharacterizationCase,
 } from "../../../../scripts/evals/cases/cover-letter/english-quality-gate-characterization-cases";
 
@@ -3581,6 +3583,60 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it.each([
+    { text: "Aligned for delivery.", end: 21 },
+    { text: "The work.", end: 9 },
+    { text: "The support.", end: 12 },
+  ])("observes UNKNOWN prose without adding a blocking issue: $text", ({
+    text,
+    end,
+  }) => {
+    const analysis = analyzeEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: text,
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(analysis.issues).not.toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+    expect(analysis.observations).toContainEqual(
+      expect.objectContaining({
+        code: "english_prose_unknown",
+        section: "proofBlock",
+        analysis: expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          reasonCodes: ["ambiguous_clause_structure"],
+          sentenceSpan: { start: 0, end },
+        }),
+      }),
+    );
+  });
+
+  it("contains no competing syntax fallback in the gate", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "convex/lib/proposals/premiumCoverLetterEnglishQualityGate.ts",
+      ),
+      "utf8",
+    );
+
+    expect(source).not.toMatch(
+      /\b(?:splitSentenceRanges|isVerbLedFragment|isFinitePredicateCandidate|FINITE_PREDICATE_TOKENS)\b/u,
+    );
+    expect(source).toContain(
+      "analyzePremiumCoverLetterEnglishProseSection",
+    );
+  });
+
   it("rejects a verb-led fragment with a plural object and trailing adverb", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -3994,6 +4050,33 @@ function characterizationProseIsIncomplete(
   );
 }
 
+function characterizationProseAnalyses(
+  input: EnglishProseCharacterizationCase,
+) {
+  return analyzePremiumCoverLetterEnglishProseSection({
+    section: "proofBlock",
+    text: input.visibleText,
+  }).map(
+    ({
+      sentenceSpan,
+      classification,
+      confidence,
+      reasonCodes,
+      subjectSpan,
+      finitePredicateSpan,
+      infinitiveSpans,
+    }) => ({
+      sentenceSpan,
+      classification,
+      confidence,
+      reasonCodes,
+      subjectSpan,
+      finitePredicateSpan,
+      infinitiveSpans,
+    }),
+  );
+}
+
 function characterizationCaseObservation(
   input: EnglishQualityGateCharacterizationCase,
 ): string {
@@ -4003,7 +4086,11 @@ function characterizationCaseObservation(
     case "numeric_evidence":
       return JSON.stringify(characterizationUnsupportedMetrics(input));
     case "english_prose":
-      return JSON.stringify(characterizationProseIsIncomplete(input));
+      return JSON.stringify(
+        input.expectedAnalyses
+          ? characterizationProseAnalyses(input)
+          : characterizationProseIsIncomplete(input),
+      );
   }
 }
 
@@ -4016,7 +4103,9 @@ function characterizationCaseExpectedObservation(
     case "numeric_evidence":
       return JSON.stringify([...input.expectedUnsupportedMetrics].sort());
     case "english_prose":
-      return JSON.stringify(input.expectedIncomplete);
+      return JSON.stringify(
+        input.expectedAnalyses ?? input.expectedIncomplete,
+      );
   }
 }
 
@@ -4097,6 +4186,10 @@ describe("English quality-gate shared characterization corpus", () => {
       "prose-infinitive-fragment",
       "prose-main-predicate",
       "prose-finite-control",
+      "prose-abbreviation-segmentation",
+      "prose-subject-shapes",
+      "prose-clause-bounds",
+      "prose-policy-disposition",
     ]);
     for (const pairId of invariantPairIds) {
       const variants = ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.filter(
