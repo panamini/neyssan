@@ -25,6 +25,15 @@ export const ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS = [
   "p2-prose-main-predicate-removed-minimal-pair",
   "history-prose-finite-subject-control",
   "history-prose-finite-subject-punctuation-variation",
+  "pr-d-prose-abbreviations-corp-us",
+  "pr-d-prose-abbreviation-co",
+  "pr-d-prose-simple-subject",
+  "pr-d-prose-modified-subject",
+  "pr-d-prose-coordinated-subject",
+  "pr-d-prose-relative-clause",
+  "pr-d-prose-bounded-infinitive-clause",
+  "pr-d-prose-imperative-form",
+  "pr-d-prose-unknown-observation",
 ] as const;
 
 export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS = [] as const;
@@ -73,6 +82,15 @@ export type EnglishProseCharacterizationCase = CharacterizationCaseBase &
     axis: "english_prose";
     visibleText: string;
     expectedIncomplete: boolean;
+    expectedAnalyses?: readonly Readonly<{
+      sentenceSpan: Readonly<{ start: number; end: number }>;
+      classification: "VALID" | "INVALID" | "UNKNOWN";
+      confidence: "high" | "medium" | "low";
+      reasonCodes: readonly string[];
+      subjectSpan: Readonly<{ start: number; end: number }> | null;
+      finitePredicateSpan: Readonly<{ start: number; end: number }> | null;
+      infinitiveSpans: readonly Readonly<{ start: number; end: number }>[];
+    }>[];
   }>;
 
 export type EnglishQualityGateCharacterizationCase =
@@ -281,6 +299,17 @@ const englishProseCases: readonly EnglishProseCharacterizationCase[] = [
     axis: "english_prose",
     visibleText: "Managed client reporting to make teams grow.",
     expectedIncomplete: true,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 44 },
+        classification: "INVALID",
+        confidence: "high",
+        reasonCodes: ["verb_led_fragment", "missing_finite_predicate"],
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        infinitiveSpans: [{ start: 25, end: 43 }],
+      },
+    ],
   },
   {
     id: "history-prose-help-teams-grow-fragment",
@@ -298,6 +327,22 @@ const englishProseCases: readonly EnglishProseCharacterizationCase[] = [
     visibleText:
       "Managed services to help teams scale are central to reliable delivery.",
     expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 70 },
+        classification: "VALID",
+        confidence: "high",
+        reasonCodes: [
+          "finite_predicate",
+          "modified_subject",
+          "bounded_infinitive",
+          "main_finite_predicate_after_infinitive",
+        ],
+        subjectSpan: { start: 0, end: 16 },
+        finitePredicateSpan: { start: 37, end: 40 },
+        infinitiveSpans: [{ start: 17, end: 36 }],
+      },
+    ],
   },
   {
     id: "p2-prose-main-predicate-case-punctuation",
@@ -331,6 +376,191 @@ const englishProseCases: readonly EnglishProseCharacterizationCase[] = [
     axis: "english_prose",
     visibleText: "I managed services—to help teams scale!",
     expectedIncomplete: false,
+  },
+  {
+    id: "pr-d-prose-abbreviations-corp-us",
+    provenance: "P2",
+    pairId: "prose-abbreviation-segmentation",
+    axis: "english_prose",
+    visibleText: "Example Corp. shipped results. U.S. teams coordinated work.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 30 },
+        classification: "UNKNOWN",
+        confidence: "low",
+        reasonCodes: ["ambiguous_clause_structure"],
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        infinitiveSpans: [],
+      },
+      {
+        sentenceSpan: { start: 31, end: 59 },
+        classification: "UNKNOWN",
+        confidence: "low",
+        reasonCodes: ["ambiguous_clause_structure"],
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-abbreviation-co",
+    provenance: "P2",
+    pairId: "prose-abbreviation-segmentation",
+    axis: "english_prose",
+    visibleText: "Acme Co. delivered reports.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 27 },
+        classification: "UNKNOWN",
+        confidence: "low",
+        reasonCodes: ["ambiguous_clause_structure"],
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-simple-subject",
+    provenance: "P2",
+    pairId: "prose-subject-shapes",
+    axis: "english_prose",
+    visibleText: "Teams deliver results.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 22 },
+        classification: "VALID",
+        confidence: "high",
+        reasonCodes: ["finite_predicate", "simple_subject"],
+        subjectSpan: { start: 0, end: 5 },
+        finitePredicateSpan: { start: 6, end: 13 },
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-modified-subject",
+    provenance: "P2",
+    pairId: "prose-subject-shapes",
+    axis: "english_prose",
+    visibleText: "The experienced teams deliver results.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 38 },
+        classification: "VALID",
+        confidence: "high",
+        reasonCodes: ["finite_predicate", "modified_subject"],
+        subjectSpan: { start: 0, end: 21 },
+        finitePredicateSpan: { start: 22, end: 29 },
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-coordinated-subject",
+    provenance: "P2",
+    pairId: "prose-subject-shapes",
+    axis: "english_prose",
+    visibleText: "I and my colleague managed reporting.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 37 },
+        classification: "VALID",
+        confidence: "high",
+        reasonCodes: ["finite_predicate", "coordinated_subject"],
+        subjectSpan: { start: 0, end: 18 },
+        finitePredicateSpan: { start: 19, end: 26 },
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-relative-clause",
+    provenance: "P2",
+    pairId: "prose-clause-bounds",
+    axis: "english_prose",
+    visibleText: "The teams that managed reporting improved delivery.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 51 },
+        classification: "UNKNOWN",
+        confidence: "low",
+        reasonCodes: ["ambiguous_clause_structure"],
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-bounded-infinitive-clause",
+    provenance: "P2",
+    pairId: "prose-clause-bounds",
+    axis: "english_prose",
+    visibleText:
+      "Teams work to improve delivery while managers review results.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 61 },
+        classification: "VALID",
+        confidence: "high",
+        reasonCodes: [
+          "finite_predicate",
+          "simple_subject",
+          "bounded_infinitive",
+        ],
+        subjectSpan: { start: 0, end: 5 },
+        finitePredicateSpan: { start: 6, end: 10 },
+        infinitiveSpans: [{ start: 11, end: 30 }],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-imperative-form",
+    provenance: "P2",
+    pairId: "prose-policy-disposition",
+    axis: "english_prose",
+    visibleText: "Submit reports promptly.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 24 },
+        classification: "VALID",
+        confidence: "high",
+        reasonCodes: ["imperative_form"],
+        subjectSpan: null,
+        finitePredicateSpan: { start: 0, end: 6 },
+        infinitiveSpans: [],
+      },
+    ],
+  },
+  {
+    id: "pr-d-prose-unknown-observation",
+    provenance: "P2",
+    pairId: "prose-policy-disposition",
+    axis: "english_prose",
+    visibleText: "Aligned for delivery.",
+    expectedIncomplete: false,
+    expectedAnalyses: [
+      {
+        sentenceSpan: { start: 0, end: 21 },
+        classification: "UNKNOWN",
+        confidence: "low",
+        reasonCodes: ["ambiguous_clause_structure"],
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        infinitiveSpans: [],
+      },
+    ],
   },
 ];
 
