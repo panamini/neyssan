@@ -755,6 +755,36 @@ describe("premium cover-letter numeric evidence", () => {
     ).not.toEqual([]);
   });
 
+  it("does not use a nearby translated alias to override an explicit measurement", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_revenue_count",
+          source: "cv",
+          text: "Managed 10 revenue.",
+        },
+      ]),
+    });
+
+    expect(evidence.sources).toContainEqual(
+      expect.objectContaining({
+        factId: "fact_revenue_count",
+        measurement: "revenue",
+      }),
+    );
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "Revenue by 10 servers.",
+        section: "proofBlock",
+        factIds: ["fact_revenue_count"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
   it("rejects a percentage direction inversion in the generic fallback", () => {
     const evidence = projection({
       factGraph: factGraph([
@@ -857,6 +887,267 @@ describe("premium cover-letter numeric evidence", () => {
       ).toEqual([]);
     },
   );
+
+  it("matches an exact Spanish revenue alias without arbitrary fallback", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_revenue_es",
+          source: "cv",
+          text: "Increased revenue by 10%.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "Aumenté los ingresos un 10%.",
+        section: "proofBlock",
+        factIds: ["fact_revenue_es"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["French", "revenus"],
+    ["Spanish", "ingresos"],
+    ["German", "Umsatz"],
+    ["Italian", "ricavi"],
+    ["Portuguese", "receitas"],
+    ["Polish", "przychody"],
+    ["Dutch", "omzet"],
+    ["Greek", "έσοδα"],
+    ["Hungarian", "bevétel"],
+    ["Lithuanian", "pajamos"],
+    ["Estonian", "tulu"],
+    ["Russian", "доход"],
+    ["Arabic", "إيرادات"],
+  ])("matches the exact revenue alias for enabled %s output", (_language, alias) => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_enabled_language_revenue",
+          source: "cv",
+          text: "Managed 10 revenue.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: `10 ${alias}`,
+        section: "proofBlock",
+        factIds: ["fact_enabled_language_revenue"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["French", "conversion"],
+    ["Spanish", "conversión"],
+    ["German", "Konversion"],
+    ["Italian", "conversione"],
+    ["Portuguese", "conversão"],
+    ["Polish", "konwersja"],
+    ["Dutch", "conversie"],
+    ["Greek", "μετατροπή"],
+    ["Hungarian", "konverzió"],
+    ["Lithuanian", "konversija"],
+    ["Estonian", "konversioon"],
+    ["Russian", "конверсия"],
+    ["Arabic", "تحويل"],
+  ])("matches the exact conversion alias for enabled %s output", (_language, alias) => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_enabled_language_conversion",
+          source: "cv",
+          text: "Improved 10 conversion.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: `10 ${alias}`,
+        section: "proofBlock",
+        factIds: ["fact_enabled_language_conversion"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it.each(["in the year 2020", "during the year 2020"])(
+    "matches the common calendar-year paraphrase %s",
+    (visibleDate) => {
+      const evidence = projection({
+        factGraph: factGraph([
+          {
+            id: "fact_joined_2020",
+            source: "cv",
+            text: "Joined the company in 2020.",
+          },
+        ]),
+      });
+
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: evidence,
+          visibleText: `I joined the company ${visibleDate}.`,
+          section: "proofBlock",
+          factIds: ["fact_joined_2020"],
+          demandIds: [],
+          claimIds: [],
+        }).unsupported,
+      ).toEqual([]);
+    },
+  );
+
+  it("matches a signed decrease to equivalent directional percentage phrasing", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_churn_decrease",
+          source: "cv",
+          text: "Churn: -20%.",
+        },
+      ]),
+    });
+
+    expect(evidence.sources).toContainEqual(
+      expect.objectContaining({
+        factId: "fact_churn_decrease",
+        baseKey: "percent:-20",
+        measurement: "churn",
+      }),
+    );
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I delivered a 20% reduction in churn.",
+        section: "proofBlock",
+        factIds: ["fact_churn_decrease"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("preserves compliance-standard identifiers as numeric evidence", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_iso_standard",
+          source: "cv",
+          text: "Implemented ISO/IEC 27001 controls.",
+        },
+      ]),
+    });
+
+    expect(evidence.sources).toContainEqual(
+      expect.objectContaining({
+        factId: "fact_iso_standard",
+        role: "VERSION",
+        normalizedValue: "27001",
+        contextQualifier: "iso/iec",
+      }),
+    );
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I implemented ISO/IEC 27002 controls.",
+        section: "proofBlock",
+        factIds: ["fact_iso_standard"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("ignores the adjectival one-team idiom", () => {
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({}),
+        visibleText: "I aligned stakeholders as one cohesive team.",
+        section: "proofBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("retains semantic versions for adjacent unlisted tools", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_spring_boot_version",
+          source: "cv",
+          text: "Built services with Spring Boot 3.2.1.",
+        },
+      ]),
+    });
+
+    expect(evidence.sources).toContainEqual(
+      expect.objectContaining({
+        factId: "fact_spring_boot_version",
+        role: "VERSION",
+        normalizedValue: "3.2.1",
+        contextQualifier: "spring boot",
+      }),
+    );
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I built services with Spring Boot 4.0.0.",
+        section: "proofBlock",
+        factIds: ["fact_spring_boot_version"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("binds an unlisted semantic version to the adjacent tool, not the sentence verb", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_next_version",
+          source: "cv",
+          text: "Built Next.js 3.2.1 applications.",
+        },
+      ]),
+    });
+    const match = (visibleText: string) =>
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText,
+        section: "proofBlock",
+        factIds: ["fact_next_version"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported;
+
+    expect(evidence.sources).toContainEqual(
+      expect.objectContaining({
+        factId: "fact_next_version",
+        contextQualifier: "next.js",
+      }),
+    );
+    expect(match("Used Next.js 3.2.1 applications.")).toEqual([]);
+    expect(match("Used Nuxt.js 3.2.1 applications.")).not.toEqual([]);
+  });
 
   it("does not let translated matching bypass candidate ownership", () => {
     const jobDemandGraph: JobDemandGraphV1 = {

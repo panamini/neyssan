@@ -177,6 +177,8 @@ const METRIC_MEASUREMENT_ALIASES = new Map([
   ["squad", "team"],
 ]);
 const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
+  ["bevétel", "revenue"],
+  ["bevételek", "revenue"],
   ["chiffre", "revenue"],
   ["client", "client"],
   ["clients", "client"],
@@ -184,10 +186,27 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["clientes", "client"],
   ["clienti", "client"],
   ["conversion", "conversion"],
+  ["conversione", "conversion"],
+  ["conversie", "conversion"],
+  ["conversión", "conversion"],
+  ["conversão", "conversion"],
+  ["konversion", "conversion"],
+  ["konversija", "conversion"],
+  ["konversioon", "conversion"],
+  ["konverzió", "conversion"],
+  ["konwersja", "conversion"],
   ["délai", "time"],
   ["délais", "time"],
+  ["dochod", "revenue"],
+  ["dochody", "revenue"],
   ["équipe", "team"],
   ["équipes", "team"],
+  ["έσοδα", "revenue"],
+  ["έσοδο", "revenue"],
+  ["faturamento", "revenue"],
+  ["fatturato", "revenue"],
+  ["ingreso", "revenue"],
+  ["ingresos", "revenue"],
   ["klant", "client"],
   ["klanten", "client"],
   ["klient", "client"],
@@ -196,16 +215,80 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["klientų", "client"],
   ["kunde", "client"],
   ["kunden", "client"],
+  ["omzet", "revenue"],
   ["projet", "project"],
   ["projets", "project"],
+  ["przychód", "revenue"],
+  ["przychody", "revenue"],
+  ["pajamos", "revenue"],
+  ["receita", "revenue"],
+  ["receitas", "revenue"],
+  ["ricavi", "revenue"],
+  ["ricavo", "revenue"],
   ["revenu", "revenue"],
   ["revenus", "revenue"],
+  ["tulu", "revenue"],
+  ["tulud", "revenue"],
+  ["umsatz", "revenue"],
+  ["umsätze", "revenue"],
   ["utilisateur", "user"],
   ["utilisateurs", "user"],
+  ["выручка", "revenue"],
+  ["доход", "revenue"],
+  ["доходы", "revenue"],
+  ["конверсия", "conversion"],
+  ["μετατροπή", "conversion"],
   ["ügyfelek", "client"],
   ["клиентов", "client"],
   ["πελάτες", "client"],
+  ["إيراد", "revenue"],
+  ["إيرادات", "revenue"],
+  ["تحويل", "conversion"],
   ["عملاء", "client"],
+]);
+const TRANSLATED_METRIC_MEASUREMENT_CONNECTORS = new Set([
+  "a",
+  "an",
+  "by",
+  "da",
+  "de",
+  "del",
+  "della",
+  "des",
+  "do",
+  "du",
+  "ein",
+  "eine",
+  "einen",
+  "em",
+  "en",
+  "in",
+  "met",
+  "o",
+  "of",
+  "por",
+  "the",
+  "um",
+  "un",
+  "una",
+  "van",
+  "von",
+  "w",
+  "z",
+  "κατά",
+  "με",
+  "на",
+  "بنسبة",
+]);
+const TRANSLATED_METRIC_POST_VALUE_BOUNDARIES = new Set([
+  "across",
+  "after",
+  "because",
+  "during",
+  "grâce",
+  "through",
+  "via",
+  "while",
 ]);
 const TRANSLATED_METRIC_MEASUREMENT_PREFIX_ALIASES: ReadonlyArray<
   readonly [RegExp, string]
@@ -253,7 +336,23 @@ const TOOL_VERSION_QUALIFIERS = new Set([
   "windows",
 ]);
 const CONTEXTUAL_NUMERIC_OCCURRENCE_PATTERN =
-  /\b([A-Za-z][A-Za-z.]*|level|grade|tier)\s*[-–—:]?\s*(\d+(?:\.\d+)*)\b/giu;
+  /\b([A-Za-z][A-Za-z./]*|level|grade|tier)\s*[-–—:]?\s*(\d+(?:\.\d+)*)\b/giu;
+const SEMANTIC_VERSION_OCCURRENCE_PATTERN = /\b(\d+(?:\.\d+){2,})\b/gu;
+const SEMANTIC_VERSION_LEADING_ACTIONS = new Set([
+  "built",
+  "deployed",
+  "developed",
+  "implemented",
+  "used",
+]);
+
+function normalizeSemanticVersionQualifier(value: string): string {
+  const tokens = value.split(/\s+/u);
+  if (SEMANTIC_VERSION_LEADING_ACTIONS.has(tokens[0].toLowerCase())) {
+    tokens.shift();
+  }
+  return tokens.length > 0 ? normalizeText(tokens.join(" ")) : "version";
+}
 type MetricCurrency =
   | "usd"
   | "eur"
@@ -414,7 +513,7 @@ const WRITTEN_NUMBER_PATTERN =
 const NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN =
   /\b(?:one-on-one|one-to-one|two-way)\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_PHRASE_PATTERN =
-  /\b(?:as\s+one\s+(?:team|unit)|one\s+source\s+of\s+truth|one(?:\s+\p{L}[\p{L}-]*){0,2}\s+(?:example|focus|opportunity|priority|reason|thing|way))\b/giu;
+  /\b(?:as\s+one(?:\s+\p{L}[\p{L}-]*){0,2}\s+(?:team|unit)|one\s+source\s+of\s+truth|one(?:\s+\p{L}[\p{L}-]*){0,2}\s+(?:example|focus|opportunity|priority|reason|thing|way))\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -595,10 +694,23 @@ function translatedMetricMeasurementForOccurrence(
   visibleText: string,
   occurrence: NumericOccurrence,
 ): string | undefined {
-  const direct = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(
-    occurrence.measurement,
-  );
-  if (direct) return direct;
+  const suffixTokens = visibleText
+    .slice(occurrence.end, occurrence.end + 64)
+    .toLocaleLowerCase("en-US")
+    .split(/[^\p{L}]+/u)
+    .filter(Boolean);
+  let suffixAllowsContext = suffixTokens.length === 0;
+  for (const token of suffixTokens.slice(0, 4)) {
+    const translated = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(token);
+    if (translated) return translated;
+    if (TRANSLATED_METRIC_POST_VALUE_BOUNDARIES.has(token)) {
+      suffixAllowsContext = true;
+      break;
+    }
+    if (!TRANSLATED_METRIC_MEASUREMENT_CONNECTORS.has(token)) return undefined;
+  }
+  if (!suffixAllowsContext && suffixTokens.length <= 4) suffixAllowsContext = true;
+  if (!suffixAllowsContext) return undefined;
   const prefix = visibleText.slice(
     Math.max(0, occurrence.index - 64),
     occurrence.index,
@@ -610,6 +722,30 @@ function translatedMetricMeasurementForOccurrence(
   ) {
     return "conversion";
   }
+  const prefixTokens = prefix
+    .toLocaleLowerCase("en-US")
+    .split(/[^\p{L}]+/u)
+    .filter(Boolean);
+  for (let index = prefixTokens.length - 1; index >= 0; index -= 1) {
+    const translated = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(
+      prefixTokens[index],
+    );
+    if (!translated) continue;
+    const remainder = prefixTokens.slice(index + 1);
+    if (
+      remainder.length <= 3 &&
+      remainder.every((token) =>
+        TRANSLATED_METRIC_MEASUREMENT_CONNECTORS.has(token),
+      )
+    ) {
+      return translated;
+    }
+    break;
+  }
+  const direct = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(
+    occurrence.measurement,
+  );
+  if (direct) return direct;
   const suffix = visibleText.slice(occurrence.end, occurrence.end + 64);
   return TRANSLATED_METRIC_MEASUREMENT_PREFIX_ALIASES.find(([pattern]) =>
     pattern.test(suffix),
@@ -639,12 +775,15 @@ function numericOccurrenceCurrency(args: {
 
 function versionQualifierFromPrefix(prefix: string): string | undefined {
   const qualifier = prefix.match(
-    /\b([A-Za-z][A-Za-z.]*)(?:\s*(?:version|ver|v))?\s*[-–—:]?\s*$/iu,
+    /\b([A-Za-z][A-Za-z./]*)(?:\s*(?:version|ver|v))?\s*[-–—:]?\s*$/iu,
   )?.[1];
   if (!qualifier) return undefined;
   const normalized = qualifier.toLocaleLowerCase("en-US");
   if (normalized === "version" || normalized === "ver" || normalized === "v") {
     return "version";
+  }
+  if (/^(?:iso(?:\/iec)?|iec|soc|rfc)$/u.test(normalized)) {
+    return normalized;
   }
   const canonical =
     normalized === "node.js"
@@ -772,6 +911,7 @@ function precedingPercentageMeasurement(args: {
   }
   const precedingMeasurement =
     prefix.match(/\b([A-Za-z][A-Za-z-]*)\s+(?:by|of|at|to)\s*$/u)?.[1] ??
+    prefix.match(/\b([A-Za-z][A-Za-z-]*)\s*:\s*$/u)?.[1] ??
     "";
   return precedingMeasurement
     ? canonicalMetricMeasurement(precedingMeasurement)
@@ -1153,6 +1293,24 @@ function numericOccurrences(value: string): NumericOccurrence[] {
     end: numericOccurrenceSurfaceEnd(value, occurrence),
   }));
   const contextual: NumericOccurrence[] = [];
+  for (const match of value.matchAll(SEMANTIC_VERSION_OCCURRENCE_PATTERN)) {
+    const raw = match[1];
+    if (!raw || match.index === undefined) continue;
+    const normalizedValue = raw
+      .split(".")
+      .map((part) => String(Number(part)))
+      .join(".");
+    const baseKey = `number:${normalizedValue}`;
+    contextual.push({
+      metric: normalizedValue,
+      normalizedValue,
+      key: baseKey,
+      baseKey,
+      measurement: "",
+      index: match.index,
+      end: match.index + raw.length,
+    });
+  }
   for (const match of value.matchAll(CONTEXTUAL_NUMERIC_OCCURRENCE_PATTERN)) {
     const qualifier = match[1]?.toLocaleLowerCase("en-US");
     const raw = match[2];
@@ -1168,7 +1326,11 @@ function numericOccurrences(value: string): NumericOccurrence[] {
     const relativeIndex = match[0].lastIndexOf(raw);
     const index = match.index + relativeIndex;
     const end = index + raw.length;
-    if (quantitative.some((occurrence) => index < occurrence.end && end > occurrence.index)) {
+    if (
+      [...quantitative, ...contextual].some(
+        (occurrence) => index < occurrence.end && end > occurrence.index,
+      )
+    ) {
       continue;
     }
     const normalizedValue =
@@ -1399,12 +1561,32 @@ function translatedDurationUnitForOccurrence(
   return TRANSLATED_DURATION_UNITS.get(unit);
 }
 
+function semanticVersionQualifierForOccurrence(
+  value: string,
+  occurrence: NumericOccurrence,
+): string | undefined {
+  if (!/^\d+(?:\.\d+){2,}$/u.test(occurrence.metric)) return undefined;
+  const prefix = value.slice(Math.max(0, occurrence.index - 64), occurrence.index);
+  const qualified = prefix.match(
+    /(?:^|\b(?:with|using|on|via)\s+)([A-Za-z][A-Za-z0-9.+#-]*(?:\s+[A-Za-z][A-Za-z0-9.+#-]*){0,2})\s*$/u,
+  )?.[1];
+  if (qualified) return normalizeSemanticVersionQualifier(qualified);
+  const adjacent = prefix.match(
+    /\b([A-Z][A-Za-z0-9.+#-]*(?:\s+[A-Z][A-Za-z0-9.+#-]*){0,2})\s*$/u,
+  )?.[1];
+  if (!adjacent) return "version";
+  return normalizeSemanticVersionQualifier(adjacent);
+}
+
 function versionQualifierForOccurrence(
   value: string,
   occurrence: NumericOccurrence,
 ): string | undefined {
   const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
-  return versionQualifierFromPrefix(prefix);
+  return (
+    semanticVersionQualifierForOccurrence(value, occurrence) ??
+    versionQualifierFromPrefix(prefix)
+  );
 }
 
 function isCalendarYearOccurrence(occurrence: NumericOccurrence): boolean {
@@ -1422,6 +1604,7 @@ function hasDateContextForOccurrence(
   const suffix = value.slice(occurrence.end, occurrence.end + 32);
   const surface = value.slice(occurrence.index, occurrence.end);
   return (
+    /\b(?:in|during)\s+the\s+year\s*$/iu.test(prefix) ||
     /\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
     /\bbetween\s*$/iu.test(prefix) ||
     /\bbetween\s+(?:19|20|21)\d{2}\s+and\s*$/iu.test(prefix) ||
@@ -1667,13 +1850,63 @@ function sourceIsAvailable(args: {
   return false;
 }
 
+function percentageBaseValue(baseKey: string): number | undefined {
+  const raw = baseKey.match(/^percent:(-?\d+(?:\.\d+)?)$/u)?.[1];
+  if (!raw) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function percentageDirectionFromKey(
+  key: string,
+): "increase" | "decrease" | undefined {
+  if (key.endsWith(":increase")) return "increase";
+  if (key.endsWith(":decrease")) return "decrease";
+  return undefined;
+}
+
+function semanticPercentageValue(baseKey: string, key: string): number | undefined {
+  const value = percentageBaseValue(baseKey);
+  if (value === undefined) return undefined;
+  const direction = percentageDirectionFromKey(key);
+  if (direction === "decrease") return -Math.abs(value);
+  if (direction === "increase") return Math.abs(value);
+  return value;
+}
+
+function signedPercentageMatchesDirectionalPhrase(args: {
+  source: PremiumCoverLetterNumericEvidenceSource;
+  occurrence: NumericOccurrence;
+}): boolean {
+  const sourceValue = percentageBaseValue(args.source.baseKey);
+  const visibleValue = percentageBaseValue(args.occurrence.baseKey);
+  if (
+    sourceValue === undefined ||
+    visibleValue === undefined ||
+    (sourceValue >= 0 && visibleValue >= 0)
+  ) {
+    return false;
+  }
+  return (
+    semanticPercentageValue(args.source.baseKey, args.source.key) ===
+      semanticPercentageValue(args.occurrence.baseKey, args.occurrence.key) &&
+    args.source.measurement === args.occurrence.measurement
+  );
+}
+
 function sourceMatchesOccurrence(
   source: PremiumCoverLetterNumericEvidenceSource,
   occurrence: NumericOccurrence,
   visibleText: string,
   allowMeasurementTranslation: boolean,
 ): boolean {
-  if (source.baseKey !== occurrence.baseKey) return false;
+  const signedPercentageMatch = signedPercentageMatchesDirectionalPhrase({
+    source,
+    occurrence,
+  });
+  if (source.baseKey !== occurrence.baseKey && !signedPercentageMatch) {
+    return false;
+  }
   const prefix = visibleText.slice(
     Math.max(0, occurrence.index - 32),
     occurrence.index,
@@ -1720,6 +1953,7 @@ function sourceMatchesOccurrence(
       allowMeasurementTranslation,
     );
   }
+  if (signedPercentageMatch) return true;
   if (source.key === occurrence.key) return true;
   if (allowMeasurementTranslation) {
     const translatedMeasurement = translatedMetricMeasurementForOccurrence(
