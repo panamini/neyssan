@@ -707,7 +707,7 @@ describe("premium cover-letter numeric evidence", () => {
     ).not.toEqual([]);
   });
 
-  it("allows a French translated measurement outside the narrow alias table", () => {
+  it("allows the exact French response-time measurement alias", () => {
     const evidence = projection({
       factGraph: factGraph([
         {
@@ -730,6 +730,133 @@ describe("premium cover-letter numeric evidence", () => {
       }).unsupported,
     ).toEqual([]);
   });
+
+  it("rejects an unmapped translated measurement substitution", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_projects",
+          source: "cv",
+          text: "Managed 5 projects.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "Managed 5 servers.",
+        section: "proofBlock",
+        factIds: ["fact_projects"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("rejects a percentage direction inversion in the generic fallback", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_conversion_increase",
+          source: "cv",
+          text: "Increased conversion by 10%.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I delivered a 10% reduction.",
+        section: "proofBlock",
+        factIds: ["fact_conversion_increase"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("matches localized date context only when translation is allowed", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_calendar_year",
+          source: "cv",
+          text: "Worked there in 2024.",
+        },
+      ]),
+    });
+    const match = (allowMeasurementTranslation: boolean) =>
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "J’y ai travaillé en 2024.",
+        section: "proofBlock",
+        factIds: ["fact_calendar_year"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation,
+      }).unsupported;
+
+    expect(match(true)).toEqual([]);
+    expect(match(false)).not.toEqual([]);
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "2024",
+        section: "proofBlock",
+        factIds: ["fact_calendar_year"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    [
+      "fact_conversion_fr",
+      "Improved signup conversion by 11% after iterative UI experiments.",
+      "J’ai amélioré la conversion des inscriptions de 11 % grâce à des expériences d’interface itératives.",
+    ],
+    [
+      "fact_teams_fr",
+      "Led a design system migration used across 4 product squads.",
+      "J’ai dirigé une migration de design system utilisée par 4 équipes produit.",
+    ],
+    [
+      "fact_duration_teams_fr",
+      "Completed a design system migration in 3 years across 4 product squads.",
+      "J’ai réalisé une migration de design system en 3 ans pour 4 équipes produit.",
+    ],
+  ])(
+    "matches exact validated French measurement aliases for %s",
+    (factId, sourceText, visibleText) => {
+      const evidence = projection({
+        factGraph: factGraph([
+          {
+            id: factId,
+            source: "cv",
+            text: sourceText,
+          },
+        ]),
+      });
+
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: evidence,
+          visibleText,
+          section: "proofBlock",
+          factIds: [factId],
+          demandIds: [],
+          claimIds: [],
+          allowMeasurementTranslation: true,
+        }).unsupported,
+      ).toEqual([]);
+    },
+  );
 
   it("does not let translated matching bypass candidate ownership", () => {
     const jobDemandGraph: JobDemandGraphV1 = {

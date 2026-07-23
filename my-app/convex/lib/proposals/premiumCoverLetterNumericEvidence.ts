@@ -180,16 +180,48 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["chiffre", "revenue"],
   ["client", "client"],
   ["clients", "client"],
+  ["cliente", "client"],
+  ["clientes", "client"],
+  ["clienti", "client"],
   ["conversion", "conversion"],
+  ["délai", "time"],
+  ["délais", "time"],
   ["équipe", "team"],
   ["équipes", "team"],
+  ["klant", "client"],
+  ["klanten", "client"],
+  ["klient", "client"],
+  ["kliendid", "client"],
+  ["klientów", "client"],
+  ["klientų", "client"],
+  ["kunde", "client"],
+  ["kunden", "client"],
   ["projet", "project"],
   ["projets", "project"],
   ["revenu", "revenue"],
   ["revenus", "revenue"],
   ["utilisateur", "user"],
   ["utilisateurs", "user"],
+  ["ügyfelek", "client"],
+  ["клиентов", "client"],
+  ["πελάτες", "client"],
+  ["عملاء", "client"],
 ]);
+const TRANSLATED_METRIC_MEASUREMENT_PREFIX_ALIASES: ReadonlyArray<
+  readonly [RegExp, string]
+> = [
+  [/^\s*(?:de\s+)?chiffre\s+d['’]affaires\b/iu, "revenue"],
+  [/^\s*(?:de\s+)?délais?\s+de\s+réponse\b/iu, "time"],
+  [
+    /^\s*(?:de\s+)?(?:client(?:e|es|i|s)?|kunden?|klant(?:en)?|klient(?:ów|ų)?|kliendid|πελάτες|ügyfelek|клиентов|عملاء)\b/iu,
+    "client",
+  ],
+  [/^\s*(?:de\s+)?équipes?\b/iu, "team"],
+  [/^\s*(?:de\s+)?projets?\b/iu, "project"],
+  [/^\s*(?:de\s+)?utilisateurs?\b/iu, "user"],
+];
+const TRANSLATED_DATE_PREFIX_PATTERN =
+  /(?:^|[\s(])(?:en|depuis|pendant|desde|durante|hasta|im|seit|während|von|bis|nel|dal|fino|em|até|od|podczas|sinds|tijdens|van|tot|από|κατά|μέχρι|óta|alatt|nuo|per|iki|aastal|alates|jooksul|kuni|с|до|в|في|منذ|خلال|حتى)\s*$/iu;
 const TOOL_VERSION_QUALIFIERS = new Set([
   "android",
   "angular",
@@ -567,16 +599,21 @@ function translatedMetricMeasurementForOccurrence(
     occurrence.measurement,
   );
   if (direct) return direct;
-  const contextTokens = visibleText
-    .slice(Math.max(0, occurrence.index - 64), occurrence.end + 64)
-    .toLocaleLowerCase("fr-FR")
-    .split(/[^\p{L}]+/u)
-    .filter(Boolean);
-  for (const token of contextTokens) {
-    const translated = TRANSLATED_METRIC_MEASUREMENT_ALIASES.get(token);
-    if (translated) return translated;
+  const prefix = visibleText.slice(
+    Math.max(0, occurrence.index - 64),
+    occurrence.index,
+  );
+  if (
+    /\bconversion(?:\s+(?:de|des|d['’])\s+\p{L}[\p{L}'’-]*){0,2}\s+(?:de|du|des|d['’])\s*$/iu.test(
+      prefix,
+    )
+  ) {
+    return "conversion";
   }
-  return undefined;
+  const suffix = visibleText.slice(occurrence.end, occurrence.end + 64);
+  return TRANSLATED_METRIC_MEASUREMENT_PREFIX_ALIASES.find(([pattern]) =>
+    pattern.test(suffix),
+  )?.[1];
 }
 
 function metricCurrency(symbol: string): MetricCurrency | null {
@@ -1378,6 +1415,7 @@ function isCalendarYearOccurrence(occurrence: NumericOccurrence): boolean {
 function hasDateContextForOccurrence(
   value: string,
   occurrence: NumericOccurrence,
+  allowLocalizedDateContext = false,
 ): boolean {
   if (!isCalendarYearOccurrence(occurrence)) return false;
   const prefix = value.slice(Math.max(0, occurrence.index - 32), occurrence.index);
@@ -1400,6 +1438,8 @@ function hasDateContextForOccurrence(
     /^\s*(?:to|through|until)\s*(?:(?:19|20|21)\d{2}|present|current|now)\b/iu.test(
       suffix,
     ) ||
+    (allowLocalizedDateContext &&
+      TRANSLATED_DATE_PREFIX_PATTERN.test(prefix)) ||
     (/\b(?:19|20|21)\d{2}\s*$/u.test(prefix) &&
       /^\s*[-–—]\s*(?:19|20|21)\d{2}\b/u.test(surface))
   );
@@ -1674,7 +1714,11 @@ function sourceMatchesOccurrence(
     );
   }
   if (source.role === "DATE") {
-    return hasDateContextForOccurrence(visibleText, occurrence);
+    return hasDateContextForOccurrence(
+      visibleText,
+      occurrence,
+      allowMeasurementTranslation,
+    );
   }
   if (source.key === occurrence.key) return true;
   if (allowMeasurementTranslation) {
@@ -1688,7 +1732,7 @@ function sourceMatchesOccurrence(
           translatedMeasurement === source.measurement,
       );
     }
-    return Boolean(source.measurement && occurrence.measurement);
+    return false;
   }
   if (!source.measurement || !occurrence.measurement) return true;
   return false;
@@ -1743,8 +1787,21 @@ export function matchPremiumCoverLetterNumericEvidence(args: {
       matchingSources.length === 0 &&
       GENERIC_PERCENTAGE_MEASUREMENTS.has(occurrence.measurement)
     ) {
+      const visibleDirection = PERCENTAGE_NOMINAL_DIRECTIONS.get(
+        occurrence.measurement,
+      );
       const sameBaseSources = availableSources.filter(
-        (source) => source.baseKey === occurrence.baseKey,
+        (source) =>
+          source.baseKey === occurrence.baseKey &&
+          ((visibleDirection !== undefined &&
+            source.key.endsWith(`:${visibleDirection}`)) ||
+            (occurrence.measurement === "result" &&
+              matches.some(
+                (match) =>
+                  match.key === source.key &&
+                  match.factId === source.factId &&
+                  match.demandId === source.demandId,
+              ))),
       );
       const measuredKeys = new Set(
         sameBaseSources
