@@ -32,16 +32,21 @@ import {
   type EnglishCvBackedQualityGateIssueCode,
 } from "./premiumCoverLetterEnglishQualityGate";
 import {
+  buildPremiumCoverLetterNumericEvidenceProjection,
+  matchPremiumCoverLetterNumericEvidence,
+  numericEvidenceNormalizedValues,
+  premiumCoverLetterFactGraphNumericMetrics,
+  type PremiumCoverLetterNumericEvidenceProjection,
+} from "./premiumCoverLetterNumericEvidence";
+import {
   canonicalizePremiumCoverLetterToken,
   expandPremiumCoverLetterTokenVariants,
-  normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 import {
   MISSING_TARGET_EMPLOYER,
   resolveTargetEmployerAuthorities,
-  targetEmployerOwnsOccurrence,
   type TargetEmployerResolution,
 } from "./premiumCoverLetterTargetEmployer";
 
@@ -250,6 +255,45 @@ export type PremiumWriterOutputV1 = {
     closeLine: PremiumWriterBodyPartV1;
   };
 };
+
+export type PremiumCoverLetterNumericEvidenceValidationContext = Readonly<{
+  projection: PremiumCoverLetterNumericEvidenceProjection;
+  provenanceBySection: Readonly<
+    Record<
+      ClaimPlanSection,
+      Readonly<{
+        claimIds: readonly string[];
+        factIds: readonly string[];
+        demandIds: readonly string[];
+      }>
+    >
+  >;
+}>;
+
+function numericEvidenceValidationContext(args: {
+  projection: PremiumCoverLetterNumericEvidenceProjection;
+  writerOutput: PremiumWriterOutputV1;
+}): PremiumCoverLetterNumericEvidenceValidationContext {
+  return {
+    projection: args.projection,
+    provenanceBySection: Object.fromEntries(
+      CLAIM_PLAN_SECTIONS.map((section) => {
+        const part = args.writerOutput.bodyParts[section];
+        return [
+          section,
+          {
+            claimIds: part.claimIds,
+            factIds: part.factIds,
+            demandIds: part.demandIds,
+          },
+        ];
+      }),
+    ) as Record<
+      ClaimPlanSection,
+      { claimIds: string[]; factIds: string[]; demandIds: string[] }
+    >,
+  };
+}
 
 export type PremiumCoverLetterFinalProvenanceStatus =
   | "validated_final_text"
@@ -1763,7 +1807,7 @@ function createFactNode(
     sourcePath,
     confidence: fact.confidence,
     category: fact.category,
-    metrics: extractNumericClaims(fact.text),
+    metrics: premiumCoverLetterFactGraphNumericMetrics(fact.text),
     entities: extractFactEntities(fact.text),
     allowedVerbs: extractAllowedVerbs(fact.text),
     forbiddenUpgrades: inferForbiddenUpgrades(fact.text),
@@ -2984,7 +3028,9 @@ export function validatePremiumClaimPlanV1(args: {
       .filter((fact): fact is FactNodeV1 => Boolean(fact));
     const factMetrics = new Set(factNodes.flatMap((fact) => fact.metrics));
     for (const requiredElement of claim.requiredElements) {
-      for (const metric of extractNumericClaims(requiredElement)) {
+      for (const metric of premiumCoverLetterFactGraphNumericMetrics(
+        requiredElement,
+      )) {
         if (!factMetrics.has(metric)) {
           issues.push({
             code: "metric_not_in_fact",
@@ -4301,8 +4347,17 @@ export function validatePremiumWriterOutputV1(args: {
   factGraph: FactGraphV1;
   jobDemandGraph: JobDemandGraphV1;
   brief: CoverLetterBrief;
+  numericEvidenceProjection?: PremiumCoverLetterNumericEvidenceProjection;
 }): PremiumWriterOutputValidationIssue[] {
   const issues: PremiumWriterOutputValidationIssue[] = [];
+  const numericEvidenceProjection =
+    args.numericEvidenceProjection ??
+    buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph: args.factGraph,
+      claimPlan: args.claimPlan,
+      jobDemandGraph: args.jobDemandGraph,
+      targetEmployer: args.brief.targetEmployer,
+    });
   const claimById = new Map(args.claimPlan.claims.map((claim) => [claim.id, claim]));
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const demandById = new Map(
@@ -4484,13 +4539,19 @@ export function validatePremiumWriterOutputV1(args: {
         ]),
       ).values(),
     );
-    const referencedFactSurface = referencedFacts.map((fact) => fact.text).join(" ");
+    const referencedFactSurface = referencedFacts
+      .map((fact) => fact.text)
+      .join(" ");
     if (
-      hasUnsupportedNumericClaim({
-        generatedText: compact,
-        sourceSurface: referencedFactSurface,
-        targetEmployer: args.brief.targetEmployer,
-      })
+      args.claimPlan.language === "English" &&
+      matchPremiumCoverLetterNumericEvidence({
+        projection: numericEvidenceProjection,
+        visibleText: compact,
+        section,
+        factIds: part.factIds,
+        demandIds: part.demandIds,
+        claimIds: part.claimIds,
+      }).unsupported.length > 0
     ) {
       issues.push({
         code: "unsupported_numeric_claim",
@@ -4632,11 +4693,6 @@ const EMPLOYER_ARGUMENT_BRIDGE_PATTERN =
   /(?:^|[^\p{L}\p{N}_])(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?|dans|pour|où|parce\s+que|pertinent(?:e|es|s)?|rôles?|équipes?|environnement|travail|besoins?|exige(?:nt)?|priorités?)(?=$|[^\p{L}\p{N}_])/iu;
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
-const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
-  /\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
-const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d[\d,]*(?:\.\d+)?\b/g;
-const WORD_NUMBER_DURATION_CLAIM_PATTERN =
-  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
 const HIGH_OWNERSHIP_VERB_PATTERNS = [
   { verb: "owned", pattern: /\bown(?:ed|s|ing)\b/i },
   { verb: "managed", pattern: /\bmanag(?:ed|es|ing)\b/i },
@@ -4766,63 +4822,6 @@ function buildCandidateEvidenceSurface(args: { brief: CoverLetterBrief }): strin
     .map((value) => compactWhitespace(value))
     .filter(Boolean)
     .join(" ");
-}
-
-function normalizeNumericClaim(value: string): string {
-  return compactWhitespace(value)
-    .toLowerCase()
-    .replace(/percentage\s+points?/g, "percent")
-    .replace(/%/g, " percent")
-    .replace(
-      /\d[\d,]*(?:\.\d+)?/gu,
-      normalizePremiumCoverLetterNumericToken,
-    );
-}
-
-function extractNumericClaims(value: string): string[] {
-  return [
-    ...new Set(
-      extractNumericClaimOccurrences(value).map((occurrence) => occurrence.claim),
-    ),
-  ];
-}
-
-function extractNumericClaimOccurrences(
-  value: string,
-): Array<Readonly<{ claim: string; index: number }>> {
-  const occurrences = new Map<string, Readonly<{ claim: string; index: number }>>();
-  for (const match of value.matchAll(PERCENTAGE_NUMERIC_CLAIM_PATTERN)) {
-    const claim = normalizeNumericClaim(match[0]);
-    occurrences.set(`${match.index}:${claim}`, { claim, index: match.index });
-  }
-  for (const match of value.matchAll(DIGIT_NUMERIC_CLAIM_PATTERN)) {
-    const claim = normalizeNumericClaim(match[0]);
-    occurrences.set(`${match.index}:${claim}`, { claim, index: match.index });
-  }
-  for (const match of value.matchAll(WORD_NUMBER_DURATION_CLAIM_PATTERN)) {
-    const claim = normalizeNumericClaim(match[0]);
-    occurrences.set(`${match.index}:${claim}`, { claim, index: match.index });
-  }
-  return Array.from(occurrences.values());
-}
-
-function hasUnsupportedNumericClaim(args: {
-  generatedText: string;
-  sourceSurface: string;
-  targetEmployer?: TargetEmployerResolution;
-}): boolean {
-  const generatedClaims = extractNumericClaimOccurrences(args.generatedText);
-  if (generatedClaims.length === 0) return false;
-  const sourceClaims = new Set(extractNumericClaims(args.sourceSurface));
-  return generatedClaims.some(
-    (occurrence) =>
-      !sourceClaims.has(occurrence.claim) &&
-      !targetEmployerOwnsOccurrence({
-        value: args.generatedText,
-        occurrenceIndex: occurrence.index,
-        targetEmployer: args.targetEmployer ?? MISSING_TARGET_EMPLOYER,
-      }),
-  );
 }
 
 function hasUnsupportedOwnershipVerb(args: {
@@ -5971,16 +5970,93 @@ function hasAdjacentRoleMappingLeak(args: {
   );
 }
 
+function buildStandaloneBriefNumericEvidenceContext(
+  brief: CoverLetterBrief,
+): PremiumCoverLetterNumericEvidenceValidationContext {
+  const candidateSources = [
+    ...brief.topEvidence,
+    ...brief.supportEvidence,
+    ...(brief.transferCore ?? []),
+  ].filter(Boolean);
+  const factGraph: FactGraphV1 = {
+    version: "fact_graph_v1",
+    facts: candidateSources.map((text, index) => ({
+      id: `fact_brief_numeric_${String(index + 1).padStart(3, "0")}`,
+      text,
+      source: "cv",
+      sourcePath: `brief.numericEvidence[${index}]`,
+      confidence: "medium",
+      category: "achievement",
+      metrics: premiumCoverLetterFactGraphNumericMetrics(text),
+      entities: [],
+      allowedVerbs: [],
+      forbiddenUpgrades: [],
+      ownershipLevel: "support",
+    })),
+  };
+  const jobSources = [
+    ...(brief.topResponsibilities ?? []),
+    ...(brief.keyRequirements ?? []),
+    ...(brief.preferredQualifications ?? []),
+    ...(brief.lowValueChecklist ?? []),
+    ...(brief.workContext ?? []),
+  ].filter(Boolean);
+  const jobDemandGraph: JobDemandGraphV1 = {
+    version: "job_demand_graph_v1",
+    priorityTokens: [],
+    demands: jobSources.map((text, index) => ({
+      id: `demand_brief_numeric_${String(index + 1).padStart(3, "0")}`,
+      text,
+      bucket: "key_requirement",
+      requiredness: "required",
+      tokens: [],
+      mustNotBecomeCandidateClaim: true,
+    })),
+  };
+  const claimPlan: ClaimPlanV1 = {
+    version: "claim_plan_v1",
+    contextClass: brief.contextClass,
+    language: brief.language as ProposalOutputLanguage,
+    targetRole: brief.targetRole,
+    preset: brief.preset,
+    claims: [],
+    globalForbidden: [],
+  };
+  const factIds = factGraph.facts.map((fact) => fact.id);
+  const demandIds = jobDemandGraph.demands.map((demand) => demand.id);
+  const provenance = { claimIds: [], factIds, demandIds };
+  return {
+    projection: buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph,
+      claimPlan,
+      jobDemandGraph,
+      targetEmployer: brief.targetEmployer,
+    }),
+    provenanceBySection: {
+      opening: provenance,
+      proofBlock: provenance,
+      employerValueBlock: provenance,
+      closeLine: provenance,
+    },
+  };
+}
+
 export function validatePremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
+  numericEvidenceContext?: PremiumCoverLetterNumericEvidenceValidationContext;
 }): PremiumBodyPartValidationIssue[] {
   const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
   const issues: PremiumBodyPartValidationIssue[] = [];
-  const values = Object.values(bodyParts);
+  const values = Object.entries(bodyParts) as Array<
+    [ClaimPlanSection, string]
+  >;
   const sourceSurface = buildValidationSourceSurface(args);
   const candidateEvidenceSurface = buildCandidateEvidenceSurface(args);
-  for (const value of values) {
+  const numericEvidenceContext =
+    args.numericEvidenceContext ??
+    buildStandaloneBriefNumericEvidenceContext(args.brief);
+  for (const [section, value] of values) {
     const compact = compactWhitespace(value);
     if (!compact) {
       issues.push({ code: "missing_field", repairable: true });
@@ -6060,12 +6136,18 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (WRITER_META_PROSE_PATTERN.test(compact)) {
       issues.push({ code: "meta_prose", repairable: false });
     }
+    const numericProvenance = numericEvidenceContext.provenanceBySection[section];
     if (
-      hasUnsupportedNumericClaim({
-        generatedText: compact,
-        sourceSurface,
-        targetEmployer: args.brief.targetEmployer,
-      })
+      args.brief.language === "English" &&
+      numericProvenance &&
+      matchPremiumCoverLetterNumericEvidence({
+        projection: numericEvidenceContext.projection,
+        visibleText: compact,
+        section,
+        factIds: numericProvenance.factIds,
+        demandIds: numericProvenance.demandIds,
+        claimIds: numericProvenance.claimIds,
+      }).unsupported.length > 0
     ) {
       issues.push({ code: "unsupported_numeric_claim", repairable: false });
     }
@@ -6900,13 +6982,21 @@ function getChangedPremiumCoverLetterSections(args: {
 function repairTextHasCandidateUnsupportedClaim(args: {
   text: string;
   candidateEvidenceSurface: string;
+  section: ClaimPlanSection;
+  numericEvidenceContext: PremiumCoverLetterNumericEvidenceValidationContext;
 }): boolean {
   const compact = compactWhitespace(args.text);
+  const numericProvenance =
+    args.numericEvidenceContext.provenanceBySection[args.section];
   if (
-    hasUnsupportedNumericClaim({
-      generatedText: compact,
-      sourceSurface: args.candidateEvidenceSurface,
-    })
+    matchPremiumCoverLetterNumericEvidence({
+      projection: args.numericEvidenceContext.projection,
+      visibleText: compact,
+      section: args.section,
+      factIds: numericProvenance.factIds,
+      demandIds: numericProvenance.demandIds,
+      claimIds: numericProvenance.claimIds,
+    }).unsupported.length > 0
   ) {
     return true;
   }
@@ -6938,8 +7028,8 @@ function repairAddsNumericClaimToSection(args: {
   before: string;
   after: string;
 }): boolean {
-  const previousClaims = new Set(extractNumericClaims(args.before));
-  return extractNumericClaims(args.after).some(
+  const previousClaims = new Set(numericEvidenceNormalizedValues(args.before));
+  return numericEvidenceNormalizedValues(args.after).some(
     (claim) => !previousClaims.has(claim),
   );
 }
@@ -6998,6 +7088,7 @@ function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
   repairedProvenance: PremiumCoverLetterFinalProvenance;
   writerOutput: PremiumWriterOutputV1;
   factGraph: FactGraphV1;
+  numericEvidenceContext: PremiumCoverLetterNumericEvidenceValidationContext;
 }): boolean {
   const changedSections = getChangedPremiumCoverLetterSections({
     before: args.before,
@@ -7028,6 +7119,8 @@ function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
       !repairTextHasCandidateUnsupportedClaim({
         text: args.after[section],
         candidateEvidenceSurface,
+        section,
+        numericEvidenceContext: args.numericEvidenceContext,
       })
     );
   });
@@ -7046,6 +7139,7 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
   factGraph: FactGraphV1;
   legacyWrapped: boolean;
   provenanceIdsNormalized: boolean;
+  numericEvidenceContext: PremiumCoverLetterNumericEvidenceValidationContext;
 }): Promise<{
   bodyParts?: CoverLetterBodyParts;
   rendered?: { content: string; sections: Array<{ type: "text"; content: string }> };
@@ -7128,6 +7222,7 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
   const repairedIssues = validatePremiumCoverLetterBodyParts({
     bodyParts: repairedBodyParts,
     brief: args.brief,
+    numericEvidenceContext: args.numericEvidenceContext,
   });
   if (repairedIssues.length > 0) {
     return {
@@ -7166,8 +7261,9 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
       after: repairedBodyParts,
       brief: args.brief,
       repairedProvenance,
-      writerOutput: args.writerOutput,
-      factGraph: args.factGraph,
+    writerOutput: args.writerOutput,
+    factGraph: args.factGraph,
+    numericEvidenceContext: args.numericEvidenceContext,
     })
   ) {
     return {
@@ -7340,6 +7436,13 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     });
     return null;
   }
+  const numericEvidenceProjection =
+    buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph,
+      claimPlan,
+      jobDemandGraph,
+      targetEmployer,
+    });
 
   const brief = buildPremiumCoverLetterBrief({
     preset: voicePreset,
@@ -7393,6 +7496,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     factGraph,
     jobDemandGraph,
     brief,
+    numericEvidenceProjection,
   });
   const blockingWriterOutputIssues = writerOutputIssues.filter(
     isBlockingPremiumWriterOutputIssue,
@@ -7448,6 +7552,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       factGraph,
       jobDemandGraph,
       brief,
+      numericEvidenceProjection,
     });
     const repairedBlockingWriterOutputIssues = writerOutputIssues.filter(
       isBlockingPremiumWriterOutputIssue,
@@ -7473,11 +7578,22 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerOutput = normalizedRepairedWriterOutput;
   }
 
+  const numericEvidenceContext = numericEvidenceValidationContext({
+    projection: numericEvidenceProjection,
+    writerOutput,
+  });
+  const validateBodyParts = (candidateBodyParts: CoverLetterBodyParts) =>
+    validatePremiumCoverLetterBodyParts({
+      bodyParts: candidateBodyParts,
+      brief,
+      numericEvidenceContext,
+    });
+
   let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
     toCoverLetterBodyParts(writerOutput),
   );
 
-  let issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
+  let issues = validateBodyParts(bodyParts);
   const issueCodes = summarizeValidationIssueCodes(issues);
   const shouldTryAdjacentEvidenceNormalization =
     brief.contextClass === "cv_adjacent" &&
@@ -7500,10 +7616,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   if (issues.some((issue) => !issue.repairable)) {
     if (shouldTryAdjacentEvidenceNormalization) {
       const normalizedBodyParts = normalizeAdjacentEvidenceOrder({ bodyParts, brief });
-      const normalizedIssues = validatePremiumCoverLetterBodyParts({
-        bodyParts: normalizedBodyParts,
-        brief,
-      });
+      const normalizedIssues = validateBodyParts(normalizedBodyParts);
       if (normalizedIssues.length === 0) {
         bodyParts = normalizedBodyParts;
         issues = [];
@@ -7524,10 +7637,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         bodyParts,
         brief,
       });
-      const ownershipRepairedIssues = validatePremiumCoverLetterBodyParts({
-        bodyParts: ownershipRepairedBodyParts,
-        brief,
-      });
+      const ownershipRepairedIssues = validateBodyParts(
+        ownershipRepairedBodyParts,
+      );
       if (ownershipRepairedIssues.length === 0) {
         bodyParts = ownershipRepairedBodyParts;
         issues = [];
@@ -7576,10 +7688,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         signal: args.signal,
       }),
     );
-    const repairedIssues = validatePremiumCoverLetterBodyParts({
-      bodyParts: repairedBodyParts,
-      brief,
-    });
+    const repairedIssues = validateBodyParts(repairedBodyParts);
     if (repairedIssues.some((issue) => !issue.repairable) || repairedIssues.length > 0) {
       args.onFailure?.({
         stage: "validation",
@@ -7592,7 +7701,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     bodyParts = repairedBodyParts;
   } else if (issues.length > 0) {
     bodyParts = repairPremiumCoverLetterBodyParts({ bodyParts, brief });
-    issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
+    issues = validateBodyParts(bodyParts);
     if (issues.some((issue) => !issue.repairable) || issues.length > 0) {
       args.onFailure?.({
         stage: "validation",
@@ -7608,10 +7717,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     bodyParts,
     brief,
   });
-  const qualityCleanedIssues = validatePremiumCoverLetterBodyParts({
-    bodyParts: qualityCleanedBodyParts,
-    brief,
-  });
+  const qualityCleanedIssues = validateBodyParts(qualityCleanedBodyParts);
   if (qualityCleanedIssues.length === 0) {
     bodyParts = qualityCleanedBodyParts;
   }
@@ -7626,10 +7732,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       bodyParts: compactMistralPremiumBodyParts(bodyParts),
       brief,
     });
-    const compactIssues = validatePremiumCoverLetterBodyParts({
-      bodyParts: compactBodyParts,
-      brief,
-    });
+    const compactIssues = validateBodyParts(compactBodyParts);
     if (compactIssues.length === 0) {
       bodyParts = compactBodyParts;
     }
@@ -7662,6 +7765,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     factGraph,
     legacyWrapped,
     provenanceIdsNormalized,
+    numericEvidenceContext,
   });
   qualityRepairTrace = qualityRepair.trace;
   if (qualityRepair.bodyParts && qualityRepair.rendered && qualityRepair.qualityShadow) {
@@ -7678,10 +7782,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       brief,
       forceGenericCloseRepair: true,
     });
-    const deterministicFallbackIssues = validatePremiumCoverLetterBodyParts({
-      bodyParts: deterministicFallbackBodyParts,
-      brief,
-    });
+    const deterministicFallbackIssues = validateBodyParts(
+      deterministicFallbackBodyParts,
+    );
     if (deterministicFallbackIssues.length === 0) {
       bodyParts = deterministicFallbackBodyParts;
       rendered = renderPremiumCoverLetter({
@@ -7707,6 +7810,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     factGraph,
     jobDemandGraph,
     targetEmployer,
+    numericEvidenceProjection,
   });
   let blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>
@@ -7742,6 +7846,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       factGraph,
       jobDemandGraph,
       targetEmployer,
+      numericEvidenceProjection,
     });
     blockingEnglishCvBackedQualityGateIssues =
       englishCvBackedQualityGateIssues.filter((issue) =>
