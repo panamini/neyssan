@@ -413,7 +413,7 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it("does not accept a job-context metric as candidate proof through demand provenance", () => {
+  it("does not accept a job-context metric as candidate prose through demand provenance", () => {
     const jobDemandGraph: JobDemandGraphV1 = {
       version: "job_demand_graph_v1",
       priorityTokens: [],
@@ -431,18 +431,18 @@ describe("English CV-backed quality gate", () => {
     const demandClaimPlan: ClaimPlanV1 = {
       ...claimPlan,
       claims: claimPlan.claims.map((claim) =>
-        claim.section === "proofBlock"
+        claim.section === "employerValueBlock"
           ? { ...claim, demandIds: ["demand_scale"] }
           : claim,
       ),
     };
     const writerOutput = output({
       opening: "I reduced the onboarding backlog by 24%.",
-      proofBlock: "I operated a 100M business line.",
-      employerValueBlock: "That reporting supports clear delivery handoffs.",
+      proofBlock: "I documented handoffs for three implementation teams.",
+      employerValueBlock: "I operated a 100M business line.",
       closeLine: "I would bring that discipline to the team.",
     });
-    writerOutput.bodyParts.proofBlock.demandIds = ["demand_scale"];
+    writerOutput.bodyParts.employerValueBlock.demandIds = ["demand_scale"];
 
     expect(
       validateEnglishCvBackedQualityGate({
@@ -453,7 +453,7 @@ describe("English CV-backed quality gate", () => {
       }),
     ).toContainEqual({
       code: "unsupported_visible_metric",
-      section: "proofBlock",
+      section: "employerValueBlock",
       metric: "100000000",
     });
   });
@@ -1795,7 +1795,7 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
-  it("accepts a numeral supported by the section's assigned job demand", () => {
+  it("fails closed on an assigned job-demand numeral without an explicit owner signal", () => {
     const demandId = "demand_always_on";
     const demandClaimPlan: ClaimPlanV1 = {
       ...claimPlan,
@@ -1835,7 +1835,7 @@ describe("English CV-backed quality gate", () => {
       jobDemandGraph,
     });
 
-    expect(issues).not.toContainEqual(
+    expect(issues).toContainEqual(
       expect.objectContaining({
         code: "unsupported_visible_metric",
         section: "employerValueBlock",

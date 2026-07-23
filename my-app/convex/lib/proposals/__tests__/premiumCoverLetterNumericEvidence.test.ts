@@ -124,6 +124,90 @@ describe("premium cover-letter numeric evidence", () => {
     ).toEqual([]);
   });
 
+  it("does not authorize a different duration unit with the same number", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        { id: "fact_duration", source: "cv", text: "Completed the work in 3 days." },
+      ]),
+    });
+
+    const sameUnit = matchPremiumCoverLetterNumericEvidence({
+      projection: evidence,
+      visibleText: "I completed the work in three days.",
+      section: "proofBlock",
+      factIds: ["fact_duration"],
+      demandIds: [],
+      claimIds: [],
+    });
+    const changedUnit = matchPremiumCoverLetterNumericEvidence({
+      projection: evidence,
+      visibleText: "I completed the work in three months.",
+      section: "proofBlock",
+      factIds: ["fact_duration"],
+      demandIds: [],
+      claimIds: [],
+    });
+
+    expect(sameUnit.unsupported).toEqual([]);
+    expect(changedUnit.matches).toEqual([]);
+    expect(changedUnit.unsupported).toContainEqual(
+      expect.objectContaining({ normalizedValue: "3" }),
+    );
+  });
+
+  it("does not authorize a contextual version from a metric with the same number", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        { id: "fact_count", source: "cv", text: "Delivered 3 projects." },
+      ]),
+    });
+
+    const result = matchPremiumCoverLetterNumericEvidence({
+      projection: evidence,
+      visibleText: "Used Python 3 in production.",
+      section: "proofBlock",
+      factIds: ["fact_count"],
+      demandIds: [],
+      claimIds: [],
+    });
+
+    expect(result.matches).toEqual([]);
+    expect(result.unsupported).toContainEqual(
+      expect.objectContaining({ normalizedValue: "3" }),
+    );
+  });
+
+  it("keeps version qualifiers bound to their classified source", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        { id: "fact_python", source: "cv", text: "Used Python 3 in production." },
+      ]),
+    });
+
+    const sameQualifier = matchPremiumCoverLetterNumericEvidence({
+      projection: evidence,
+      visibleText: "I used Python 3 in production.",
+      section: "proofBlock",
+      factIds: ["fact_python"],
+      demandIds: [],
+      claimIds: [],
+    });
+    const changedQualifier = matchPremiumCoverLetterNumericEvidence({
+      projection: evidence,
+      visibleText: "I used React 3 in production.",
+      section: "proofBlock",
+      factIds: ["fact_python"],
+      demandIds: [],
+      claimIds: [],
+    });
+
+    expect(sameQualifier.unsupported).toEqual([]);
+    expect(changedQualifier.matches).toEqual([]);
+    expect(changedQualifier.unsupported).toContainEqual(
+      expect.objectContaining({ normalizedValue: "3" }),
+    );
+  });
+
   it("rejects unsupported 100M and accepts the same structured candidate metric", () => {
     const unsupported = matchPremiumCoverLetterNumericEvidence({
       projection: projection({}),
@@ -324,14 +408,28 @@ describe("premium cover-letter numeric evidence", () => {
 
     const employerValueMatch = matchPremiumCoverLetterNumericEvidence({
       projection: evidence,
-      visibleText: "The role includes a 100M business line.",
+      visibleText: "I operated a 100M business line.",
       section: "employerValueBlock",
       factIds: [],
       demandIds: ["demand_scale"],
       claimIds: [],
     });
-    expect(employerValueMatch.unsupported).toEqual([]);
-    expect(employerValueMatch.matches).toContainEqual(
+    expect(employerValueMatch.matches).toEqual([]);
+    expect(employerValueMatch.unsupported).toContainEqual(
+      expect.objectContaining({ reasonCodes: expect.arrayContaining(["owner_mismatch"]) }),
+    );
+
+    const explicitJobContextMatch = matchPremiumCoverLetterNumericEvidence({
+      projection: evidence,
+      visibleText: "The role includes a 100M business line.",
+      section: "employerValueBlock",
+      factIds: [],
+      demandIds: ["demand_scale"],
+      claimIds: [],
+      requiredOwner: "JOB_CONTEXT",
+    });
+    expect(explicitJobContextMatch.unsupported).toEqual([]);
+    expect(explicitJobContextMatch.matches).toContainEqual(
       expect.objectContaining({ owner: "JOB_CONTEXT", demandId: "demand_scale" }),
     );
 

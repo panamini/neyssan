@@ -4678,7 +4678,7 @@ describe("premium cover letter generation and rendering", () => {
     ).not.toContain("unsupported_numeric_claim");
   });
 
-  it("rejects job-context metrics as candidate proof in writer and body validation", () => {
+  it("rejects job-context metrics as candidate employer-value prose in writer and body validation", () => {
     const { claimPlan, factGraph, jobDemandGraph, brief } =
       buildDirectClaimPlanFixture();
     const demand = {
@@ -4696,7 +4696,7 @@ describe("premium cover letter generation and rendering", () => {
     const demandClaimPlan: ClaimPlanV1 = {
       ...claimPlan,
       claims: claimPlan.claims.map((claim) =>
-        claim.section === "proofBlock"
+        claim.section === "employerValueBlock"
           ? { ...claim, demandIds: [...claim.demandIds, demand.id] }
           : claim,
       ),
@@ -4704,13 +4704,13 @@ describe("premium cover letter generation and rendering", () => {
     const writerOutput = buildDirectPremiumWriterOutputFixture({
       opening:
         "I improved signup conversion by 11% through iterative UI experiments.",
-      proofBlock: "I operated a 100M business line.",
-      employerValueBlock:
+      proofBlock:
         "I built experimentation dashboards used by product and growth teams.",
+      employerValueBlock: "I operated a 100M business line.",
       closeLine:
         "I would bring that design-system discipline to product-facing interface work.",
     });
-    writerOutput.bodyParts.proofBlock.demandIds = [demand.id];
+    writerOutput.bodyParts.employerValueBlock.demandIds = [demand.id];
 
     expect(
       validatePremiumWriterOutputV1({
