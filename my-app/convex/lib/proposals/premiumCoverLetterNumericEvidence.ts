@@ -6,6 +6,7 @@ import type {
 } from "./premiumCoverLetter";
 import {
   canonicalizePremiumCoverLetterNoun,
+  canonicalizePremiumCoverLetterToken,
   normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
 import {
@@ -2275,6 +2276,83 @@ export function matchPremiumCoverLetterNumericEvidence(args: {
   }
 
   return { matches, unsupported };
+}
+
+export type PremiumCoverLetterNumericEvidenceSectionInput = Readonly<{
+  section: ClaimPlanSection;
+  visibleText: string;
+  factIds: readonly string[];
+  demandIds: readonly string[];
+  claimIds: readonly string[];
+}>;
+
+/**
+ * Match all retained cover-letter sections through one Numeric Evidence
+ * module boundary. The section-level matcher remains available to the writer
+ * validator and focused module tests.
+ */
+export function matchPremiumCoverLetterNumericEvidenceSections(args: {
+  projection: PremiumCoverLetterNumericEvidenceProjection;
+  sections: readonly PremiumCoverLetterNumericEvidenceSectionInput[];
+}): readonly PremiumCoverLetterNumericEvidenceMatchResult[] {
+  return args.sections.map((section) =>
+    matchPremiumCoverLetterNumericEvidence({
+      projection: args.projection,
+      ...section,
+    }),
+  );
+}
+
+export type PremiumCoverLetterNumericEvidenceEvaluation = Readonly<{
+  projection: PremiumCoverLetterNumericEvidenceProjection;
+  sectionResults: readonly PremiumCoverLetterNumericEvidenceMatchResult[];
+  excludedAnchorTokens: ReadonlySet<string>;
+}>;
+
+function numericEvidenceExcludedAnchorTokens(
+  projection: PremiumCoverLetterNumericEvidenceProjection,
+): ReadonlySet<string> {
+  return new Set(
+    projection.sources.flatMap((source) =>
+      [source.sourceSpan.text, source.normalizedValue]
+        .flatMap((value) =>
+          value.normalize("NFKC").split(/[^\p{L}\p{N}%]+/u),
+        )
+        .filter((token) => isPremiumCoverLetterNumericLexeme(token))
+        .map((token) => canonicalizePremiumCoverLetterToken(token)),
+    ),
+  );
+}
+
+/**
+ * Evaluate all retained sections through one Numeric Evidence module
+ * boundary. Projection construction remains inside the module when a legacy
+ * caller does not provide the already-built projection.
+ */
+export function evaluatePremiumCoverLetterNumericEvidence(args: {
+  factGraph: FactGraphV1;
+  claimPlan: ClaimPlanV1;
+  jobDemandGraph: JobDemandGraphV1;
+  targetEmployer?: TargetEmployerResolution;
+  projection?: PremiumCoverLetterNumericEvidenceProjection;
+  sections: readonly PremiumCoverLetterNumericEvidenceSectionInput[];
+}): PremiumCoverLetterNumericEvidenceEvaluation {
+  const projection =
+    args.projection ??
+    buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph: args.factGraph,
+      claimPlan: args.claimPlan,
+      jobDemandGraph: args.jobDemandGraph,
+      targetEmployer: args.targetEmployer,
+    });
+  return {
+    projection,
+    sectionResults: matchPremiumCoverLetterNumericEvidenceSections({
+      projection,
+      sections: args.sections,
+    }),
+    excludedAnchorTokens: numericEvidenceExcludedAnchorTokens(projection),
+  };
 }
 
 export function numericEvidenceNormalizedValues(value: string): string[] {
