@@ -114,6 +114,7 @@ const FINITE_AUXILIARIES = new Set([
   "will",
   "would",
 ]);
+const INFINITIVE_AUXILIARIES = new Set(["be", "do", "have"]);
 
 const FINITE_LEXICAL_FORMS = new Set([
   "built",
@@ -304,6 +305,7 @@ function continuesContextualAbbreviation(args: {
   remainingText: string;
 }): boolean {
   if (/\b(?:e\.g|i\.e)\.$/iu.test(args.textThroughPunctuation)) return true;
+  if (startsWithLowercaseStyledProperNoun(args.remainingText)) return false;
   return (
     /\b(?:u\.s|u\.k)\.$/iu.test(args.textThroughPunctuation) &&
     /^\s*(?:(?:Bank|Bancorp|Airways|Airlines|Army|Navy|Department|Government|Steel)\b|[a-z]+\b)/u.test(
@@ -427,6 +429,8 @@ function isFiniteVerbForm(
 ): boolean {
   const token = tokens[index];
   if (!token) return false;
+  const previous = tokens[index - 1]?.canonical ?? "";
+  if (previous === "to") return false;
   if (
     FINITE_AUXILIARIES.has(token.canonical) ||
     FINITE_LEXICAL_FORMS.has(token.canonical)
@@ -434,11 +438,16 @@ function isFiniteVerbForm(
     return true;
   }
   if (index === 0 || !/(?:ed|en)$/u.test(token.canonical)) return false;
-  const previous = tokens[index - 1]?.canonical ?? "";
   return (
-    previous !== "to" &&
     !SUBJECT_DETERMINERS.has(previous) &&
     !PREPOSITIONAL_FRAGMENT_STARTERS.has(previous)
+  );
+}
+
+function isInfinitiveHead(canonical: string): boolean {
+  return (
+    BASE_INFINITIVE_VERBS.has(canonical) ||
+    INFINITIVE_AUXILIARIES.has(canonical)
   );
 }
 
@@ -546,7 +555,7 @@ function findInfinitiveRanges(args: {
   for (let index = 0; index < args.tokens.length - 1; index += 1) {
     if (
       args.tokens[index]?.canonical !== "to" ||
-      !BASE_INFINITIVE_VERBS.has(
+      !isInfinitiveHead(
         args.tokens[index + 1]?.canonical ?? "",
       )
     ) {
@@ -608,9 +617,20 @@ function findRelativePredicateIndexes(args: {
 }): number[] {
   const indexes: number[] = [];
   for (let index = 0; index < args.tokens.length; index += 1) {
+    const marker = args.tokens[index];
+    const previousToken = args.tokens[index - 1];
+    const precedingGap =
+      marker && previousToken
+        ? args.segment.text.slice(
+            previousToken.end - args.segment.start,
+            marker.start - args.segment.start,
+          )
+        : "";
     if (
       index === 0 ||
-      !RELATIVE_MARKERS.has(args.tokens[index]?.canonical ?? "")
+      !RELATIVE_MARKERS.has(marker?.canonical ?? "") ||
+      (marker?.canonical === "that" &&
+        /[,;:—–]/u.test(precedingGap))
     )
       continue;
     for (
@@ -748,14 +768,18 @@ function looksLikeReducedParticipleContinuation(args: {
     args.tokens[args.predicateIndex]?.canonical ?? "";
   const followingCanonical =
     args.tokens[args.predicateIndex + 1]?.canonical ?? "";
-  return (
+  const startsWithVerbLedParticiple =
     args.subjectStartIndex === 0 &&
-    VERB_LED_PARTICIPLES.has(subjectTokens[0]?.canonical ?? "") &&
-    subjectTokens.some((token) =>
-      SUBJECT_DETERMINERS.has(token.canonical),
-    ) &&
-    /(?:ed|en)$/u.test(predicateCanonical) &&
-    PREPOSITIONAL_FRAGMENT_STARTERS.has(followingCanonical)
+    VERB_LED_PARTICIPLES.has(subjectTokens[0]?.canonical ?? "");
+  const predicateIsParticiple = /(?:ed|en)$/u.test(predicateCanonical);
+  return (
+    startsWithVerbLedParticiple &&
+    predicateIsParticiple &&
+    (args.predicateIndex === args.subjectStartIndex + 1 ||
+      (subjectTokens.some((token) =>
+        SUBJECT_DETERMINERS.has(token.canonical),
+      ) &&
+        PREPOSITIONAL_FRAGMENT_STARTERS.has(followingCanonical)))
   );
 }
 
@@ -830,11 +854,47 @@ function inferSubject(args: {
   return { span, reasonCode: "modified_subject" };
 }
 
+function hasPostCommaClauseShape(args: {
+  tokens: readonly ProseToken[];
+  segment: SentenceSegment;
+}): boolean {
+  let clauseStartIndex = -1;
+  for (let index = 1; index < args.tokens.length; index += 1) {
+    const previousToken = args.tokens[index - 1];
+    const token = args.tokens[index];
+    const punctuationGap =
+      previousToken && token
+        ? args.segment.text.slice(
+            previousToken.end - args.segment.start,
+            token.start - args.segment.start,
+          )
+        : "";
+    if (punctuationGap.includes(",")) clauseStartIndex = index;
+  }
+  if (clauseStartIndex < 0) return false;
+  const clauseTokens = args.tokens.slice(clauseStartIndex);
+  const subjectStarter = clauseTokens[0]?.canonical ?? "";
+  if (
+    clauseTokens.length < 2 ||
+    PREPOSITIONAL_FRAGMENT_STARTERS.has(subjectStarter) ||
+    CLAUSE_COORDINATORS.has(subjectStarter)
+  ) {
+    return false;
+  }
+  if (
+    SUBJECT_DETERMINERS.has(subjectStarter) ||
+    subjectStarter === "that"
+  ) {
+    return clauseTokens.length >= 3;
+  }
+  return !RELATIVE_MARKERS.has(subjectStarter);
+}
+
 function isVerbLedFragmentCategory(args: {
   tokens: readonly ProseToken[];
   infinitiveRanges: readonly TokenRange[];
   mainFinitePredicateIndex: number | null;
-  text: string;
+  segment: SentenceSegment;
 }): boolean {
   const firstToken = args.tokens[0];
   if (
@@ -847,7 +907,7 @@ function isVerbLedFragmentCategory(args: {
     PREPOSITIONAL_FRAGMENT_STARTERS.has(
       args.tokens[1]?.canonical ?? "",
     ) &&
-    !args.text.includes(",") &&
+    !args.segment.text.includes(",") &&
     !args.tokens
       .slice(2)
       .some((token) => SUBJECT_PRONOUNS.has(token.canonical))
@@ -855,6 +915,14 @@ function isVerbLedFragmentCategory(args: {
     return true;
   }
   if (args.mainFinitePredicateIndex !== null) return false;
+  if (
+    hasPostCommaClauseShape({
+      tokens: args.tokens,
+      segment: args.segment,
+    })
+  ) {
+    return false;
+  }
   const firstInfinitive = args.infinitiveRanges[0];
   if (!firstInfinitive) return true;
   const nominalHead = args.tokens[firstInfinitive.startIndex - 1];
@@ -898,7 +966,7 @@ function hasInvalidSemicolonClause(segment: SentenceSegment): boolean {
         tokens,
         infinitiveRanges,
         mainFinitePredicateIndex,
-        text,
+        segment: clause,
       })
     ) {
       return true;
@@ -947,7 +1015,7 @@ function analyzeSentence(args: {
       tokens,
       infinitiveRanges,
       mainFinitePredicateIndex,
-      text: args.segment.text,
+      segment: args.segment,
     });
 
   if (isInvalidFragment) {

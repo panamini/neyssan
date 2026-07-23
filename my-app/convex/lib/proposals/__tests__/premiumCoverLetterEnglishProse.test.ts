@@ -88,6 +88,43 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it.each(["U.S.", "U.K."])(
+    "splits after %s before a lowercase-styled proper-name sentence",
+    (abbreviation) => {
+      const text = `I worked in the ${abbreviation} npm supports reliable delivery.`;
+
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          text: `I worked in the ${abbreviation}`,
+          sentenceSpan: { start: 0, end: 20 },
+          classification: "VALID",
+          subjectSpan: { start: 0, end: 1 },
+          finitePredicateSpan: { start: 2, end: 8 },
+        }),
+        expect.objectContaining({
+          text: "npm supports reliable delivery.",
+          sentenceSpan: { start: 21, end: 52 },
+          classification: "VALID",
+          subjectSpan: { start: 21, end: 24 },
+          finitePredicateSpan: { start: 25, end: 33 },
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "I supported U.S. teams across regions.",
+    "I supported U.K. operations across regions.",
+  ])("preserves a genuine abbreviation continuation: %s", (text) => {
+    expect(analyze(text)).toEqual([
+      expect.objectContaining({
+        text,
+        sentenceSpan: { start: 0, end: text.length },
+        classification: "VALID",
+      }),
+    ]);
+  });
+
   it.each([
     {
       text: "Teams deliver results.",
@@ -153,6 +190,19 @@ describe("premium cover-letter English prose module", () => {
         subjectSpan: { start: 39, end: 51 },
         finitePredicateSpan: { start: 52, end: 60 },
         relativePredicateSpans: [],
+      }),
+    ]);
+  });
+
+  it("treats post-comma that as the start of the main subject", () => {
+    expect(analyze("Built on research, that approach works.")).toEqual([
+      expect.objectContaining({
+        classification: "VALID",
+        confidence: "high",
+        subjectSpan: { start: 19, end: 32 },
+        finitePredicateSpan: { start: 33, end: 38 },
+        relativePredicateSpans: [],
+        reasonCodes: expect.not.arrayContaining(["relative_clause"]),
       }),
     ]);
   });
@@ -243,6 +293,24 @@ describe("premium cover-letter English prose module", () => {
   );
 
   it.each([
+    "Built on user research, my work demonstrates customer focus.",
+    "Supported by product data, our process clarifies decisions.",
+  ])(
+    "keeps an unsupported present predicate after a fronted clause conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
+        }),
+      ]);
+    },
+  );
+
+  it.each([
     {
       text: "Built on research, I collaborated with teams.",
       finitePredicateSpan: { start: 21, end: 33 },
@@ -271,6 +339,24 @@ describe("premium cover-letter English prose module", () => {
         "Led a design-system migration used across four product squads.",
       ),
     ).toEqual([
+      expect.objectContaining({
+        classification: "INVALID",
+        confidence: "high",
+        subjectSpan: null,
+        finitePredicateSpan: null,
+        reasonCodes: expect.arrayContaining([
+          "verb_led_fragment",
+          "missing_finite_predicate",
+        ]),
+      }),
+    ]);
+  });
+
+  it.each([
+    "Built proven systems.",
+    "Managed established processes.",
+  ])("keeps a stacked-participle fragment invalid: %s", (text) => {
+    expect(analyze(text)).toEqual([
       expect.objectContaining({
         classification: "INVALID",
         confidence: "high",
@@ -328,6 +414,24 @@ describe("premium cover-letter English prose module", () => {
           confidence,
           subjectSpan,
           finitePredicateSpan,
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "Built on research, people support delivery.",
+    "Built on research, personnel support delivery.",
+  ])(
+    "keeps an irregular-number subject before a base predicate conservative: %s",
+    (text) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "UNKNOWN",
+          confidence: "low",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          reasonCodes: ["ambiguous_clause_structure"],
         }),
       ]);
     },
@@ -391,6 +495,57 @@ describe("premium cover-letter English prose module", () => {
       }),
     ]);
   });
+
+  it.each([
+    {
+      text: "Built to have supported teams.",
+      infinitiveSpan: { start: 6, end: 29 },
+    },
+    {
+      text: "Managed to do reliable reporting.",
+      infinitiveSpan: { start: 8, end: 32 },
+    },
+  ])(
+    "keeps an infinitival auxiliary out of the main predicate: $text",
+    ({ text, infinitiveSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "INVALID",
+          confidence: "high",
+          subjectSpan: null,
+          finitePredicateSpan: null,
+          infinitiveSpans: [infinitiveSpan],
+          reasonCodes: expect.arrayContaining([
+            "verb_led_fragment",
+            "missing_finite_predicate",
+          ]),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    {
+      text: "Teams have supported delivery.",
+      finitePredicateSpan: { start: 6, end: 10 },
+    },
+    {
+      text: "Teams do support delivery.",
+      finitePredicateSpan: { start: 6, end: 8 },
+    },
+  ])(
+    "preserves a genuinely finite auxiliary: $text",
+    ({ text, finitePredicateSpan }) => {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({
+          classification: "VALID",
+          confidence: "high",
+          subjectSpan: { start: 0, end: 5 },
+          finitePredicateSpan,
+        }),
+      ]);
+    },
+  );
 
   it("identifies a grammatical imperative without declaring it invalid", () => {
     const [result] = analyze("Submit reports promptly.");
@@ -466,5 +621,27 @@ describe("premium cover-letter English prose module", () => {
     );
     expect(source).not.toContain('"collaborated"');
     expect(source).not.toContain('"partnered"');
+    for (const fixture of [
+      "Built on user research, my work demonstrates customer focus.",
+      "Built on research, that approach works.",
+      "Built to have supported teams.",
+      "I worked in the U.S. npm supports reliable delivery.",
+      "Built proven systems.",
+      "Managed established processes.",
+      "Built on research, people support delivery.",
+      "Built on research, personnel support delivery.",
+    ]) {
+      expect(source).not.toContain(fixture);
+    }
+    for (const fixtureLexeme of [
+      '"demonstrates"',
+      '"clarifies"',
+      '"proven"',
+      '"established"',
+      '"people"',
+      '"personnel"',
+    ]) {
+      expect(source).not.toContain(fixtureLexeme);
+    }
   });
 });
