@@ -215,11 +215,55 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["klientų", "client"],
   ["kunde", "client"],
   ["kunden", "client"],
+  ["equipo", "team"],
+  ["equipos", "team"],
+  ["team", "team"],
+  ["teams", "team"],
+  ["squadra", "team"],
+  ["squadre", "team"],
+  ["equipe", "team"],
+  ["equipes", "team"],
+  ["zespół", "team"],
+  ["zespoły", "team"],
+  ["teams", "team"],
+  ["ομάδα", "team"],
+  ["ομάδες", "team"],
+  ["csapat", "team"],
+  ["csapatok", "team"],
+  ["komanda", "team"],
+  ["komandos", "team"],
+  ["meeskond", "team"],
+  ["meeskonnad", "team"],
+  ["команда", "team"],
+  ["команды", "team"],
+  ["فريق", "team"],
+  ["فرق", "team"],
   ["mètre", "meter"],
   ["mètres", "meter"],
   ["omzet", "revenue"],
   ["projet", "project"],
   ["projets", "project"],
+  ["proyecto", "project"],
+  ["proyectos", "project"],
+  ["projekt", "project"],
+  ["projekte", "project"],
+  ["progetto", "project"],
+  ["progetti", "project"],
+  ["projeto", "project"],
+  ["projetos", "project"],
+  ["projekty", "project"],
+  ["project", "project"],
+  ["projecten", "project"],
+  ["έργο", "project"],
+  ["έργα", "project"],
+  ["projektek", "project"],
+  ["projektas", "project"],
+  ["projektai", "project"],
+  ["projektid", "project"],
+  ["проект", "project"],
+  ["проекты", "project"],
+  ["مشروع", "project"],
+  ["مشاريع", "project"],
   ["przychód", "revenue"],
   ["przychody", "revenue"],
   ["pajamos", "revenue"],
@@ -235,6 +279,41 @@ const TRANSLATED_METRIC_MEASUREMENT_ALIASES = new Map([
   ["umsätze", "revenue"],
   ["utilisateur", "user"],
   ["utilisateurs", "user"],
+  ["usuario", "user"],
+  ["usuarios", "user"],
+  ["benutzer", "user"],
+  ["utente", "user"],
+  ["utenti", "user"],
+  ["usuário", "user"],
+  ["usuários", "user"],
+  ["użytkownik", "user"],
+  ["użytkowników", "user"],
+  ["gebruiker", "user"],
+  ["gebruikers", "user"],
+  ["χρήστης", "user"],
+  ["χρήστες", "user"],
+  ["felhasználó", "user"],
+  ["felhasználók", "user"],
+  ["naudotojas", "user"],
+  ["naudotojai", "user"],
+  ["kasutaja", "user"],
+  ["kasutajad", "user"],
+  ["пользователь", "user"],
+  ["пользователи", "user"],
+  ["مستخدم", "user"],
+  ["مستخدمون", "user"],
+  ["temps", "time"],
+  ["tiempo", "time"],
+  ["zeit", "time"],
+  ["tempo", "time"],
+  ["czas", "time"],
+  ["tijd", "time"],
+  ["χρόνος", "time"],
+  ["idő", "time"],
+  ["laikas", "time"],
+  ["aeg", "time"],
+  ["время", "time"],
+  ["وقت", "time"],
   ["выручка", "revenue"],
   ["доход", "revenue"],
   ["доходы", "revenue"],
@@ -1183,13 +1262,24 @@ function isIgnoredWrittenNumberOccurrence(args: {
   const standaloneScaleAfterDigit =
     WRITTEN_NUMBER_SCALES.has(args.matchedNumber.toLowerCase()) &&
     /\d\s*$/u.test(args.value.slice(0, args.index));
+  const compoundSegment =
+    args.matchedNumber.toLowerCase() === "one"
+      ? args.value.slice(args.end).match(/^-([\p{L}]+)/u)?.[1]
+      : undefined;
+  const qualitativeOneCompound = Boolean(
+    compoundSegment &&
+      !DURATION_UNITS.has(canonicalMetricMeasurement(compoundSegment)) &&
+      !Array.from(METRIC_MEASUREMENT_ALIASES.values()).includes(
+        canonicalMetricMeasurement(compoundSegment),
+      ),
+  );
   const partOfIdiom = [
     NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN,
     NON_QUANTITATIVE_WRITTEN_NUMBER_PHRASE_PATTERN,
   ].some((pattern) =>
     writtenNumberOccurrenceMatchesPattern({ ...args, pattern }),
   );
-  return standaloneScaleAfterDigit || partOfIdiom;
+  return standaloneScaleAfterDigit || qualitativeOneCompound || partOfIdiom;
 }
 
 function writtenNumberSignMultiplier(value: string, index: number): number {
@@ -1628,6 +1718,8 @@ function hasDateContextForOccurrence(
     /\bbetween\s*$/iu.test(prefix) ||
     /\bbetween\s+(?:19|20|21)\d{2}\s+and\s*$/iu.test(prefix) ||
     /\b(?:19|20|21)\d{2}\s+to\s*$/iu.test(prefix) ||
+    (/(?:^|[^\d])(?:0?[1-9]|1[0-2])[/-]\s*$/u.test(prefix) &&
+      !/\b(?:fraction|ratio)\s+(?:0?[1-9]|1[0-2])[/-]\s*$/iu.test(prefix)) ||
     /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+\d{1,2}(?:st|nd|rd|th)?)?,?\s*$/iu.test(
       prefix,
     ) ||

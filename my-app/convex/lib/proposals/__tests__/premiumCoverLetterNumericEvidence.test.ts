@@ -1633,4 +1633,126 @@ describe("premium cover-letter numeric evidence", () => {
       }).unsupported,
     ).toEqual([]);
   });
+
+  it.each([
+    ["team", "équipes", "equipos", "teams", "squadre", "equipes", "zespoły", "teams", "ομάδες", "csapatok", "komandos", "meeskonnad", "команды", "فرق"],
+    ["project", "projets", "proyectos", "projekte", "progetti", "projetos", "projekty", "projecten", "έργα", "projektek", "projektai", "projektid", "проекты", "مشاريع"],
+    ["user", "utilisateurs", "usuarios", "benutzer", "utenti", "usuários", "użytkowników", "gebruikers", "χρήστες", "felhasználók", "naudotojai", "kasutajad", "пользователи", "مستخدمون"],
+    ["time", "temps", "tiempo", "zeit", "tempo", "tempo", "czas", "tijd", "χρόνος", "idő", "laikas", "aeg", "время", "وقت"],
+  ])(
+    "covers the finite translated %s measurement matrix",
+    (canonical, ...aliases) => {
+      const evidence = projection({
+        factGraph: factGraph([
+          {
+            id: `fact_${canonical}_matrix`,
+            source: "cv",
+            text: `Managed 4 ${canonical}.`,
+          },
+        ]),
+      });
+      for (const alias of aliases) {
+        expect(
+          matchPremiumCoverLetterNumericEvidence({
+            projection: evidence,
+            visibleText: `4 ${alias}`,
+            section: "proofBlock",
+            factIds: [`fact_${canonical}_matrix`],
+            demandIds: [],
+            claimIds: [],
+            allowMeasurementTranslation: true,
+          }).unsupported,
+        ).toEqual([]);
+      }
+    },
+  );
+
+  it("treats qualitative one-compounds as prose but preserves measured units", () => {
+    for (const visibleText of [
+      "I built a one-stop onboarding hub.",
+      "I bring a one-of-a-kind perspective.",
+    ]) {
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: projection({}),
+          visibleText,
+          section: "proofBlock",
+          factIds: [],
+          demandIds: [],
+          claimIds: [],
+        }).unsupported,
+      ).toEqual([]);
+    }
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({}),
+        visibleText: "I completed a one-year program.",
+        section: "proofBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("recognizes bounded numeric month/year ranges without accepting invalid months", () => {
+    const valid = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_numeric_dates",
+          source: "cv",
+          text: "Engineer — 05/2020 – 06/2024",
+        },
+        {
+          id: "fact_numeric_dates_dash",
+          source: "cv",
+          text: "Engineer — 05-2020 – 06-2024",
+        },
+      ]),
+    });
+    expect(
+      valid.sources.filter((source) => source.role === "DATE"),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factId: "fact_numeric_dates",
+          normalizedValue: "2020",
+        }),
+        expect.objectContaining({
+          factId: "fact_numeric_dates",
+          normalizedValue: "2024",
+        }),
+        expect.objectContaining({
+          factId: "fact_numeric_dates_dash",
+          normalizedValue: "2020",
+        }),
+        expect.objectContaining({
+          factId: "fact_numeric_dates_dash",
+          normalizedValue: "2024",
+        }),
+      ]),
+    );
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: valid,
+        visibleText: "I worked as an engineer from 2020 to 2024.",
+        section: "proofBlock",
+        factIds: ["fact_numeric_dates"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+
+    for (const text of ["Engineer — 13/2020", "Ratio 1/2020"]) {
+      const invalid = projection({
+        factGraph: factGraph([{ id: "fact_invalid_date", source: "cv", text }]),
+      });
+      expect(
+        invalid.sources.some(
+          (source) =>
+            source.normalizedValue === "2020" && source.role === "DATE",
+        ),
+      ).toBe(false);
+    }
+  });
 });
