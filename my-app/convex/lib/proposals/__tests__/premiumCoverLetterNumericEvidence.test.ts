@@ -527,6 +527,223 @@ describe("premium cover-letter numeric evidence", () => {
     ).toEqual([]);
   });
 
+  it("matches between-and paraphrases of cited date ranges", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_between_role_dates",
+          source: "cv",
+          text: "Engineer — 2020–2024",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I worked there between 2020 and 2024.",
+        section: "proofBlock",
+        factIds: ["fact_between_role_dates"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("matches only complete semantic versions with the same tool qualifier", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_angular_semver",
+          source: "cv",
+          text: "Built applications with Angular 18.2.1.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I built applications with Angular 18.2.1.",
+        section: "proofBlock",
+        factIds: ["fact_angular_semver"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "I built applications with React 99.9.1.",
+        section: "proofBlock",
+        factIds: ["fact_angular_semver"],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("allows translated metric measurements only with candidate fact provenance", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_multilingual_customers",
+          source: "cv",
+          text: "Supported 5 customers through onboarding.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "Apoyé a 5 clientes durante la incorporación.",
+        section: "proofBlock",
+        factIds: ["fact_multilingual_customers"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "Apoyé a 5 clientes durante la incorporación.",
+        section: "proofBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).not.toEqual([]);
+  });
+
+  it("allows a French translated measurement outside the narrow alias table", () => {
+    const evidence = projection({
+      factGraph: factGraph([
+        {
+          id: "fact_response_time",
+          source: "cv",
+          text: "Improved 5 response times.",
+        },
+      ]),
+    });
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: evidence,
+        visibleText: "J’ai amélioré 5 délais de réponse.",
+        section: "proofBlock",
+        factIds: ["fact_response_time"],
+        demandIds: [],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it("does not let translated matching bypass candidate ownership", () => {
+    const jobDemandGraph: JobDemandGraphV1 = {
+      ...emptyDemandGraph,
+      demands: [
+        {
+          id: "demand_translated_scale",
+          text: "Support 5 customers.",
+          bucket: "key_requirement",
+          requiredness: "required",
+          tokens: ["support", "customers"],
+          mustNotBecomeCandidateClaim: true,
+        },
+      ],
+    };
+
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({ jobDemandGraph }),
+        visibleText: "Apoyé a 5 clientes.",
+        section: "proofBlock",
+        factIds: [],
+        demandIds: ["demand_translated_scale"],
+        claimIds: [],
+        allowMeasurementTranslation: true,
+      }).unsupported,
+    ).toContainEqual(
+      expect.objectContaining({
+        reasonCodes: expect.arrayContaining(["owner_mismatch"]),
+      }),
+    );
+  });
+
+  it.each([
+    ["French", "5 clients"],
+    ["Spanish", "5 clientes"],
+    ["German", "5 Kunden"],
+    ["Italian", "5 clienti"],
+    ["Portuguese", "5 clientes"],
+    ["Polish", "5 klientów"],
+    ["Dutch", "5 klanten"],
+    ["Greek", "5 πελάτες"],
+    ["Hungarian", "5 ügyfelek"],
+    ["Lithuanian", "5 klientų"],
+    ["Estonian", "5 kliendid"],
+    ["Russian", "5 клиентов"],
+    ["Arabic", "5 عملاء"],
+  ])(
+    "matches the explicit customer alias for enabled %s output",
+    (_language, visibleText) => {
+      const evidence = projection({
+        factGraph: factGraph([
+          {
+            id: "fact_enabled_language_customers",
+            source: "cv",
+            text: "Supported 5 customers.",
+          },
+        ]),
+      });
+
+      expect(
+        matchPremiumCoverLetterNumericEvidence({
+          projection: evidence,
+          visibleText,
+          section: "proofBlock",
+          factIds: ["fact_enabled_language_customers"],
+          demandIds: [],
+          claimIds: [],
+          allowMeasurementTranslation: true,
+        }).unsupported,
+      ).toEqual([]);
+    },
+  );
+
+  it("matches exact written-number target-employer aliases", () => {
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({ employer: "Two Sigma" }),
+        visibleText: "Two Sigma offers reliable delivery.",
+        section: "employerValueBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
+  it.each([
+    "One clear focus would be reliable handoffs.",
+    "One opportunity is to improve handoffs.",
+  ])("ignores qualitative one-prefaces: %s", (visibleText) => {
+    expect(
+      matchPremiumCoverLetterNumericEvidence({
+        projection: projection({}),
+        visibleText,
+        section: "employerValueBlock",
+        factIds: [],
+        demandIds: [],
+        claimIds: [],
+      }).unsupported,
+    ).toEqual([]);
+  });
+
   it.each([
     ["7-Eleven Inc.", "7-Eleven offers reliable delivery."],
     ["99", "At 99, reporting supports delivery."],

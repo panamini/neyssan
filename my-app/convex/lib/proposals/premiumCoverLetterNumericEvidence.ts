@@ -382,7 +382,7 @@ const WRITTEN_NUMBER_PATTERN =
 const NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN =
   /\b(?:one-on-one|one-to-one|two-way)\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_PHRASE_PATTERN =
-  /\b(?:as\s+one\s+(?:team|unit)|one\s+source\s+of\s+truth|one(?:\s+\p{L}[\p{L}-]*){0,2}\s+(?:example|priority|reason|thing|way))\b/giu;
+  /\b(?:as\s+one\s+(?:team|unit)|one\s+source\s+of\s+truth|one(?:\s+\p{L}[\p{L}-]*){0,2}\s+(?:example|focus|opportunity|priority|reason|thing|way))\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -1086,7 +1086,14 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
       /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b|[$€£])))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
-    if (occurrence) tokens.push(occurrence);
+    if (!occurrence) continue;
+    const numericSurface = match[3] ?? "";
+    const numericIndex =
+      (match.index ?? occurrence.index) + match[0].indexOf(numericSurface);
+    const isSemanticVersionFragment =
+      /\d\.$/u.test(value.slice(Math.max(0, numericIndex - 2), numericIndex)) ||
+      /^\.\d/u.test(value.slice(numericIndex + numericSurface.length));
+    if (!isSemanticVersionFragment) tokens.push(occurrence);
   }
   return [...tokens, ...writtenNumericTokenOccurrences(value)];
 }
@@ -1127,7 +1134,13 @@ function numericOccurrences(value: string): NumericOccurrence[] {
     if (quantitative.some((occurrence) => index < occurrence.end && end > occurrence.index)) {
       continue;
     }
-    const normalizedValue = normalizePremiumCoverLetterNumericToken(raw);
+    const normalizedValue =
+      raw.split(".").length > 2
+        ? raw
+            .split(".")
+            .map((part) => String(Number(part)))
+            .join(".")
+        : normalizePremiumCoverLetterNumericToken(raw);
     const baseKey = `number:${normalizedValue}`;
     contextual.push({
       metric: normalizedValue,
@@ -1150,7 +1163,13 @@ function entityCoveringOccurrence(
   const searchable = value.toLocaleLowerCase("en-US");
   return entities.find((rawEntity) => {
     const entity = rawEntity.trim();
-    if (!/\p{L}/u.test(entity) || !/\p{N}/u.test(entity)) return false;
+    if (
+      !/\p{L}/u.test(entity) ||
+      (!/\p{N}/u.test(entity) &&
+        writtenNumericTokenOccurrences(entity).length === 0)
+    ) {
+      return false;
+    }
     const normalized = entity.toLocaleLowerCase("en-US");
     let start = searchable.indexOf(normalized);
     while (start >= 0) {
@@ -1237,6 +1256,8 @@ function hasDateContextForOccurrence(
   const surface = value.slice(occurrence.index, occurrence.end);
   return (
     /\b(?:in|since|during|from|until|through)\s*$/iu.test(prefix) ||
+    /\bbetween\s*$/iu.test(prefix) ||
+    /\bbetween\s+(?:19|20|21)\d{2}\s+and\s*$/iu.test(prefix) ||
     /\b(?:19|20|21)\d{2}\s+to\s*$/iu.test(prefix) ||
     /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+\d{1,2}(?:st|nd|rd|th)?)?,?\s*$/iu.test(
       prefix,
@@ -1453,11 +1474,21 @@ function sourceIsAvailable(args: {
   targetEmployer: TargetEmployerResolution;
 }): boolean {
   if (args.source.owner === "TARGET_EMPLOYER") {
-    return targetEmployerOwnsOccurrence({
-      value: args.visibleText,
-      occurrenceIndex: args.occurrence.index,
-      targetEmployer: args.targetEmployer,
-    });
+    return (
+      targetEmployerOwnsOccurrence({
+        value: args.visibleText,
+        occurrenceIndex: args.occurrence.index,
+        targetEmployer: args.targetEmployer,
+      }) ||
+      (args.targetEmployer.status === "RESOLVED" &&
+        Boolean(
+          entityCoveringOccurrence(
+            args.visibleText,
+            args.occurrence,
+            args.targetEmployer.aliases,
+          ),
+        ))
+    );
   }
   if (args.source.factId) return args.factIds.has(args.source.factId);
   if (args.source.demandId) return args.demandIds.has(args.source.demandId);
@@ -1515,11 +1546,17 @@ function sourceMatchesOccurrence(
   }
   if (source.key === occurrence.key) return true;
   if (allowMeasurementTranslation) {
-    return Boolean(
-      source.measurement &&
-        translatedMetricMeasurementForOccurrence(visibleText, occurrence) ===
-          source.measurement,
+    const translatedMeasurement = translatedMetricMeasurementForOccurrence(
+      visibleText,
+      occurrence,
     );
+    if (translatedMeasurement) {
+      return Boolean(
+        source.measurement &&
+          translatedMeasurement === source.measurement,
+      );
+    }
+    return Boolean(source.measurement && occurrence.measurement);
   }
   if (!source.measurement || !occurrence.measurement) return true;
   return false;
