@@ -231,10 +231,12 @@ function execute(
   adapter: McpSafeSummaryProofAdapter,
   effectObserver: McpSafeSummaryProofEffectObserver,
   forbiddenSubstrings: readonly string[] = [],
+  effectObserverIndependent = true,
 ) {
   return runMcpSafeSummaryProjectionProof({
     adapter,
     effectObserver,
+    effectObserverIndependent,
     forbiddenSubstrings,
   });
 }
@@ -308,7 +310,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
     },
   ])("$name", async ({ attestations, stopCode, protectedCallCount }) => {
     const { adapter, effectObserver, events } = makeAdapter({
-      attestations: attestations as McpSafeSummaryIdentityAttestation[],
+      attestations,
     });
     const result = await execute(adapter, effectObserver);
     expect(result).toMatchObject({
@@ -515,6 +517,34 @@ describe("runMcpSafeSummaryProjectionProof", () => {
     });
   });
 
+  it("accepts a structurally equivalent structuredContent envelope", async () => {
+    const { adapter, effectObserver } = makeAdapter({
+      callResult: (role, toolName) => {
+        const result = role === "A" ? ok(toolName) : noData(toolName);
+        if (role !== "A") return result;
+        return {
+          ...result,
+          structuredContent: JSON.parse(JSON.stringify(result.structuredContent)),
+        };
+      },
+    });
+    const result = await execute(adapter, effectObserver);
+    expect(result).toMatchObject({ outcome: "PASS", protectedCallCount: 8 });
+  });
+
+  it("accepts a null-prototype JSON-like data object", async () => {
+    const { adapter, effectObserver } = makeAdapter({
+      callResult: (role, toolName) => {
+        const result = role === "A" ? ok(toolName) : noData(toolName);
+        if (role !== "A") return result;
+        Object.setPrototypeOf(result.structuredContent.data, null);
+        return result;
+      },
+    });
+    const result = await execute(adapter, effectObserver);
+    expect(result).toMatchObject({ outcome: "PASS", protectedCallCount: 8 });
+  });
+
   it("requires at least one data-bearing OK result for A", async () => {
     const { adapter, effectObserver } = makeAdapter({
       callResult: (_role, toolName) => noData(toolName),
@@ -606,6 +636,19 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       throwEffectSnapshotAt: 1,
     });
     const result = await execute(adapter, effectObserver);
+    expect(result).toMatchObject({
+      outcome: "STOPPED",
+      stopCode: "EFFECT_OBSERVER_FAILED",
+      seedCount: 0,
+      protectedCallCount: 0,
+      recovery: "NOT_REQUIRED",
+    });
+    expect(events).toEqual([]);
+  });
+
+  it("stops before the effect snapshot when observer independence is not attested", async () => {
+    const { adapter, effectObserver, events } = makeAdapter();
+    const result = await execute(adapter, effectObserver, [], false);
     expect(result).toMatchObject({
       outcome: "STOPPED",
       stopCode: "EFFECT_OBSERVER_FAILED",

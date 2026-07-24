@@ -23,7 +23,7 @@ type AcceptedStatus = McpProductionReadonlySummaryResultV2["status"];
 
 export type McpSafeSummaryIdentityAttestation = Readonly<{
   role: McpSafeSummaryProofIdentityRole;
-  verified: true;
+  verified: boolean;
   relationToInitialA: IdentityRelation;
   version: 1;
 }>;
@@ -148,6 +148,8 @@ const ACCEPTED_B_STATUSES = new Set<AcceptedStatus>([
 export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
   adapter: McpSafeSummaryProofAdapter;
   effectObserver: McpSafeSummaryProofEffectObserver;
+  /** Caller attestation; LIVE adapters must derive this only from independent provisioning. */
+  effectObserverIndependent: boolean;
   forbiddenSubstrings?: readonly string[];
 }>): Promise<McpSafeSummaryProofLedger> {
   const ledger: MutableLedger = {
@@ -170,7 +172,7 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
   let primaryStop: Stop | undefined;
   let effectBaseline: McpSafeSummaryProofEffectSnapshot;
 
-  if (Object.is(input.adapter, input.effectObserver)) {
+  if (!input.effectObserverIndependent || Object.is(input.adapter, input.effectObserver)) {
     ledger.outcome = "STOPPED";
     ledger.stopCode = "EFFECT_OBSERVER_FAILED";
     return freezeLedger(ledger);
@@ -439,7 +441,7 @@ function isCanonicalCallToolEnvelope(
   status: AcceptedStatus,
 ): boolean {
   if (!hasExactKeys(value, ["content", "structuredContent"]) ||
-      value.structuredContent !== candidate ||
+      !structurallyEqual(value.structuredContent, candidate) ||
       !Array.isArray(value.content) ||
       value.content.length !== 1) {
     return false;
@@ -555,8 +557,7 @@ function hasExactKeys(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null &&
     typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype;
+    !Array.isArray(value);
 }
 
 function matchesSchema(
