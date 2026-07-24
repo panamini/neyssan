@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { createLocalMcpDevEndpointPlugin } from "../../../../vite.config";
 import {
@@ -6,23 +7,21 @@ import {
   buildMcpSafeSummaryControlledProofRunner,
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
 } from "../mcpSafeSummaryControlledProofRunner";
+import { MCP_PRODUCTION_OPERATION_TIMEOUT_MS } from "../mcpProductionOperationTimeout";
 import { createMcpSafeSummaryProofEffectLedger } from "../mcpSafeSummaryProofEffectLedger";
-import {
-  createMcpSafeSummaryProofReceipt,
-  isMcpSafeSummaryProofReceipt,
-} from "../mcpSafeSummaryProofReceipt";
+import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../mcpSafeSummaryProofMarker";
 import type { McpSafeSummaryProofToolName } from "../mcpSafeSummaryProjectionProofHarness";
 import type { McpSafeSummaryServerIdentityV1 } from "../mcpSafeSummaryServerSession";
 
 const OWNER_A = {
   subject: "subject_A",
-  issuer: "issuer_A",
+  issuer: "https://issuer-a.example.test",
   ownerProfileId: "profile_A",
   version: 1 as const,
 };
 const OWNER_B = {
   subject: "subject_B",
-  issuer: "issuer_B",
+  issuer: "https://issuer-b.example.test",
   ownerProfileId: "profile_B",
   version: 1 as const,
 };
@@ -33,6 +32,57 @@ const SAFE_REFS: Record<McpSafeSummaryProofToolName, string> = {
   "twoweeks.resume_variant_plan.summarize": "mcp-safe-ref:resume-variant-plan:latest",
   "twoweeks.review_cockpit.summarize": "mcp-safe-ref:review-cockpit:latest",
 };
+
+const CONVEX_SUMMARY_STRUCTURAL_EXPECTATIONS = [
+  {
+    fileName: "mcpApplicationPackageSummary.ts",
+    internalFunctionName: "internalSummarizeMcpApplicationPackage",
+    summarizeFunctionName: "summarizeMcpApplicationPackage",
+    dataReads: "convex_application_package_summary",
+  },
+  {
+    fileName: "mcpEvidenceGraphSummary.ts",
+    internalFunctionName: "internalSummarizeMcpEvidenceGraph",
+    summarizeFunctionName: "summarizeMcpEvidenceGraph",
+    dataReads: "convex_evidence_graph_summary",
+  },
+  {
+    fileName: "mcpResumeVariantPlanSummary.ts",
+    internalFunctionName: "internalSummarizeMcpResumeVariantPlan",
+    summarizeFunctionName: "summarizeMcpResumeVariantPlan",
+    dataReads: "convex_resume_variant_plan_summary",
+  },
+  {
+    fileName: "mcpReviewCockpitSummary.ts",
+    internalFunctionName: "internalSummarizeMcpReviewCockpit",
+    summarizeFunctionName: "summarizeMcpReviewCockpit",
+    dataReads: "convex_review_cockpit_summary",
+  },
+] as const;
+
+const BLOCKED_CAPABILITIES = [
+  "dataWrites",
+  "handlerExecution",
+  "productionConnector",
+  "networkAccess",
+  "modelCalls",
+  "writeActions",
+  "rawDataProjection",
+] as const;
+
+const PROHIBITED_IMPORT_PATTERN =
+  /\b(?:retry|repair|fallback|provider|model)\b/iu;
+const PROHIBITED_CALL_PATTERN =
+  /\b(?:retry|repair|fallback|provider|model)\w*\s*\(/iu;
+
+function readSourceBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end < 0) {
+    throw new Error(`Structural proof anchor missing: ${startMarker} -> ${endMarker}`);
+  }
+  return source.slice(start, end);
+}
 
 function queryResult(
   toolName: McpSafeSummaryProofToolName,
@@ -203,6 +253,7 @@ function runnerFor(resolveIdentity: (
 ) => Promise<McpSafeSummaryServerIdentityV1>, options: {
   seedA?: (identity: McpSafeSummaryServerIdentityV1) => Promise<unknown>;
   cleanupA?: (identity: McpSafeSummaryServerIdentityV1) => Promise<unknown>;
+  recoverOldRuntime?: () => Promise<boolean>;
 } = {}) {
   const calls: string[] = [];
   const protectedSubjects: string[] = [];
@@ -212,7 +263,7 @@ function runnerFor(resolveIdentity: (
       environment: "development",
       enabled: true,
       contractId: "CC-20260724-mcp-safe-summary-live-adapter",
-      contractVersion: 4,
+      contractVersion: 5,
     },
     resolveIdentity: async (role) => {
       const identity = await resolveIdentity(role);
@@ -247,13 +298,13 @@ function runnerFor(resolveIdentity: (
     })),
     runtime: {
       start: async () => true,
-      recoverOldRuntime: async () => true,
+      recoverOldRuntime: options.recoverOldRuntime ?? (async () => true),
     },
   });
   return { runner, calls, protectedSubjects };
 }
 
-describe("v4 controlled MCP safe-summary adapter", () => {
+describe("v5 controlled MCP safe-summary adapter", () => {
   it("wires the normal Vite composition only for the explicit development contract", () => {
     const activePlugin = createLocalMcpDevEndpointPlugin({ env: controlledProofEnv() });
     expect(activePlugin).toBeDefined();
@@ -302,8 +353,70 @@ describe("v4 controlled MCP safe-summary adapter", () => {
     })).toMatchObject({
       enabled: true,
       contractId: "CC-20260724-mcp-safe-summary-live-adapter",
-      contractVersion: 4,
+      contractVersion: 5,
     });
+  });
+
+  it("keeps STATIC_PROOF separate from runtime observation", () => {
+    const executorSource = readFileSync(
+      new URL("../mcpProductionReadonlySummaryExecutor.ts", import.meta.url),
+      "utf8",
+    );
+    const executorPath = executorSource.slice(
+      executorSource.indexOf("export function buildMcpProductionReadonlySummaryExecutor"),
+      executorSource.indexOf("function buildConvexSummaryArgs"),
+    );
+    expect(executorPath.match(/runQuery\(/gu)).toHaveLength(1);
+    expect(executorPath).not.toMatch(/\b(?:retry|repair|fallback|provider|model)\b/iu);
+    expect(executorPath).not.toMatch(/(?:retry|repair|fallback|provider|model)\s*\(/iu);
+    const viteSource = readFileSync(
+      new URL("../../../../vite.config.ts", import.meta.url),
+      "utf8",
+    );
+    const queryPortPath = viteSource.slice(
+      viteSource.indexOf("function buildProductionReadonlySummaryQueryPort"),
+      viteSource.indexOf("function buildProductionMcpSafeSummaryControlledProofRunner"),
+    );
+    expect(queryPortPath.match(/convexClient\.query\(/gu)).toHaveLength(1);
+    expect(queryPortPath).not.toMatch(/\b(?:retry|repair|fallback|provider|model)\b/iu);
+
+    for (const expectation of CONVEX_SUMMARY_STRUCTURAL_EXPECTATIONS) {
+      const convexSource = readFileSync(
+        new URL(`../../../../convex/${expectation.fileName}`, import.meta.url),
+        "utf8",
+      );
+      const importLines = convexSource
+        .split("\n")
+        .filter((line) => line.trimStart().startsWith("import "))
+        .join("\n");
+      expect(importLines).not.toMatch(PROHIBITED_IMPORT_PATTERN);
+
+      const internalFunctionPath = readSourceBetween(
+        convexSource,
+        `export const ${expectation.internalFunctionName}`,
+        `async function ${expectation.summarizeFunctionName}`,
+      );
+      expect(internalFunctionPath).toContain("internalQuery(");
+      expect(internalFunctionPath).toContain(`summarize${expectation.internalFunctionName.slice("internalSummarize".length)}(`);
+
+      const exactQueryPath = readSourceBetween(
+        convexSource,
+        `export const ${expectation.internalFunctionName}`,
+        "function buildCapabilities(",
+      );
+      expect(exactQueryPath).toContain("capabilities: buildCapabilities(");
+      expect(exactQueryPath).not.toMatch(PROHIBITED_CALL_PATTERN);
+
+      const capabilitiesPath = readSourceBetween(
+        convexSource,
+        "function buildCapabilities(",
+        "\nfunction zeroCounts(",
+      );
+      expect(capabilitiesPath).toContain(`dataReads: "${expectation.dataReads}"`);
+      for (const capability of BLOCKED_CAPABILITIES) {
+        expect(capabilitiesPath).toContain(`${capability}: "blocked"`);
+      }
+    }
   });
 
   it("executes the real executor path with exactly A to B to A and honest completion", async () => {
@@ -318,16 +431,26 @@ describe("v4 controlled MCP safe-summary adapter", () => {
     expect(result.completed).toBe(true);
     expect(result.liveCalls).toBe(true);
     expect(result.proof).toMatchObject({
-      outcome: "PASS",
-      protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
-      recovery: "RECOVERED",
-      retryCount: 0,
-      repairCount: 0,
-      fallbackCount: 0,
-      providerCallCount: 0,
-      modelCallCount: 0,
+      sequence: {
+        outcome: "PASS",
+        protectedCallCount: 8,
+        seedCount: 3,
+        cleanupCount: 3,
+        recovery: "RECOVERED",
+      },
+    });
+    expect(result.proof.effectObservation).toEqual({
+      retry: "NOT_OBSERVED",
+      repair: "NOT_OBSERVED",
+      fallback: "NOT_OBSERVED",
+      provider: "NOT_OBSERVED",
+      model: "NOT_OBSERVED",
+      version: 1,
+    });
+    expect(result.proof.staticProof).toMatchObject({
+      kind: "STATIC_PROOF",
+      exactQueryKindCount: 4,
+      runtimeObservation: "NOT_OBSERVED",
     });
     expect(identities).toEqual(["A", "B", "A"]);
     expect(calls).toHaveLength(8);
@@ -337,43 +460,60 @@ describe("v4 controlled MCP safe-summary adapter", () => {
     expect(JSON.stringify(result)).not.toContain("profile_B");
   });
 
-  it("passes a contract-valid receipt to seed and omits it from the operator response", async () => {
-    const receipt = createMcpSafeSummaryProofReceipt(
-      "123e4567-e89b-42d3-a456-426614174000",
-    );
-    let seededReceipt: unknown;
-    const { runner } = runnerFor(
-      async (role) => role === "B" ? OWNER_B : OWNER_A,
-      {
-        seedA: async () => {
-          seededReceipt = receipt;
-          return {
-            status: "ready",
-            createdCount: 3,
-            reusedCount: 0,
-            expectedCount: 3,
-            ownerBound: true,
-            version: 1,
-          };
-        },
-      },
-    );
+  it("does not expose the deterministic recovery marker in the operator response", async () => {
+    const { runner } = runnerFor(async (role) => role === "B" ? OWNER_B : OWNER_A);
     const plugin = createLocalMcpDevEndpointPlugin({
       env: controlledProofEnv(),
       controlledSummaryProofRunner: runner,
+      productionOAuthAuthorizationDependencies: operatorAuthDependencies(),
     });
     const response = responseCapture();
     configuredMiddleware(plugin)(
-      { method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH },
+      {
+        method: "POST",
+        url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
+        headers: { authorization: "Bearer fixture" },
+      } as never,
       response,
       vi.fn(),
     );
     await response.done;
 
-    expect(isMcpSafeSummaryProofReceipt(seededReceipt)).toBe(true);
     expect(response.statusCode).toBe(200);
-    expect(response.body()).not.toContain(receipt);
-    expect(response.body()).not.toContain("mcp-proof-v1:");
+    expect(response.body()).not.toContain(MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5);
+  });
+
+  it("fails closed before runner or seed when bearer auth is missing or not A", async () => {
+    const { runner, calls } = runnerFor(async (role) => role === "B" ? OWNER_B : OWNER_A);
+    const noBearerPlugin = createLocalMcpDevEndpointPlugin({
+      env: controlledProofEnv(),
+      controlledSummaryProofRunner: runner,
+      productionOAuthAuthorizationDependencies: operatorAuthDependencies(),
+    });
+    const noBearerResponse = responseCapture();
+    configuredMiddleware(noBearerPlugin)(
+      { method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH, headers: {} } as never,
+      noBearerResponse,
+      vi.fn(),
+    );
+    await noBearerResponse.done;
+    expect(noBearerResponse.statusCode).toBe(401);
+    expect(calls).toHaveLength(0);
+
+    const wrongOwnerResponse = responseCapture();
+    const wrongOwnerPlugin = createLocalMcpDevEndpointPlugin({
+      env: controlledProofEnv(),
+      controlledSummaryProofRunner: runner,
+      productionOAuthAuthorizationDependencies: operatorAuthDependencies(OWNER_B),
+    });
+    configuredMiddleware(wrongOwnerPlugin)(
+      { method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH, headers: { authorization: "Bearer fixture" } } as never,
+      wrongOwnerResponse,
+      vi.fn(),
+    );
+    await wrongOwnerResponse.done;
+    expect(wrongOwnerResponse.statusCode).toBe(401);
+    expect(calls).toHaveLength(0);
   });
 
   it("stops before B protected calls when the server resolves the same identity", async () => {
@@ -382,11 +522,13 @@ describe("v4 controlled MCP safe-summary adapter", () => {
     expect(result.completed).toBe(false);
     expect(result.liveCalls).toBe(true);
     expect(result.proof).toMatchObject({
-      outcome: "STOPPED",
-      stopCode: "IDENTITY_B_NOT_DISTINCT",
-      protectedCallCount: 4,
-      cleanupCount: 3,
-      recovery: "RECOVERED",
+      sequence: {
+        outcome: "STOPPED",
+        stopCode: "IDENTITY_B_NOT_DISTINCT",
+        protectedCallCount: 4,
+        cleanupCount: 3,
+        recovery: "RECOVERED",
+      },
     });
     expect(calls).toHaveLength(4);
     expect(protectedSubjects).toEqual([OWNER_A.subject, OWNER_A.subject, OWNER_A.subject, OWNER_A.subject]);
@@ -395,7 +537,7 @@ describe("v4 controlled MCP safe-summary adapter", () => {
   it("stops before B protected calls when owner profile matches despite a different issuer", async () => {
     const ownerB = {
       ...OWNER_B,
-      issuer: "issuer_B_different",
+      issuer: "https://issuer-b-different.example.test",
       ownerProfileId: OWNER_A.ownerProfileId,
     };
     const { runner, calls, protectedSubjects } = runnerFor(async (role) =>
@@ -405,11 +547,13 @@ describe("v4 controlled MCP safe-summary adapter", () => {
 
     expect(result.completed).toBe(false);
     expect(result.proof).toMatchObject({
-      outcome: "STOPPED",
-      stopCode: "IDENTITY_B_NOT_DISTINCT",
-      protectedCallCount: 4,
-      cleanupCount: 3,
-      recovery: "RECOVERED",
+      sequence: {
+        outcome: "STOPPED",
+        stopCode: "IDENTITY_B_NOT_DISTINCT",
+        protectedCallCount: 4,
+        cleanupCount: 3,
+        recovery: "RECOVERED",
+      },
     });
     expect(calls).toHaveLength(4);
     expect(protectedSubjects).toEqual([OWNER_A.subject, OWNER_A.subject, OWNER_A.subject, OWNER_A.subject]);
@@ -419,7 +563,7 @@ describe("v4 controlled MCP safe-summary adapter", () => {
     const ownerB = {
       ...OWNER_B,
       subject: OWNER_A.subject,
-      issuer: "issuer_B_different",
+      issuer: "https://issuer-b-different.example.test",
       ownerProfileId: "profile_B_different",
     };
     const { runner, calls, protectedSubjects } = runnerFor(async (role) =>
@@ -429,6 +573,25 @@ describe("v4 controlled MCP safe-summary adapter", () => {
 
     expect(result.completed).toBe(false);
     expect(result.proof).toMatchObject({
+      sequence: {
+        outcome: "STOPPED",
+        stopCode: "IDENTITY_B_NOT_DISTINCT",
+        protectedCallCount: 4,
+        cleanupCount: 3,
+        recovery: "RECOVERED",
+      },
+    });
+    expect(calls).toHaveLength(4);
+    expect(protectedSubjects).toEqual([OWNER_A.subject, OWNER_A.subject, OWNER_A.subject, OWNER_A.subject]);
+  });
+
+  it("rejects a non-canonical issuer URL before any B protected call", async () => {
+    const ownerB = { ...OWNER_B, issuer: "https://issuer-b.example.test/path" };
+    const { runner, calls } = runnerFor(async (role) => role === "B" ? ownerB : OWNER_A);
+    const result = await runner!.run();
+
+    expect(result.completed).toBe(false);
+    expect(result.proof.sequence).toMatchObject({
       outcome: "STOPPED",
       stopCode: "IDENTITY_B_NOT_DISTINCT",
       protectedCallCount: 4,
@@ -436,7 +599,283 @@ describe("v4 controlled MCP safe-summary adapter", () => {
       recovery: "RECOVERED",
     });
     expect(calls).toHaveLength(4);
-    expect(protectedSubjects).toEqual([OWNER_A.subject, OWNER_A.subject, OWNER_A.subject, OWNER_A.subject]);
+  });
+
+  it("settles a timed-out seed before cleanup and recovery can complete", async () => {
+    vi.useFakeTimers();
+    try {
+      let markSeedStarted!: () => void;
+      let releaseSeed!: () => void;
+      const seedStarted = new Promise<void>((resolve) => {
+        markSeedStarted = resolve;
+      });
+      const seedRelease = new Promise<void>((resolve) => {
+        releaseSeed = resolve;
+      });
+      const events: string[] = [];
+      let residualCount = 0;
+      let runFinished = false;
+      let seedCalls = 0;
+      let cleanupCalls = 0;
+      let recoveryCalls = 0;
+      const { runner, calls } = runnerFor(
+        async (role) => role === "B" ? OWNER_B : OWNER_A,
+        {
+          seedA: async () => {
+            seedCalls += 1;
+            markSeedStarted();
+            await seedRelease;
+            residualCount = 3;
+            events.push("seed_settled");
+            return {
+              status: "ready",
+              createdCount: 3,
+              reusedCount: 0,
+              expectedCount: 3,
+              ownerBound: true,
+              version: 1,
+            };
+          },
+          cleanupA: async () => {
+            cleanupCalls += 1;
+            events.push(`cleanup_started_with_${residualCount}`);
+            residualCount = 0;
+            return {
+              status: "clean",
+              deletedCount: 3,
+              residualCount,
+              expectedCount: 3,
+              ownerBound: true,
+              version: 1,
+            };
+          },
+          recoverOldRuntime: async () => {
+            recoveryCalls += 1;
+            events.push(`recovery_started_with_${residualCount}`);
+            return residualCount === 0;
+          },
+        },
+      );
+
+      const runPromise = runner!.run();
+      void runPromise.then(() => {
+        runFinished = true;
+      });
+      await seedStarted;
+      await vi.advanceTimersByTimeAsync(MCP_PRODUCTION_OPERATION_TIMEOUT_MS);
+
+      expect(runFinished).toBe(false);
+      expect(events).toEqual([]);
+      expect(cleanupCalls).toBe(0);
+      expect(recoveryCalls).toBe(0);
+
+      releaseSeed();
+      const result = await runPromise;
+
+      expect(runFinished).toBe(true);
+      expect(seedCalls).toBe(1);
+      expect(cleanupCalls).toBe(1);
+      expect(recoveryCalls).toBe(1);
+      expect(residualCount).toBe(0);
+      expect(events).toEqual([
+        "seed_settled",
+        "cleanup_started_with_3",
+        "recovery_started_with_0",
+      ]);
+      expect(calls).toHaveLength(0);
+      expect(result.completed).toBe(false);
+      expect(result.proof.sequence).toMatchObject({
+        outcome: "STOPPED",
+        stopCode: "SEED_FAILED",
+        seedCount: 0,
+        cleanupCount: 3,
+        protectedCallCount: 0,
+        recovery: "RECOVERED",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("settles a timed-out cleanup before recovery can complete", async () => {
+    vi.useFakeTimers();
+    try {
+      let markCleanupStarted!: () => void;
+      let releaseCleanup!: () => void;
+      const cleanupStarted = new Promise<void>((resolve) => {
+        markCleanupStarted = resolve;
+      });
+      const cleanupRelease = new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      });
+      const events: string[] = [];
+      let residualCount = 0;
+      let runFinished = false;
+      let seedCalls = 0;
+      let cleanupCalls = 0;
+      let recoveryCalls = 0;
+      const { runner, calls } = runnerFor(
+        async (role) => role === "B" ? OWNER_B : OWNER_A,
+        {
+          seedA: async () => {
+            seedCalls += 1;
+            residualCount = 3;
+            return {
+              status: "ready",
+              createdCount: 3,
+              reusedCount: 0,
+              expectedCount: 3,
+              ownerBound: true,
+              version: 1,
+            };
+          },
+          cleanupA: async () => {
+            cleanupCalls += 1;
+            markCleanupStarted();
+            await cleanupRelease;
+            residualCount = 0;
+            events.push("cleanup_settled");
+            return {
+              status: "clean",
+              deletedCount: 3,
+              residualCount,
+              expectedCount: 3,
+              ownerBound: true,
+              version: 1,
+            };
+          },
+          recoverOldRuntime: async () => {
+            recoveryCalls += 1;
+            events.push(`recovery_started_with_${residualCount}`);
+            return residualCount === 0;
+          },
+        },
+      );
+
+      const runPromise = runner!.run();
+      void runPromise.then(() => {
+        runFinished = true;
+      });
+      await cleanupStarted;
+      await vi.advanceTimersByTimeAsync(MCP_PRODUCTION_OPERATION_TIMEOUT_MS);
+
+      expect(runFinished).toBe(false);
+      expect(events).toEqual([]);
+      expect(recoveryCalls).toBe(0);
+
+      releaseCleanup();
+      const result = await runPromise;
+
+      expect(runFinished).toBe(true);
+      expect(seedCalls).toBe(1);
+      expect(cleanupCalls).toBe(1);
+      expect(recoveryCalls).toBe(1);
+      expect(residualCount).toBe(0);
+      expect(events).toEqual([
+        "cleanup_settled",
+        "recovery_started_with_0",
+      ]);
+      expect(calls).toHaveLength(8);
+      expect(result.completed).toBe(false);
+      expect(result.proof.sequence).toMatchObject({
+        outcome: "STOPPED",
+        stopCode: "CLEANUP_FAILED",
+        seedCount: 3,
+        cleanupCount: 0,
+        protectedCallCount: 8,
+        recovery: "RECOVERED",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("settles a timed-out recovery before returning its failed result", async () => {
+    vi.useFakeTimers();
+    try {
+      let markRecoveryStarted!: () => void;
+      let releaseRecovery!: () => void;
+      const recoveryStarted = new Promise<void>((resolve) => {
+        markRecoveryStarted = resolve;
+      });
+      const recoveryRelease = new Promise<void>((resolve) => {
+        releaseRecovery = resolve;
+      });
+      const events: string[] = [];
+      let residualCount = 0;
+      let runFinished = false;
+      let seedCalls = 0;
+      let cleanupCalls = 0;
+      let recoveryCalls = 0;
+      const { runner, calls } = runnerFor(
+        async (role) => role === "B" ? OWNER_B : OWNER_A,
+        {
+          seedA: async () => {
+            seedCalls += 1;
+            residualCount = 3;
+            return {
+              status: "ready",
+              createdCount: 3,
+              reusedCount: 0,
+              expectedCount: 3,
+              ownerBound: true,
+              version: 1,
+            };
+          },
+          cleanupA: async () => {
+            cleanupCalls += 1;
+            residualCount = 0;
+            return {
+              status: "clean",
+              deletedCount: 3,
+              residualCount,
+              expectedCount: 3,
+              ownerBound: true,
+              version: 1,
+            };
+          },
+          recoverOldRuntime: async () => {
+            recoveryCalls += 1;
+            markRecoveryStarted();
+            await recoveryRelease;
+            events.push(`recovery_settled_with_${residualCount}`);
+            return residualCount === 0;
+          },
+        },
+      );
+
+      const runPromise = runner!.run();
+      void runPromise.then(() => {
+        runFinished = true;
+      });
+      await recoveryStarted;
+      await vi.advanceTimersByTimeAsync(MCP_PRODUCTION_OPERATION_TIMEOUT_MS);
+
+      expect(runFinished).toBe(false);
+      expect(events).toEqual([]);
+
+      releaseRecovery();
+      const result = await runPromise;
+
+      expect(runFinished).toBe(true);
+      expect(seedCalls).toBe(1);
+      expect(cleanupCalls).toBe(1);
+      expect(recoveryCalls).toBe(1);
+      expect(residualCount).toBe(0);
+      expect(events).toEqual(["recovery_settled_with_0"]);
+      expect(calls).toHaveLength(8);
+      expect(result.completed).toBe(false);
+      expect(result.proof.sequence).toMatchObject({
+        outcome: "STOPPED",
+        stopCode: "RECOVERY_FAILED",
+        seedCount: 3,
+        cleanupCount: 3,
+        protectedCallCount: 8,
+        recovery: "FAILED",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uses a separate monotonic ledger whose delta changes when a prohibited effect is observed", async () => {
@@ -495,14 +934,15 @@ describe("v4 controlled MCP safe-summary adapter", () => {
     const plugin = createLocalMcpDevEndpointPlugin({
       env: controlledProofEnv(),
       controlledSummaryProofRunner: runner,
+      productionOAuthAuthorizationDependencies: operatorAuthDependencies(),
     });
     const middleware = configuredMiddleware(plugin);
     const firstResponse = responseCapture();
     const secondResponse = responseCapture();
 
-    middleware({ method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH }, firstResponse, vi.fn());
+    middleware({ method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH, headers: { authorization: "Bearer fixture" } } as never, firstResponse, vi.fn());
     await seedEnteredPromise;
-    middleware({ method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH }, secondResponse, vi.fn());
+    middleware({ method: "POST", url: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH, headers: { authorization: "Bearer fixture" } } as never, secondResponse, vi.fn());
 
     expect(secondResponse.statusCode).toBe(409);
     expect(secondResponse.body()).toBe(JSON.stringify({
@@ -525,7 +965,7 @@ describe("v4 controlled MCP safe-summary adapter", () => {
       status: "completed",
       completed: true,
       liveCalls: true,
-      proof: { protectedCallCount: 8, seedCount: 3, cleanupCount: 3, recovery: "RECOVERED" },
+      proof: { sequence: { protectedCallCount: 8, seedCount: 3, cleanupCount: 3, recovery: "RECOVERED" } },
     });
   });
 });
@@ -576,8 +1016,19 @@ function controlledProofEnv(): Record<string, string> {
     CONVEX_URL: "https://convex.example.test",
     CONVEX_KEY: "fixture-admin-auth",
     MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_SUBJECT: "subject_A",
-    MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_ISSUER: "issuer_A",
+    MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_ISSUER: "https://issuer-a.example.test",
     MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_SUBJECT: "subject_B",
-    MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_ISSUER: "issuer_B",
+    MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_ISSUER: "https://issuer-b.example.test",
+    CLERK_JWT_ISSUER_DOMAIN: "https://issuer-a.example.test",
+  };
+}
+
+function operatorAuthDependencies(identity = OWNER_A) {
+  return {
+    readAuthenticatedOwnerIdentity: async () => ({
+      subject: identity.subject,
+      issuer: identity.issuer,
+      version: 1 as const,
+    }),
   };
 }

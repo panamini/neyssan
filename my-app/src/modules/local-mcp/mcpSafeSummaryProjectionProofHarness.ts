@@ -152,7 +152,7 @@ const ACCEPTED_B_STATUSES = new Set<AcceptedStatus>([
 
 export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
   adapter: McpSafeSummaryProofAdapter;
-  effectObserver: McpSafeSummaryProofEffectObserver;
+  effectObserver?: McpSafeSummaryProofEffectObserver;
   forbiddenSubstrings?: readonly string[];
 }>): Promise<McpSafeSummaryProofLedger> {
   const ledger: MutableLedger = {
@@ -175,23 +175,25 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
   let primaryStop: Stop | undefined;
   let effectBaseline: McpSafeSummaryProofEffectSnapshot;
 
-  if (input.effectObserver.independence !== "separate_monotonic_ledger") {
-    ledger.outcome = "STOPPED";
-    ledger.stopCode = "EFFECT_OBSERVER_FAILED";
-    return freezeLedger(ledger);
-  }
-  try {
-    const observedBaseline = await input.effectObserver.snapshot();
-    if (!isEffectSnapshot(observedBaseline)) {
+  if (input.effectObserver) {
+    if (input.effectObserver.independence !== "separate_monotonic_ledger") {
       ledger.outcome = "STOPPED";
       ledger.stopCode = "EFFECT_OBSERVER_FAILED";
       return freezeLedger(ledger);
     }
-    effectBaseline = copyEffectSnapshot(observedBaseline);
-  } catch {
-    ledger.outcome = "STOPPED";
-    ledger.stopCode = "EFFECT_OBSERVER_FAILED";
-    return freezeLedger(ledger);
+    try {
+      const observedBaseline = await input.effectObserver.snapshot();
+      if (!isEffectSnapshot(observedBaseline)) {
+        ledger.outcome = "STOPPED";
+        ledger.stopCode = "EFFECT_OBSERVER_FAILED";
+        return freezeLedger(ledger);
+      }
+      effectBaseline = copyEffectSnapshot(observedBaseline);
+    } catch {
+      ledger.outcome = "STOPPED";
+      ledger.stopCode = "EFFECT_OBSERVER_FAILED";
+      return freezeLedger(ledger);
+    }
   }
 
   try {
@@ -366,24 +368,26 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
       }
       runtimeStarted = false;
     }
-    try {
-      const observedFinal = await input.effectObserver.snapshot();
-      if (!isEffectSnapshot(observedFinal) ||
-          !applyEffectDelta(
-            ledger,
-            effectBaseline,
-            copyEffectSnapshot(observedFinal),
-          )) {
+    if (input.effectObserver) {
+      try {
+        const observedFinal = await input.effectObserver.snapshot();
+        if (!isEffectSnapshot(observedFinal) ||
+            !applyEffectDelta(
+              ledger,
+              effectBaseline,
+              copyEffectSnapshot(observedFinal),
+            )) {
+          primaryStop ??= stop("EFFECT_OBSERVER_FAILED");
+        } else if (ledger.retryCount !== 0 ||
+            ledger.repairCount !== 0 ||
+            ledger.fallbackCount !== 0 ||
+            ledger.providerCallCount !== 0 ||
+            ledger.modelCallCount !== 0) {
+          primaryStop ??= stop("EFFECT_BUDGET_EXCEEDED");
+        }
+      } catch {
         primaryStop ??= stop("EFFECT_OBSERVER_FAILED");
-      } else if (ledger.retryCount !== 0 ||
-          ledger.repairCount !== 0 ||
-          ledger.fallbackCount !== 0 ||
-          ledger.providerCallCount !== 0 ||
-          ledger.modelCallCount !== 0) {
-        primaryStop ??= stop("EFFECT_BUDGET_EXCEEDED");
       }
-    } catch {
-      primaryStop ??= stop("EFFECT_OBSERVER_FAILED");
     }
     ledger.outcome = primaryStop ? "STOPPED" : "PASS";
     ledger.stopCode = primaryStop?.stopCode;

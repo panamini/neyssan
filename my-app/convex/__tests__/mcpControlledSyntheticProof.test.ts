@@ -2,14 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   internalCleanupControlledSyntheticProof,
+  internalRecoverControlledSyntheticProof,
   internalResolveControlledSyntheticProofOwner,
   internalSeedControlledSyntheticProof,
 } from "../mcpControlledSyntheticProof";
-import { createMcpSafeSummaryProofReceipt } from "../../src/modules/local-mcp/mcpSafeSummaryProofReceipt";
+import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../../src/modules/local-mcp/mcpSafeSummaryProofMarker";
 
-const RECEIPT = createMcpSafeSummaryProofReceipt(
-  "123e4567-e89b-42d3-a456-426614174000",
-);
+const MARKER = MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5;
 const OWNER_A = "profile_A";
 const OWNER_B = "profile_B";
 const SEEDED_AT = 1_721_000_000_000;
@@ -131,7 +130,7 @@ function fixtureCount(tables: Record<TableName, StoredDocument[]>): number {
 function seedArgs(ownerProfileId = OWNER_A) {
   return {
     ownerProfileId,
-    receipt: RECEIPT,
+    marker: MARKER,
     now: SEEDED_AT,
     version: 1 as const,
   };
@@ -140,8 +139,7 @@ function seedArgs(ownerProfileId = OWNER_A) {
 function cleanupArgs(ownerProfileId = OWNER_A) {
   return {
     ownerProfileId,
-    receipt: RECEIPT,
-    seededAt: SEEDED_AT,
+    marker: MARKER,
     version: 1 as const,
   };
 }
@@ -195,14 +193,14 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(fixtureCount(tables)).toBe(0);
   });
 
-  it("rejects malformed receipts, timestamps, and absent owners", async () => {
+  it("rejects malformed markers, timestamps, and absent owners", async () => {
     const malformed = makeCtx();
     await expect(
       internalSeedControlledSyntheticProof._handler(malformed.ctx as any, {
         ...seedArgs(),
-        receipt: "not-a-receipt",
+        marker: "not-a-marker",
       } as any),
-    ).rejects.toThrow("invalid_controlled_receipt");
+    ).rejects.toThrow("invalid_controlled_marker");
     expect(fixtureCount(malformed.tables)).toBe(0);
 
     const invalidTimestamp = makeCtx();
@@ -244,7 +242,7 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(tables.candidateSourceDocuments).toHaveLength(1);
     expect(tables.candidateFacts).toHaveLength(1);
     expect(tables.applicationArtifacts).toHaveLength(1);
-    expect(JSON.stringify(result)).not.toContain(RECEIPT);
+    expect(JSON.stringify(result)).not.toContain(MARKER);
     expect(JSON.stringify(result)).not.toContain(OWNER_A);
     expect(JSON.stringify(tables)).not.toMatch(
       /@|email|phone|address|employer|person/i,
@@ -268,7 +266,7 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(fixtureCount(tables)).toBe(3);
   });
 
-  it("binds the opaque receipt to the owner profile", async () => {
+  it("binds the synthetic marker to the owner profile", async () => {
     const { ctx, db, tables } = makeCtx();
     await internalSeedControlledSyntheticProof._handler(
       ctx as any,
@@ -352,8 +350,30 @@ describe("minimal controlled synthetic MCP fixture", () => {
     });
     expect(db.delete).toHaveBeenCalledTimes(3);
     expect(fixtureCount(tables)).toBe(0);
-    expect(JSON.stringify(result)).not.toContain(RECEIPT);
+    expect(JSON.stringify(result)).not.toContain(MARKER);
     expect(JSON.stringify(result)).not.toContain(OWNER_A);
+  });
+
+  it("recovers deterministic owner-bound fixtures after a restart without a receipt", async () => {
+    const { ctx, db, tables } = makeCtx();
+    await internalSeedControlledSyntheticProof._handler(ctx as any, seedArgs() as any);
+
+    const result = await internalRecoverControlledSyntheticProof._handler(ctx as any, {
+      ownerProfileId: OWNER_A,
+      marker: MARKER,
+      version: 1,
+    });
+
+    expect(result).toEqual({
+      status: "recovered",
+      deletedCount: 3,
+      residualCount: 0,
+      expectedCount: 3,
+      ownerBound: true,
+      version: 1,
+    });
+    expect(db.delete).toHaveBeenCalledTimes(3);
+    expect(fixtureCount(tables)).toBe(0);
   });
 
   it("refuses cleanup when any controlled row is absent", async () => {

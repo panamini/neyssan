@@ -1,6 +1,5 @@
 /// <reference types="vitest" />
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference, type FunctionReference, type UserIdentityAttributes } from "convex/server";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -63,7 +62,8 @@ import {
   type McpSafeSummaryControlledProofRunnerV1,
   type McpSafeSummaryControlledProofActivationV1,
 } from "./src/modules/local-mcp/mcpSafeSummaryControlledProofRunner";
-import { createMcpSafeSummaryProofReceipt } from "./src/modules/local-mcp/mcpSafeSummaryProofReceipt";
+import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "./src/modules/local-mcp/mcpSafeSummaryProofMarker";
+import { MCP_PRODUCTION_OPERATION_TIMEOUT_MS } from "./src/modules/local-mcp/mcpProductionOperationTimeout";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
 import {
   MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR,
@@ -164,6 +164,9 @@ const SEED_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION = makeFunctionReference(
 const CLEANUP_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION = makeFunctionReference(
   "mcpControlledSyntheticProof:internalCleanupControlledSyntheticProof",
 ) as FunctionReference<"mutation">;
+const RECOVER_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION = makeFunctionReference(
+  "mcpControlledSyntheticProof:internalRecoverControlledSyntheticProof",
+) as FunctionReference<"mutation">;
 const PRODUCTION_MCP_READONLY_SUMMARY_QUERY_REFERENCES = Object.freeze({
   applicationPackageSummary: makeFunctionReference(
     "mcpApplicationPackageSummary:internalSummarizeMcpApplicationPackage",
@@ -252,6 +255,7 @@ export function createLocalMcpDevEndpointPlugin(
   const productionOAuthAuthorizationDependencies =
     options.productionOAuthAuthorizationDependencies ??
     buildProductionMcpOAuthRouteDependencies(env);
+  const controlledSummaryProofOperatorOwnerA = readControlledProofOwner(env, "A");
 
   const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     handleLocalMcpDevMiddlewareRequest(
@@ -268,6 +272,7 @@ export function createLocalMcpDevEndpointPlugin(
       controlledSummaryProofEnabled,
       controlledSummaryProofRunner,
       controlledSummaryProofFlight,
+      controlledSummaryProofOperatorOwnerA,
     );
   };
 
@@ -296,6 +301,7 @@ function handleLocalMcpDevMiddlewareRequest(
   controlledSummaryProofEnabled: boolean,
   controlledSummaryProofRunner: McpSafeSummaryControlledProofRunnerV1 | undefined,
   controlledSummaryProofFlight: ControlledSummaryProofFlightState,
+  controlledSummaryProofOperatorOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
   if (controlledSummaryProofEnabled && pathName === MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH) {
@@ -304,6 +310,8 @@ function handleLocalMcpDevMiddlewareRequest(
       res,
       controlledSummaryProofRunner,
       controlledSummaryProofFlight,
+      productionOAuthAuthorizationDependencies.readAuthenticatedOwnerIdentity,
+      controlledSummaryProofOperatorOwnerA,
     ).catch(() => {
       sendInvalidLocalMcpDevRequest(res);
     });
@@ -397,6 +405,8 @@ async function respondToControlledSummaryProofOperatorRoute(
   res: ServerResponse,
   runner: McpSafeSummaryControlledProofRunnerV1 | undefined,
   flight: ControlledSummaryProofFlightState,
+  readAuthenticatedOwnerIdentity: McpOAuthProductionRouteAdapterDependenciesV1["readAuthenticatedOwnerIdentity"],
+  expectedOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
 ): Promise<void> {
   if (req.method !== "POST" || !runner) {
     sendLocalMcpJson(res, 405, {
@@ -420,6 +430,20 @@ async function respondToControlledSummaryProofOperatorRoute(
   }
   let runPromise: Promise<void>;
   runPromise = Promise.resolve().then(async () => {
+    if (!await isControlledSummaryProofOperatorAuthorized(
+      req,
+      readAuthenticatedOwnerIdentity,
+      expectedOwnerA,
+    )) {
+      sendLocalMcpJson(res, 401, {
+        kind: "mcp_safe_summary_controlled_proof_operator_response",
+        status: "blocked",
+        reason: "operator_owner_not_authenticated_as_a",
+        safeForModel: true,
+        version: 1,
+      });
+      return;
+    }
     try {
       const result = await runner.run();
       sendLocalMcpJson(res, 200, {
@@ -447,6 +471,63 @@ async function respondToControlledSummaryProofOperatorRoute(
   });
   flight.inFlight = runPromise;
   await runPromise;
+}
+
+async function isControlledSummaryProofOperatorAuthorized(
+  req: IncomingMessage,
+  readAuthenticatedOwnerIdentity: McpOAuthProductionRouteAdapterDependenciesV1["readAuthenticatedOwnerIdentity"],
+  expectedOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
+): Promise<boolean> {
+  if (!readAuthenticatedOwnerIdentity || !expectedOwnerA || !readRequestBearerToken(req.headers.authorization)) {
+    return false;
+  }
+  try {
+    const authenticated = await withMcpProductionOperationTimeout(() =>
+      readAuthenticatedOwnerIdentity({
+        method: req.method ?? "POST",
+        path: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
+        url: req.url ?? MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
+        headers: {
+          authorization: req.headers.authorization,
+          host: headerValue(req.headers.host),
+        },
+        remoteAddress: req.socket?.remoteAddress,
+      })
+    );
+    return isValidControlledProofAuthenticatedIdentity(authenticated) &&
+      authenticated.subject === expectedOwnerA.subject &&
+      authenticated.issuer === expectedOwnerA.issuer;
+  } catch {
+    return false;
+  }
+}
+
+function withMcpProductionOperationTimeout<T>(operation: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("mcp_operation_timeout")), MCP_PRODUCTION_OPERATION_TIMEOUT_MS);
+    operation().then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        reject(new Error("mcp_operation_failed"));
+      },
+    );
+  });
+}
+
+function isValidControlledProofAuthenticatedIdentity(
+  value: McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined,
+): value is McpOAuthProductionAuthenticatedOwnerIdentityV1 {
+  return value !== undefined &&
+    typeof value.subject === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u.test(value.subject) &&
+    typeof value.issuer === "string" &&
+    isHttpsOrigin(value.issuer) &&
+    new URL(value.issuer).origin === value.issuer &&
+    value.version === 1;
 }
 
 async function respondToMcpOAuthLocalDevRouteRequest(
@@ -1245,8 +1326,6 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
   const convexClient = readConvexHttpClient(readConvexConnection(env));
   if (!ownerConfig || !convexClient) return undefined;
 
-  let receipt: string | undefined;
-  let seededAt: number | undefined;
   const resolveIdentity = async (role: "A" | "B") => {
     const configured = ownerConfig[role];
     try {
@@ -1272,19 +1351,34 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
     resolveReference: async (_identity, toolName) => ({ id: controlledProofReferenceId(toolName) }),
     runQuery: buildProductionReadonlySummaryQueryPort(convexClient),
     seedA: async (identity) => {
-      receipt = createMcpSafeSummaryProofReceipt(randomUUID());
-      seededAt = Date.now();
+      await convexClient.mutation(
+        RECOVER_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
+        {
+          ownerProfileId: identity.ownerProfileId,
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          version: 1,
+        },
+        { skipQueue: true },
+      );
       return convexClient.mutation(
         SEED_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
-        { ownerProfileId: identity.ownerProfileId, receipt, now: seededAt, version: 1 },
+        {
+          ownerProfileId: identity.ownerProfileId,
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          now: Date.now(),
+          version: 1,
+        },
         { skipQueue: true },
       );
     },
     cleanupA: async (identity) => {
-      if (!receipt || seededAt === undefined) throw new Error("controlled_proof_receipt_missing");
       return convexClient.mutation(
         CLEANUP_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
-        { ownerProfileId: identity.ownerProfileId, receipt, seededAt, version: 1 },
+        {
+          ownerProfileId: identity.ownerProfileId,
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          version: 1,
+        },
         { skipQueue: true },
       );
     },
@@ -1327,8 +1421,8 @@ function readControlledProofOwner(
       ? MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_ISSUER_VAR
       : MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_ISSUER_VAR
   ]?.trim();
-  if (!subject || !issuer) return undefined;
-  return Object.freeze({ subject, issuer });
+  if (!subject || !issuer || !isHttpsOrigin(issuer)) return undefined;
+  return Object.freeze({ subject, issuer: new URL(issuer).origin });
 }
 
 function controlledProofReferenceId(

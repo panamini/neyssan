@@ -54,7 +54,7 @@ export type McpSafeSummaryServerSessionInputV1 = Readonly<{
   nowEpochMs?: () => number;
 }>;
 
-const VALID_IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u;
+const VALID_SUBJECT_OR_PROFILE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u;
 
 export function buildMcpSafeSummaryServerSession(
   input: McpSafeSummaryServerSessionInputV1,
@@ -193,9 +193,24 @@ function sameCanonicalAuthIdentity(
 
 function isValidIdentity(value: McpSafeSummaryServerIdentityV1): boolean {
   return value.version === 1 &&
-    VALID_IDENTITY.test(value.subject) &&
-    VALID_IDENTITY.test(value.issuer) &&
-    VALID_IDENTITY.test(value.ownerProfileId);
+    VALID_SUBJECT_OR_PROFILE.test(value.subject) &&
+    VALID_SUBJECT_OR_PROFILE.test(value.ownerProfileId) &&
+    isCanonicalHttpsIssuer(value.issuer);
+}
+
+function isCanonicalHttpsIssuer(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.origin === value &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === "";
+  } catch {
+    return false;
+  }
 }
 
 function buildValidatedSummaryCall(

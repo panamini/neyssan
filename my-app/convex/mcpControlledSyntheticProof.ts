@@ -1,6 +1,6 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v, type GenericId } from "convex/values";
-import { isMcpSafeSummaryProofReceipt } from "../src/modules/local-mcp/mcpSafeSummaryProofReceipt";
+import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../src/modules/local-mcp/mcpSafeSummaryProofMarker";
 
 const CONTROLLED_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
 const CONTROLLED_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
@@ -65,14 +65,14 @@ function assertValidTimestamp(now: number): void {
 
 async function buildOwnerBoundFixtureIds(
   ownerProfileId: string,
-  receipt: string,
+  marker: string,
 ): Promise<ControlledFixtureIds> {
-  if (!isMcpSafeSummaryProofReceipt(receipt)) {
-    throw new Error("invalid_controlled_receipt");
+  if (marker !== MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5) {
+    throw new Error("invalid_controlled_marker");
   }
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`${ownerProfileId}\u0000${receipt.toLowerCase()}`),
+    new TextEncoder().encode(`${ownerProfileId}\u0000${marker}`),
   );
   const token = Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -237,12 +237,20 @@ function isExactControlledDocument(
   row: StoredRow,
   expectedDocument: Record<string, unknown>,
 ): boolean {
-  const storedDocument = Object.fromEntries(
-    Object.entries(row).filter(
-      ([key]) => key !== "_id" && key !== "_creationTime",
-    ),
+  return structurallyEqual(
+    stripVolatileFields(row),
+    stripVolatileFields(expectedDocument),
   );
-  return structurallyEqual(storedDocument, expectedDocument);
+}
+
+function stripVolatileFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripVolatileFields);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !["_id", "_creationTime", "createdAt", "updatedAt"].includes(key))
+      .map(([key, child]) => [key, stripVolatileFields(child)]),
+  );
 }
 
 function structurallyEqual(left: unknown, right: unknown): boolean {
@@ -311,7 +319,7 @@ function buildFixtureSpecs(
 export const internalSeedControlledSyntheticProof = internalMutation({
   args: {
     ownerProfileId: v.id("userProfiles"),
-    receipt: v.string(),
+    marker: v.string(),
     now: v.number(),
     version: v.literal(1),
   },
@@ -329,7 +337,7 @@ export const internalSeedControlledSyntheticProof = internalMutation({
     const ownerProfileId = await requireOwnerProfile(ctx, args.ownerProfileId);
     const ids = await buildOwnerBoundFixtureIds(
       ownerProfileId,
-      args.receipt,
+      args.marker,
     );
     const specs = buildFixtureSpecs(ownerProfileId, ids, args.now);
     const existingRows = await Promise.all(
@@ -356,7 +364,7 @@ export const internalSeedControlledSyntheticProof = internalMutation({
       status: "ready" as const,
       createdCount,
       reusedCount: EXPECTED_FIXTURE_COUNT - createdCount,
-      expectedCount: EXPECTED_FIXTURE_COUNT as 3,
+      expectedCount: EXPECTED_FIXTURE_COUNT,
       ownerBound: true as const,
       version: 1 as const,
     };
@@ -366,8 +374,7 @@ export const internalSeedControlledSyntheticProof = internalMutation({
 export const internalCleanupControlledSyntheticProof = internalMutation({
   args: {
     ownerProfileId: v.id("userProfiles"),
-    receipt: v.string(),
-    seededAt: v.number(),
+    marker: v.string(),
     version: v.literal(1),
   },
   returns: v.object({
@@ -380,13 +387,12 @@ export const internalCleanupControlledSyntheticProof = internalMutation({
   }),
   handler: async (ctx, args) => {
     assertControlledRailEnabled();
-    assertValidTimestamp(args.seededAt);
     const ownerProfileId = await requireOwnerProfile(ctx, args.ownerProfileId);
     const ids = await buildOwnerBoundFixtureIds(
       ownerProfileId,
-      args.receipt,
+      args.marker,
     );
-    const specs = buildFixtureSpecs(ownerProfileId, ids, args.seededAt);
+    const specs = buildFixtureSpecs(ownerProfileId, ids, 0);
     const rows = await Promise.all(
       specs.map((spec) =>
         queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id),
@@ -418,9 +424,52 @@ export const internalCleanupControlledSyntheticProof = internalMutation({
 
     return {
       status: "clean" as const,
-      deletedCount: EXPECTED_FIXTURE_COUNT as 3,
+      deletedCount: EXPECTED_FIXTURE_COUNT,
+      residualCount: 0,
+      expectedCount: EXPECTED_FIXTURE_COUNT,
+      ownerBound: true as const,
+      version: 1 as const,
+    };
+  },
+});
+
+export const internalRecoverControlledSyntheticProof = internalMutation({
+  args: {
+    ownerProfileId: v.id("userProfiles"),
+    marker: v.string(),
+    version: v.literal(1),
+  },
+  returns: v.object({
+    status: v.literal("recovered"),
+    deletedCount: v.number(),
+    residualCount: v.literal(0),
+    expectedCount: v.literal(EXPECTED_FIXTURE_COUNT),
+    ownerBound: v.literal(true),
+    version: v.literal(1),
+  }),
+  handler: async (ctx, args) => {
+    assertControlledRailEnabled();
+    const ownerProfileId = await requireOwnerProfile(ctx, args.ownerProfileId);
+    const ids = await buildOwnerBoundFixtureIds(ownerProfileId, args.marker);
+    const specs = buildFixtureSpecs(ownerProfileId, ids, 0);
+    const rows = await Promise.all(
+      specs.map((spec) => queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id)),
+    );
+    if (rows.some((row, index) => row !== null && !specs[index].isControlled(row))) {
+      throw new Error("controlled_fixture_collision");
+    }
+    for (const row of rows) {
+      if (row) await ctx.db.delete(row._id);
+    }
+    const residualRows = await Promise.all(
+      specs.map((spec) => queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id)),
+    );
+    if (residualRows.some(Boolean)) throw new Error("controlled_fixture_recovery_incomplete");
+    return {
+      status: "recovered" as const,
+      deletedCount: rows.filter(Boolean).length,
       residualCount: 0 as const,
-      expectedCount: EXPECTED_FIXTURE_COUNT as 3,
+      expectedCount: EXPECTED_FIXTURE_COUNT,
       ownerBound: true as const,
       version: 1 as const,
     };
