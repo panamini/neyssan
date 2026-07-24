@@ -86,7 +86,21 @@ const TOOL_METADATA = {
 function snapshot(toolName: typeof MCP_SAFE_SUMMARY_PROOF_TOOLS[number], overrides: Readonly<Record<string, number>> = {}): Readonly<Record<string, unknown>> {
   const safeCounts: Record<string, number> = {};
   for (const key of KEYS[toolName]) safeCounts[key] = 0;
-  return { safeCounts: { ...safeCounts, ...overrides, version: 1 }, version: 1 };
+  const resolvedCounts = { ...safeCounts, ...overrides, version: 1 };
+  return {
+    safeCounts: resolvedCounts,
+    ...(toolName === "twoweeks.review_cockpit.summarize"
+      ? {
+          safeFlags: {
+            approvalNeeded: resolvedCounts.approvalNeeded > 0,
+            staleData: resolvedCounts.staleInputs > 0,
+            overLimit: resolvedCounts.overLimitCollections > 0,
+            version: 1,
+          },
+        }
+      : {}),
+    version: 1,
+  };
 }
 
 function fullSnapshot(overrides: Readonly<Record<string, Readonly<Record<string, number>>>> = {}): McpSafeSummarySnapshotV8 {
@@ -316,8 +330,18 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       reason: "BASELINE_DRIFT",
     });
     expect(validateMcpSafeSummaryBaselineV8(fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 100 },
+      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 99 },
+      "A.twoweeks.resume_variant_plan.summarize": { plans: 99 },
+      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 99 },
     }))).toMatchObject({ accepted: false, reason: "BASELINE_SATURATED" });
+
+    expect(validateMcpSafeSummaryBaselineV8(fullSnapshot({
+      "A.twoweeks.application_package.summarize": { packages: 100 },
+    }))).toMatchObject({ accepted: false, reason: "BASELINE_SATURATED" });
+
+    expect(validateMcpSafeSummaryBaselineV8(fullSnapshot({
+      "B.twoweeks.evidence_graph.summarize": { sourceDocuments: 99 },
+    }))).toMatchObject({ accepted: true });
 
     const drifted = fullSnapshot({ "B.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1 } });
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, drifted)).toMatchObject({
@@ -326,23 +350,129 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     });
   });
 
+  it("accepts only the explicit derived metadata changes from seeding evidence, resume, and review", () => {
+    const baseline = fullSnapshot();
+    const baselineWithMetadata = replaceSummary(
+      replaceSummary(
+        replaceSummary(baseline, "A", "twoweeks.evidence_graph.summarize", {
+          ...baseline.A["twoweeks.evidence_graph.summarize"],
+          status: "no_data_available",
+          evidenceGraphRef: { status: "no_data_available", count: 0 },
+          safeCategories: { version: 1 },
+          missingDataReason: "evidence_graph_not_available",
+        }),
+        "A",
+        "twoweeks.resume_variant_plan.summarize",
+        {
+          ...baseline.A["twoweeks.resume_variant_plan.summarize"],
+          status: "no_data_available",
+          resumeVariantPlanRef: { status: "no_data_available", count: 0 },
+          safeCategories: { version: 1 },
+          missingDataReason: "resume_variant_plan_not_available",
+        },
+      ),
+      "A",
+      "twoweeks.review_cockpit.summarize",
+      {
+        ...baseline.A["twoweeks.review_cockpit.summarize"],
+        status: "no_data_available",
+        reviewCockpitRef: { status: "no_data_available", count: 0 },
+        safeCategories: { version: 1 },
+        safeFlags: { approvalNeeded: false, staleData: false, overLimit: false, version: 1 },
+        missingDataReason: "review_cockpit_not_available",
+      },
+    );
+    const postSeedWithMetadata = replaceSummary(
+      replaceSummary(
+        replaceSummary(validPostSeedSnapshot(), "A", "twoweeks.evidence_graph.summarize", {
+          ...validPostSeedSnapshot().A["twoweeks.evidence_graph.summarize"],
+          status: "available",
+          evidenceGraphRef: { status: "available", count: 2, updatedAt: "2026-07-25T00:00:00.000Z" },
+          safeCategories: { evidenceCoverage: "partial", version: 1 },
+          updatedAt: "2026-07-25T00:00:00.000Z",
+        }),
+        "A",
+        "twoweeks.resume_variant_plan.summarize",
+        {
+          ...validPostSeedSnapshot().A["twoweeks.resume_variant_plan.summarize"],
+          status: "available",
+          resumeVariantPlanRef: { status: "available", count: 1, updatedAt: "2026-07-25T00:00:00.000Z" },
+          safeCategories: { planStatus: "needs_review", version: 1 },
+          updatedAt: "2026-07-25T00:00:00.000Z",
+        },
+      ),
+      "A",
+      "twoweeks.review_cockpit.summarize",
+      {
+        ...validPostSeedSnapshot().A["twoweeks.review_cockpit.summarize"],
+        status: "available",
+        reviewCockpitRef: { status: "available", count: 1, updatedAt: "2026-07-25T00:00:00.000Z" },
+        safeCategories: { reviewReadiness: "needs_user_review", version: 1 },
+        safeFlags: { approvalNeeded: true, staleData: false, overLimit: false, version: 1 },
+        updatedAt: "2026-07-25T00:00:00.000Z",
+      },
+    );
+
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(
+      baselineWithMetadata,
+      postSeedWithMetadata,
+    )).toMatchObject({ accepted: true });
+  });
+
+  it.each([
+    {
+      name: "boolean drift",
+      mutate: (summary: Readonly<Record<string, unknown>>) => ({
+        ...summary,
+        safeFlags: {
+          ...(summary.safeFlags as Record<string, unknown>),
+          approvalNeeded: false,
+        },
+      }),
+    },
+    {
+      name: "extra key",
+      mutate: (summary: Readonly<Record<string, unknown>>) => ({
+        ...summary,
+        safeFlags: {
+          ...(summary.safeFlags as Record<string, unknown>),
+          unexpected: true,
+        },
+      }),
+    },
+  ])("rejects review safeFlags $name instead of dropping the block", ({ mutate }) => {
+    const baseline = fullSnapshot();
+    const postSeed = validPostSeedSnapshot();
+    const driftedPost = replaceSummary(
+      postSeed,
+      "A",
+      "twoweeks.review_cockpit.summarize",
+      mutate(postSeed.A["twoweeks.review_cockpit.summarize"]),
+    );
+
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, driftedPost)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+    });
+  });
+
   it.each([
     {
       toolName: "twoweeks.evidence_graph.summarize" as const,
-      baselineFields: { status: "available" },
-      postSeedFields: { status: "stale" },
+      baselineFields: { capabilities: { dataReads: "convex_evidence_graph_summary", version: 1 } },
+      postSeedFields: { capabilities: { dataReads: "unexpected_read", version: 1 } },
     },
     {
       toolName: "twoweeks.resume_variant_plan.summarize" as const,
-      baselineFields: { safeCategories: { ready: true, version: 1 } },
-      postSeedFields: { safeCategories: { ready: false, version: 1 } },
+      baselineFields: { availability: { source: "convex_resume_variant_plan_summary", version: 1 } },
+      postSeedFields: { availability: { source: "unexpected_source", version: 1 } },
     },
     {
       toolName: "twoweeks.review_cockpit.summarize" as const,
-      baselineFields: { updatedAt: "2026-07-24T00:00:00.000Z" },
-      postSeedFields: { updatedAt: "2026-07-24T00:00:01.000Z" },
+      baselineFields: { kind: "mcp_review_cockpit_summary_result" },
+      postSeedFields: { kind: "unexpected_summary_kind" },
     },
-  ])("rejects non-safeCounts A drift for $toolName", ({
+  ])("rejects non-derived A drift for $toolName", ({
     toolName,
     baselineFields,
     postSeedFields,
@@ -365,6 +495,35 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       accepted: false,
       reason: "BASELINE_DRIFT",
     });
+  });
+
+  it.each([
+    { name: "seed reject", seed: async () => Promise.reject(new Error("seed rejected")) },
+    {
+      name: "seed throw",
+      seed: async () => {
+        throw new Error("seed thrown");
+      },
+    },
+  ])("maps $name to SEED_FAILED and recovers without protected calls", async ({ seed }) => {
+    const input = inputFor(fullSnapshot(), validPostSeedSnapshot());
+    input.seedA = vi.fn(seed);
+
+    const result = await buildMcpSafeSummaryLiveAdapterV8(input).run();
+
+    expect(result.proof.sequence).toMatchObject({
+      outcome: "STOPPED",
+      stopCode: "SEED_FAILED",
+      protectedCallCount: 0,
+      seedCount: 0,
+      cleanupCount: 3,
+      recovery: "RECOVERED",
+      baseline: "ACCEPTED",
+      postSeedDelta: "REJECTED",
+    });
+    expect(input.callToolsCall).not.toHaveBeenCalled();
+    expect(input.cleanupA).toHaveBeenCalledTimes(1);
+    expect(input.recover).toHaveBeenCalledTimes(1);
   });
 
   it.each([

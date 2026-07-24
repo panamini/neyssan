@@ -300,7 +300,13 @@ async function runMcpSafeSummaryLiveAdapterV8(
     baselineAccepted = true;
 
     cleanupRequired = true;
-    const seedResult = await input.seedA();
+    let seedResult: unknown;
+    try {
+      seedResult = await input.seedA();
+    } catch {
+      stopCode = "SEED_FAILED";
+      return finish();
+    }
     if (!isExpectedSeed(seedResult)) {
       stopCode = "SEED_COUNT_MISMATCH";
       return finish();

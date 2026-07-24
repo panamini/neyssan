@@ -12,8 +12,7 @@ import {
   type McpSafeSummaryServerIdentityResolverV1,
   type McpSafeSummaryServerReferenceResolverV1,
   type McpSafeSummaryServerRuntimePortV1,
-  type McpSafeSummaryServerSeedPortV1,
-  type McpSafeSummaryServerCleanupPortV1,
+  type McpSafeSummaryServerIdentityV1,
 } from "./mcpSafeSummaryServerSession";
 import { MCP_PRODUCTION_OPERATION_TIMEOUT_MS } from "./mcpProductionOperationTimeout";
 import {
@@ -23,7 +22,7 @@ import {
 
 const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_CONTRACT_ID =
   "CC-20260724-mcp-safe-summary-live-adapter" as const;
-const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_CONTRACT_VERSION = 5 as const;
+const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_CONTRACT_VERSION = 6 as const;
 const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_FLAG =
   "MCP_SAFE_SUMMARY_CONTROLLED_PROOF" as const;
 export const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH =
@@ -41,12 +40,16 @@ export type McpSafeSummaryControlledProofRunnerInputV1 = Readonly<{
   resolveIdentity: McpSafeSummaryServerIdentityResolverV1;
   resolveReference: McpSafeSummaryServerReferenceResolverV1;
   runQuery: McpProductionReadonlySummaryQueryPortV1;
-  seedA: McpSafeSummaryServerSeedPortV1;
-  cleanupA: McpSafeSummaryServerCleanupPortV1;
+  seedA: (identity: McpSafeSummaryServerIdentityV1, runId: string) => Promise<unknown>;
+  cleanupA: (identity: McpSafeSummaryServerIdentityV1, runId: string) => Promise<unknown>;
   runtime: McpSafeSummaryServerRuntimePortV1;
   nowEpochMs?: () => number;
   forbiddenSubstrings?: readonly string[];
 }>;
+
+function createRunIdentifier(): string {
+  return `mcp-safe-summary-run-${globalThis.crypto.randomUUID()}`;
+}
 
 export type McpSafeSummaryControlledProofEffectObservationV5 = Readonly<{
   retry: "NOT_OBSERVED";
@@ -109,6 +112,7 @@ export function buildMcpSafeSummaryControlledProofRunner(
 
   return Object.freeze({
     run: async (): Promise<McpSafeSummaryControlledProofResultV5> => {
+      const runId = createRunIdentifier();
       const executeSummary = buildMcpProductionReadonlySummaryExecutor((queryInput) =>
         withSharedTimeout(() => input.runQuery(queryInput))
       );
@@ -117,8 +121,8 @@ export function buildMcpSafeSummaryControlledProofRunner(
         resolveReference: (identity, toolName) =>
           withSharedTimeout(() => input.resolveReference(identity, toolName)),
         executeSummary,
-        seedA: (identity) => withSettledMutationTimeout(() => input.seedA(identity)),
-        cleanupA: (identity) => withSettledMutationTimeout(() => input.cleanupA(identity)),
+        seedA: (identity) => withSettledMutationTimeout(() => input.seedA(identity, runId)),
+        cleanupA: (identity) => withSettledMutationTimeout(() => input.cleanupA(identity, runId)),
         runtime: {
           start: () => withSharedTimeout(() => input.runtime.start()),
           recoverOldRuntime: () =>

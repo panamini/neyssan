@@ -1396,12 +1396,14 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
     resolveIdentity,
     resolveReference: async (_identity, toolName) => ({ id: controlledProofReferenceId(toolName) }),
     runQuery: buildProductionReadonlySummaryQueryPort(convexClient),
-    seedA: async (identity) => {
+    seedA: async (identity, runId) => {
       await convexClient.mutation(
         RECOVER_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
         {
           ownerProfileId: identity.ownerProfileId,
           marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
+          now: Date.now(),
           version: 1,
         },
         { skipQueue: true },
@@ -1411,18 +1413,20 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
         {
           ownerProfileId: identity.ownerProfileId,
           marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
           now: Date.now(),
           version: 1,
         },
         { skipQueue: true },
       );
     },
-    cleanupA: async (identity) => {
+    cleanupA: async (identity, runId) => {
       return convexClient.mutation(
         CLEANUP_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
         {
           ownerProfileId: identity.ownerProfileId,
           marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
           version: 1,
         },
         { skipQueue: true },

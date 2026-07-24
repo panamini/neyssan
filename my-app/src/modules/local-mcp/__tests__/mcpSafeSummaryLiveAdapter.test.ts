@@ -251,8 +251,8 @@ const safeCategoriesByTool: Record<McpSafeSummaryProofToolName, Readonly<Record<
 function runnerFor(resolveIdentity: (
   role: "A" | "B",
 ) => Promise<McpSafeSummaryServerIdentityV1>, options: {
-  seedA?: (identity: McpSafeSummaryServerIdentityV1) => Promise<unknown>;
-  cleanupA?: (identity: McpSafeSummaryServerIdentityV1) => Promise<unknown>;
+  seedA?: (identity: McpSafeSummaryServerIdentityV1, runId: string) => Promise<unknown>;
+  cleanupA?: (identity: McpSafeSummaryServerIdentityV1, runId: string) => Promise<unknown>;
   recoverOldRuntime?: () => Promise<boolean>;
 } = {}) {
   const calls: string[] = [];
@@ -263,7 +263,7 @@ function runnerFor(resolveIdentity: (
       environment: "development",
       enabled: true,
       contractId: "CC-20260724-mcp-safe-summary-live-adapter",
-      contractVersion: 5,
+      contractVersion: 6,
     },
     resolveIdentity: async (role) => {
       const identity = await resolveIdentity(role);
@@ -353,7 +353,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
     })).toMatchObject({
       enabled: true,
       contractId: "CC-20260724-mcp-safe-summary-live-adapter",
-      contractVersion: 5,
+      contractVersion: 6,
     });
   });
 
@@ -458,6 +458,45 @@ describe("v5 controlled MCP safe-summary adapter", () => {
     expect(JSON.stringify(result)).not.toContain("profile_A");
     expect(JSON.stringify(result)).not.toContain("subject_B");
     expect(JSON.stringify(result)).not.toContain("profile_B");
+  });
+
+  it("propagates one opaque run lease to seed and cleanup without exposing it", async () => {
+    const seedRunIds: string[] = [];
+    const cleanupRunIds: string[] = [];
+    const { runner } = runnerFor(async (role) => role === "B" ? OWNER_B : OWNER_A, {
+      seedA: async (_identity, runId) => {
+        seedRunIds.push(runId);
+        return {
+          status: "ready",
+          createdCount: 3,
+          reusedCount: 0,
+          expectedCount: 3,
+          ownerBound: true,
+          version: 1,
+        };
+      },
+      cleanupA: async (_identity, runId) => {
+        cleanupRunIds.push(runId);
+        return {
+          status: "clean",
+          deletedCount: 3,
+          residualCount: 0,
+          expectedCount: 3,
+          ownerBound: true,
+          version: 1,
+        };
+      },
+    });
+
+    const result = await runner!.run();
+
+    expect(result.completed).toBe(true);
+    expect(seedRunIds).toHaveLength(1);
+    expect(cleanupRunIds).toEqual(seedRunIds);
+    expect(seedRunIds[0]).toMatch(/^mcp-safe-summary-run-[0-9a-f-]{36}$/u);
+    expect(JSON.stringify(result)).not.toContain(seedRunIds[0]!);
+    expect(seedRunIds[0]).not.toContain("subject_A");
+    expect(seedRunIds[0]).not.toContain("profile_A");
   });
 
   it("does not expose the deterministic recovery marker in the operator response", async () => {

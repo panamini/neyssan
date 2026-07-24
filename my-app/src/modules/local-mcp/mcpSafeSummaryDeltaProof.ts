@@ -134,6 +134,43 @@ const REVIEW_DELTA = Object.freeze({
   approvalNeeded: 1,
 } satisfies Readonly<Record<string, number>>);
 
+const DERIVED_METADATA = Object.freeze({
+  "twoweeks.evidence_graph.summarize": Object.freeze({
+    topLevel: Object.freeze(["status", "safeCategories", "updatedAt", "missingDataReason"]),
+    reference: Object.freeze(["status", "count", "updatedAt"]),
+    referenceKey: "evidenceGraphRef",
+  }),
+  "twoweeks.resume_variant_plan.summarize": Object.freeze({
+    topLevel: Object.freeze(["status", "safeCategories", "updatedAt", "missingDataReason"]),
+    reference: Object.freeze(["status", "count", "updatedAt"]),
+    referenceKey: "resumeVariantPlanRef",
+  }),
+  "twoweeks.review_cockpit.summarize": Object.freeze({
+    topLevel: Object.freeze(["status", "safeCategories", "safeFlags", "updatedAt", "missingDataReason"]),
+    reference: Object.freeze(["status", "count", "updatedAt"]),
+    referenceKey: "reviewCockpitRef",
+  }),
+} satisfies Readonly<Record<
+  Exclude<McpProductionReadonlySummaryToolNameV1,
+    "twoweeks.application_package.summarize"
+  >,
+  Readonly<{
+    topLevel: readonly string[];
+    reference: readonly string[];
+    referenceKey: string;
+  }>
+>>);
+
+const POSITIVE_DELTAS = Object.freeze({
+  "twoweeks.application_package.summarize": Object.freeze({}),
+  "twoweeks.evidence_graph.summarize": EVIDENCE_DELTA,
+  "twoweeks.resume_variant_plan.summarize": RESUME_DELTA,
+  "twoweeks.review_cockpit.summarize": REVIEW_DELTA,
+} satisfies Readonly<Record<
+  McpProductionReadonlySummaryToolNameV1,
+  Readonly<Record<string, number>>
+>>);
+
 export function validateMcpSafeSummaryBaselineV8(
   baseline: McpSafeSummarySnapshotV8 | undefined,
 ): McpSafeSummaryDeltaProofResultV8 {
@@ -143,7 +180,14 @@ export function validateMcpSafeSummaryBaselineV8(
     for (const toolName of TOOLS) {
       const counts = readCounts(baseline[role][toolName], toolName);
       if (!counts) return failure("BASELINE_UNAVAILABLE");
-      if (Object.values(counts).some((count) => count >= MAX_SAFE_COUNT)) {
+      if (
+        toolName === "twoweeks.review_cockpit.summarize" &&
+        !hasExactReviewSafeFlags(baseline[role][toolName], counts)
+      ) {
+        return failure("BASELINE_DRIFT");
+      }
+      if (Object.values(counts).some((count) => count >= MAX_SAFE_COUNT) ||
+        (role === "A" && hasInsufficientHeadroom(counts, POSITIVE_DELTAS[toolName]))) {
         return failure("BASELINE_SATURATED");
       }
     }
@@ -180,7 +224,11 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     "twoweeks.evidence_graph.summarize",
   );
   if (
-    !matchesOutsideSafeCounts(evidenceBaselineSummary, evidencePostSummary) ||
+    !matchesOutsideDerivedMetadata(
+      "twoweeks.evidence_graph.summarize",
+      evidenceBaselineSummary,
+      evidencePostSummary,
+    ) ||
     !evidenceBaseline ||
     !evidencePost ||
     !matchesDelta(evidenceBaseline, evidencePost, EVIDENCE_DELTA)
@@ -199,7 +247,11 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     "twoweeks.resume_variant_plan.summarize",
   );
   if (
-    !matchesOutsideSafeCounts(resumeBaselineSummary, resumePostSummary) ||
+    !matchesOutsideDerivedMetadata(
+      "twoweeks.resume_variant_plan.summarize",
+      resumeBaselineSummary,
+      resumePostSummary,
+    ) ||
     !resumeBaseline ||
     !resumePost ||
     resumePost.plans !== resumeBaseline.plans + 1 ||
@@ -219,15 +271,33 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     "twoweeks.review_cockpit.summarize",
   );
   if (
-    !matchesOutsideSafeCounts(reviewBaselineSummary, reviewPostSummary) ||
     !reviewBaseline ||
     !reviewPost ||
+    !hasExactReviewSafeFlags(reviewBaselineSummary, reviewBaseline) ||
+    !hasExactReviewSafeFlags(reviewPostSummary, reviewPost) ||
+    !matchesOutsideDerivedMetadata(
+      "twoweeks.review_cockpit.summarize",
+      reviewBaselineSummary,
+      reviewPostSummary,
+    ) ||
     !matchesDelta(reviewBaseline, reviewPost, REVIEW_DELTA, { staleInputs: 0 })
   ) {
     return failure("BASELINE_DRIFT");
   }
 
   return success();
+}
+
+function hasExactReviewSafeFlags(
+  summary: Readonly<Record<string, unknown>>,
+  counts: Readonly<Record<string, number>>,
+): boolean {
+  return structurallyEqual(summary.safeFlags, {
+    approvalNeeded: counts.approvalNeeded > 0,
+    staleData: counts.staleInputs > 0,
+    overLimit: counts.overLimitCollections > 0,
+    version: 1,
+  });
 }
 
 function readCounts(
@@ -272,18 +342,43 @@ function matchesDelta(
   );
 }
 
-function matchesOutsideSafeCounts(
+function hasInsufficientHeadroom(
+  counts: Readonly<Record<string, number>>,
+  positiveDelta: Readonly<Record<string, number>>,
+): boolean {
+  return Object.entries(positiveDelta).some(([key, delta]) =>
+    delta > 0 && counts[key] + delta >= MAX_SAFE_COUNT,
+  );
+}
+
+function matchesOutsideDerivedMetadata(
+  toolName: McpProductionReadonlySummaryToolNameV1,
   baseline: Readonly<Record<string, unknown>>,
   postSeed: Readonly<Record<string, unknown>>,
 ): boolean {
-  const baselineKeys = Object.keys(baseline).filter((key) => key !== "safeCounts").sort();
-  const postSeedKeys = Object.keys(postSeed).filter((key) => key !== "safeCounts").sort();
-  return baselineKeys.length === postSeedKeys.length &&
-    baselineKeys.every(
-      (key, index) =>
-        key === postSeedKeys[index] &&
-        structurallyEqual(baseline[key], postSeed[key]),
+  const normalizedBaseline = normalizeForPostSeedComparison(toolName, baseline);
+  const normalizedPostSeed = normalizeForPostSeedComparison(toolName, postSeed);
+  return structurallyEqual(normalizedBaseline, normalizedPostSeed);
+}
+
+function normalizeForPostSeedComparison(
+  toolName: McpProductionReadonlySummaryToolNameV1,
+  summary: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const metadata = DERIVED_METADATA[toolName as keyof typeof DERIVED_METADATA];
+  const normalized = Object.fromEntries(
+    Object.entries(summary).filter(([key]) => key !== "safeCounts"),
+  );
+  if (!metadata) return normalized;
+
+  for (const key of metadata.topLevel) delete normalized[key];
+  const reference = normalized[metadata.referenceKey];
+  if (isPlainRecord(reference)) {
+    normalized[metadata.referenceKey] = Object.fromEntries(
+      Object.entries(reference).filter(([key]) => !metadata.reference.includes(key)),
     );
+  }
+  return normalized;
 }
 
 function isValidSnapshot(value: unknown): value is McpSafeSummarySnapshotV8 {

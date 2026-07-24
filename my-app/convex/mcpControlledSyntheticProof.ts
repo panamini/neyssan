@@ -5,6 +5,8 @@ import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../src/modules/loca
 const CONTROLLED_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
 const CONTROLLED_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
 const EXPECTED_FIXTURE_COUNT = 3;
+const CONTROLLED_RUN_ID_PATTERN = /^mcp-safe-summary-run-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+export const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS = 30 * 60 * 1000;
 
 export const internalResolveControlledSyntheticProofOwner = internalQuery({
   args: {
@@ -63,16 +65,24 @@ function assertValidTimestamp(now: number): void {
   }
 }
 
+function assertValidRunId(runId: string): void {
+  if (!CONTROLLED_RUN_ID_PATTERN.test(runId)) {
+    throw new Error("invalid_controlled_run_id");
+  }
+}
+
 async function buildOwnerBoundFixtureIds(
   ownerProfileId: string,
   marker: string,
+  runId: string,
 ): Promise<ControlledFixtureIds> {
   if (marker !== MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5) {
     throw new Error("invalid_controlled_marker");
   }
+  assertValidRunId(runId);
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`${ownerProfileId}\u0000${marker}`),
+    new TextEncoder().encode(`${ownerProfileId}\u0000${marker}\u0000${runId}`),
   );
   const token = Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -115,6 +125,40 @@ async function queryOwnedRow(
       query.eq("userId", ownerProfileId).eq("id", id),
     )
     .unique();
+}
+
+async function queryControlledArtifacts(
+  ctx: any,
+  ownerProfileId: string,
+): Promise<StoredRow[]> {
+  return (await ctx.db
+    .query("applicationArtifacts")
+    .withIndex("by_user_type", (query: any) =>
+      query.eq("userId", ownerProfileId).eq("type", "resume_variant_plan"),
+    )
+    .collect()) as StoredRow[];
+}
+
+function readControlledRunId(row: StoredRow): string | null {
+  const runId = row.runId;
+  return typeof runId === "string" && CONTROLLED_RUN_ID_PATTERN.test(runId)
+    ? runId
+    : null;
+}
+
+function readLeaseStartedAt(row: StoredRow | null): number | null {
+  const leaseStartedAt = row?.createdAt;
+  return typeof leaseStartedAt === "number" && Number.isSafeInteger(leaseStartedAt)
+    ? leaseStartedAt
+    : null;
+}
+
+function isLeaseExpired(leaseStartedAt: number, now: number): boolean {
+  return now >= leaseStartedAt + MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS;
+}
+
+function isLeaseRecent(leaseStartedAt: number, now: number): boolean {
+  return now < leaseStartedAt + MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS;
 }
 
 function buildSourceDocument(
@@ -164,10 +208,12 @@ function buildResumeVariantPlanArtifact(
   ownerProfileId: string,
   ids: ControlledFixtureIds,
   now: number,
+  runId: string,
 ): Record<string, unknown> {
   return {
     id: ids.artifactId,
     userId: ownerProfileId,
+    runId,
     contextId: ids.contextId,
     type: "resume_variant_plan",
     status: "needs_review",
@@ -289,10 +335,11 @@ function buildFixtureSpecs(
   ownerProfileId: string,
   ids: ControlledFixtureIds,
   now: number,
+  runId: string,
 ): readonly ControlledFixtureSpec[] {
   const sourceDocument = buildSourceDocument(ownerProfileId, ids, now);
   const candidateFact = buildCandidateFact(ownerProfileId, ids, now);
-  const artifact = buildResumeVariantPlanArtifact(ownerProfileId, ids, now);
+  const artifact = buildResumeVariantPlanArtifact(ownerProfileId, ids, now, runId);
   return [
     {
       tableName: "candidateSourceDocuments",
@@ -316,10 +363,78 @@ function buildFixtureSpecs(
   ];
 }
 
+function buildSpecsForRows(
+  ownerProfileId: string,
+  ids: ControlledFixtureIds,
+  runId: string,
+  now: number,
+): readonly ControlledFixtureSpec[] {
+  return buildFixtureSpecs(ownerProfileId, ids, now, runId);
+}
+
+async function discoverExpiredControlledRunIds(
+  ctx: any,
+  ownerProfileId: string,
+  marker: string,
+  now: number,
+): Promise<Set<string>> {
+  const expiredRunIds = new Set<string>();
+  const artifacts = await queryControlledArtifacts(ctx, ownerProfileId);
+  for (const artifact of artifacts) {
+    const runId = readControlledRunId(artifact);
+    const leaseStartedAt = readLeaseStartedAt(artifact);
+    if (!runId || leaseStartedAt === null || !isLeaseExpired(leaseStartedAt, now)) continue;
+    const ids = await buildOwnerBoundFixtureIds(ownerProfileId, marker, runId);
+    if (artifact.id !== ids.artifactId) continue;
+    const artifactSpec = buildFixtureSpecs(
+      ownerProfileId,
+      ids,
+      0,
+      runId,
+    )[2];
+    if (artifactSpec.isControlled(artifact)) expiredRunIds.add(runId);
+  }
+  return expiredRunIds;
+}
+
+async function assertNoRecentOtherControlledRun(
+  ctx: any,
+  ownerProfileId: string,
+  marker: string,
+  currentRunId: string,
+  now: number,
+): Promise<void> {
+  const artifacts = await queryControlledArtifacts(ctx, ownerProfileId);
+  for (const artifact of artifacts) {
+    const runId = readControlledRunId(artifact);
+    const leaseStartedAt = readLeaseStartedAt(artifact);
+    if (
+      !runId ||
+      runId === currentRunId ||
+      leaseStartedAt === null ||
+      !isLeaseRecent(leaseStartedAt, now)
+    ) {
+      continue;
+    }
+    const ids = await buildOwnerBoundFixtureIds(ownerProfileId, marker, runId);
+    if (artifact.id !== ids.artifactId) continue;
+    const artifactSpec = buildFixtureSpecs(
+      ownerProfileId,
+      ids,
+      0,
+      runId,
+    )[2];
+    if (artifactSpec.isControlled(artifact)) {
+      throw new Error("controlled_proof_already_running");
+    }
+  }
+}
+
 export const internalSeedControlledSyntheticProof = internalMutation({
   args: {
     ownerProfileId: v.id("userProfiles"),
     marker: v.string(),
+    runId: v.string(),
     now: v.number(),
     version: v.literal(1),
   },
@@ -335,15 +450,34 @@ export const internalSeedControlledSyntheticProof = internalMutation({
     assertControlledRailEnabled();
     assertValidTimestamp(args.now);
     const ownerProfileId = await requireOwnerProfile(ctx, args.ownerProfileId);
+    assertValidRunId(args.runId);
+    await assertNoRecentOtherControlledRun(
+      ctx,
+      ownerProfileId,
+      args.marker,
+      args.runId,
+      args.now,
+    );
     const ids = await buildOwnerBoundFixtureIds(
       ownerProfileId,
       args.marker,
+      args.runId,
     );
-    const specs = buildFixtureSpecs(ownerProfileId, ids, args.now);
     const existingRows = await Promise.all(
-      specs.map((spec) =>
+      buildFixtureSpecs(
+        ownerProfileId,
+        ids,
+        args.now,
+        args.runId,
+      ).map((spec) =>
         queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id),
       ),
+    );
+    const specs = buildSpecsForRows(
+      ownerProfileId,
+      ids,
+      args.runId,
+      args.now,
     );
     if (
       existingRows.some(
@@ -375,6 +509,7 @@ export const internalCleanupControlledSyntheticProof = internalMutation({
   args: {
     ownerProfileId: v.id("userProfiles"),
     marker: v.string(),
+    runId: v.string(),
     version: v.literal(1),
   },
   returns: v.object({
@@ -391,13 +526,19 @@ export const internalCleanupControlledSyntheticProof = internalMutation({
     const ids = await buildOwnerBoundFixtureIds(
       ownerProfileId,
       args.marker,
+      args.runId,
     );
-    const specs = buildFixtureSpecs(ownerProfileId, ids, 0);
     const rows = await Promise.all(
-      specs.map((spec) =>
+      buildFixtureSpecs(
+        ownerProfileId,
+        ids,
+        0,
+        args.runId,
+      ).map((spec) =>
         queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id),
       ),
     );
+    const specs = buildSpecsForRows(ownerProfileId, ids, args.runId, 0);
     if (rows.some((row) => row === null)) {
       throw new Error("controlled_fixture_missing");
     }
@@ -437,6 +578,8 @@ export const internalRecoverControlledSyntheticProof = internalMutation({
   args: {
     ownerProfileId: v.id("userProfiles"),
     marker: v.string(),
+    runId: v.string(),
+    now: v.number(),
     version: v.literal(1),
   },
   returns: v.object({
@@ -449,25 +592,50 @@ export const internalRecoverControlledSyntheticProof = internalMutation({
   }),
   handler: async (ctx, args) => {
     assertControlledRailEnabled();
+    assertValidTimestamp(args.now);
     const ownerProfileId = await requireOwnerProfile(ctx, args.ownerProfileId);
-    const ids = await buildOwnerBoundFixtureIds(ownerProfileId, args.marker);
-    const specs = buildFixtureSpecs(ownerProfileId, ids, 0);
-    const rows = await Promise.all(
-      specs.map((spec) => queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id)),
+    assertValidRunId(args.runId);
+    const runIds = await discoverExpiredControlledRunIds(
+      ctx,
+      ownerProfileId,
+      args.marker,
+      args.now,
     );
-    if (rows.some((row, index) => row !== null && !specs[index].isControlled(row))) {
-      throw new Error("controlled_fixture_collision");
+    runIds.add(args.runId);
+    let deletedCount = 0;
+    for (const runId of runIds) {
+      const ids = await buildOwnerBoundFixtureIds(ownerProfileId, args.marker, runId);
+      const initialSpecs = buildFixtureSpecs(
+        ownerProfileId,
+        ids,
+        args.now,
+        runId,
+      );
+      const rows = await Promise.all(
+        initialSpecs.map((spec) =>
+          queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id),
+        ),
+      );
+      const specs = buildSpecsForRows(ownerProfileId, ids, runId, args.now);
+      if (rows.some((row, index) => row !== null && !specs[index].isControlled(row))) {
+        throw new Error("controlled_fixture_collision");
+      }
+      for (const row of rows) {
+        if (row) {
+          await ctx.db.delete(row._id);
+          deletedCount += 1;
+        }
+      }
+      const residualRows = await Promise.all(
+        specs.map((spec) =>
+          queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id),
+        ),
+      );
+      if (residualRows.some(Boolean)) throw new Error("controlled_fixture_recovery_incomplete");
     }
-    for (const row of rows) {
-      if (row) await ctx.db.delete(row._id);
-    }
-    const residualRows = await Promise.all(
-      specs.map((spec) => queryOwnedRow(ctx, spec.tableName, ownerProfileId, spec.id)),
-    );
-    if (residualRows.some(Boolean)) throw new Error("controlled_fixture_recovery_incomplete");
     return {
       status: "recovered" as const,
-      deletedCount: rows.filter(Boolean).length,
+      deletedCount,
       residualCount: 0 as const,
       expectedCount: EXPECTED_FIXTURE_COUNT,
       ownerBound: true as const,
