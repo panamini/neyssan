@@ -232,11 +232,9 @@ export function buildMcpProductionReadonlySummaryExecutor(
 
     let queryResult: unknown;
     try {
-      queryResult = await runQuery(Object.freeze({
-        query: mapping.query,
-        args: buildConvexSummaryArgs(mapping, input),
-        version: 1,
-      }));
+      const queryInput = buildMcpProductionReadonlySummaryQueryInput(input);
+      if (!queryInput) return failure("query_failed");
+      queryResult = await runQuery(queryInput);
     } catch {
       return failure("query_failed");
     }
@@ -258,6 +256,35 @@ export function buildMcpProductionReadonlySummaryExecutor(
       version: 1 as const,
     });
   };
+}
+
+export function buildMcpProductionReadonlySummaryQueryInput(
+  input: McpProductionReadonlySummaryExecutionInputV1,
+): McpProductionReadonlySummaryQueryPortInputV1 | undefined {
+  const mapping = toolMapping(input.toolName);
+  if (
+    !mapping ||
+    !isServerOnlyOwnerIdentity(input.twoweeksClerkId) ||
+    !isValidatedRef(input.ref, mapping)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    query: mapping.query,
+    args: buildConvexSummaryArgs(mapping, input),
+    version: 1,
+  });
+}
+
+export function isMcpProductionReadonlySummaryResultForExecutionInput(
+  value: unknown,
+  input: McpProductionReadonlySummaryExecutionInputV1,
+): value is Readonly<Record<string, unknown>> {
+  const mapping = toolMapping(input.toolName);
+  return mapping !== undefined &&
+    isServerOnlyOwnerIdentity(input.twoweeksClerkId) &&
+    isValidatedRef(input.ref, mapping) &&
+    isSafeReadonlySummaryResult(value, mapping, input);
 }
 
 function buildConvexSummaryArgs(
@@ -287,7 +314,11 @@ function isSafeReadonlySummaryResult(
   if (value.kind !== mapping.expectedKind) return false;
   if (value.allowed !== true || value.modelVisible !== true || value.version !== 1) return false;
   if (!SUMMARY_STATUSES.has(value.status as SummaryStatusV1)) return false;
-  if (value.missingDataReason !== undefined && !mapping.missingDataReasons.includes(String(value.missingDataReason))) {
+  if (
+    value.missingDataReason !== undefined &&
+    (typeof value.missingDataReason !== "string" ||
+      !mapping.missingDataReasons.includes(value.missingDataReason))
+  ) {
     return false;
   }
   if (value.updatedAt !== undefined && !isIsoTimestamp(value.updatedAt)) return false;

@@ -62,6 +62,15 @@ import {
   type McpSafeSummaryControlledProofRunnerV1,
   type McpSafeSummaryControlledProofActivationV1,
 } from "./src/modules/local-mcp/mcpSafeSummaryControlledProofRunner";
+import {
+  buildMcpSafeSummaryLiveAdapterActivationV8,
+  buildMcpSafeSummaryLiveAdapterHandlerV8,
+  buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8,
+  buildMcpSafeSummaryLiveAdapterV8,
+  MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID,
+  MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION,
+  type McpSafeSummaryLiveAdapterInputV8,
+} from "./src/modules/local-mcp/mcpSafeSummaryLiveAdapter";
 import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "./src/modules/local-mcp/mcpSafeSummaryProofMarker";
 import { MCP_PRODUCTION_OPERATION_TIMEOUT_MS } from "./src/modules/local-mcp/mcpProductionOperationTimeout";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
@@ -197,6 +206,43 @@ export type LocalMcpDevEndpointPluginOptions = Readonly<{
   productionOAuthAuthorizationDependencies?: McpOAuthProductionRouteAdapterDependenciesV1;
   controlledSummaryProofRunner?: McpSafeSummaryControlledProofRunnerV1;
 }>;
+
+export function buildMcpSafeSummaryLiveAdapterContractV8(): Readonly<{
+  contractId: typeof MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID;
+  contractVersion: typeof MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION;
+}> {
+  return Object.freeze({
+    contractId: MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID,
+    contractVersion: MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION,
+  });
+}
+
+export function buildMcpSafeSummaryLiveAdapterActivationForV8(
+  env: Readonly<Record<string, string | undefined>>,
+) {
+  return buildMcpSafeSummaryLiveAdapterActivationV8(env);
+}
+
+export function buildMcpSafeSummaryLiveAdapterRunnerForV8(
+  input: McpSafeSummaryLiveAdapterInputV8,
+) {
+  return buildMcpSafeSummaryLiveAdapterV8(input);
+}
+
+export function buildMcpSafeSummaryLiveAdapterHandlerForV8(input: Readonly<{
+  config: McpOAuthProductionRouteAdapterConfigV1;
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1;
+  host: string;
+  remoteAddress: string;
+}>) {
+  return buildMcpSafeSummaryLiveAdapterHandlerV8(input);
+}
+
+export function buildMcpSafeSummaryLiveAdapterOAuthVerifierForV8(
+  input: Parameters<typeof buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8>[0],
+) {
+  return buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8(input);
+}
 
 export function createLocalMcpDevEndpointPlugin(
   options: LocalMcpDevEndpointPluginOptions = {},
