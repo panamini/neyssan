@@ -35,6 +35,10 @@ export type McpSafeSummaryProofAdapter = Readonly<{
     role: McpSafeSummaryProofIdentityRole,
   ) => Promise<McpSafeSummaryIdentityAttestation>;
   seedA: () => Promise<unknown>;
+  /**
+   * Must return JSON-compatible data only; exotic runtime values are rejected
+   * as RESULT_ENVELOPE_MISMATCH so scanning stays deterministic and fail-closed.
+   */
   callTool: (
     role: McpSafeSummaryProofIdentityRole,
     toolName: McpSafeSummaryProofToolName,
