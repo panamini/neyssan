@@ -1,11 +1,25 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v, type GenericId } from "convex/values";
+import { isMcpSafeSummaryProofReceipt } from "../src/modules/local-mcp/mcpSafeSummaryProofReceipt";
 
 const CONTROLLED_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
 const CONTROLLED_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
-const RECEIPT_PATTERN =
-  /^mcp-proof-v1:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EXPECTED_FIXTURE_COUNT = 3;
+
+export const internalResolveControlledSyntheticProofOwner = internalQuery({
+  args: {
+    twoweeksClerkId: v.string(),
+    version: v.literal(1),
+  },
+  returns: v.union(v.id("userProfiles"), v.null()),
+  handler: async (ctx, args) => {
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_clerk_id", (query) => query.eq("clerkId", args.twoweeksClerkId))
+      .first();
+    return profile?._id ?? null;
+  },
+});
 
 type ControlledTableName =
   | "candidateSourceDocuments"
@@ -53,7 +67,7 @@ async function buildOwnerBoundFixtureIds(
   ownerProfileId: string,
   receipt: string,
 ): Promise<ControlledFixtureIds> {
-  if (!RECEIPT_PATTERN.test(receipt)) {
+  if (!isMcpSafeSummaryProofReceipt(receipt)) {
     throw new Error("invalid_controlled_receipt");
   }
   const digest = await crypto.subtle.digest(

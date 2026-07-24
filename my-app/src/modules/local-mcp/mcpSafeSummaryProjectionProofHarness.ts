@@ -57,6 +57,7 @@ export type McpSafeSummaryProofEffectSnapshot = Readonly<{
 }>;
 
 export type McpSafeSummaryProofEffectObserver = Readonly<{
+  independence: "separate_monotonic_ledger";
   snapshot: () => Promise<McpSafeSummaryProofEffectSnapshot>;
 }>;
 
@@ -152,8 +153,6 @@ const ACCEPTED_B_STATUSES = new Set<AcceptedStatus>([
 export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
   adapter: McpSafeSummaryProofAdapter;
   effectObserver: McpSafeSummaryProofEffectObserver;
-  /** Caller attestation; LIVE adapters must derive this only from independent provisioning. */
-  effectObserverIndependent: boolean;
   forbiddenSubstrings?: readonly string[];
 }>): Promise<McpSafeSummaryProofLedger> {
   const ledger: MutableLedger = {
@@ -176,7 +175,7 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
   let primaryStop: Stop | undefined;
   let effectBaseline: McpSafeSummaryProofEffectSnapshot;
 
-  if (!input.effectObserverIndependent || Object.is(input.adapter, input.effectObserver)) {
+  if (input.effectObserver.independence !== "separate_monotonic_ledger") {
     ledger.outcome = "STOPPED";
     ledger.stopCode = "EFFECT_OBSERVER_FAILED";
     return freezeLedger(ledger);
@@ -571,7 +570,7 @@ function matchesSchema(
   if (schema.oneOf) {
     return schema.oneOf.filter((candidate) => matchesSchema(value, candidate)).length === 1;
   }
-  if (schema.const !== undefined && !Object.is(value, schema.const)) return false;
+  if (schema.const !== undefined && value !== schema.const) return false;
   if (schema.enum && (
     typeof value !== "string" ||
     !schema.enum.includes(value)
@@ -617,7 +616,7 @@ function matchesSchema(
 }
 
 function structurallyEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
+  if (left === right) return true;
   if (Array.isArray(left) || Array.isArray(right)) {
     return Array.isArray(left) &&
       Array.isArray(right) &&

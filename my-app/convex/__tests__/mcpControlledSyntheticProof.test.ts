@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   internalCleanupControlledSyntheticProof,
+  internalResolveControlledSyntheticProofOwner,
   internalSeedControlledSyntheticProof,
 } from "../mcpControlledSyntheticProof";
+import { createMcpSafeSummaryProofReceipt } from "../../src/modules/local-mcp/mcpSafeSummaryProofReceipt";
 
-const RECEIPT = "mcp-proof-v1:123e4567-e89b-42d3-a456-426614174000";
+const RECEIPT = createMcpSafeSummaryProofReceipt(
+  "123e4567-e89b-42d3-a456-426614174000",
+);
 const OWNER_A = "profile_A";
 const OWNER_B = "profile_B";
 const SEEDED_AT = 1_721_000_000_000;
@@ -31,8 +35,8 @@ function readField(document: Record<string, unknown>, field: string): unknown {
 function makeCtx() {
   const tables: Record<TableName, StoredDocument[]> = {
     userProfiles: [
-      { _id: OWNER_A, _creationTime: 1, version: 1 },
-      { _id: OWNER_B, _creationTime: 2, version: 1 },
+      { _id: OWNER_A, _creationTime: 1, clerkId: "clerk_owner", version: 1 },
+      { _id: OWNER_B, _creationTime: 2, clerkId: "clerk_other", version: 1 },
     ],
     candidateSourceDocuments: [],
     candidateFacts: [],
@@ -73,6 +77,14 @@ function makeCtx() {
               ),
             );
             if (rows.length > 1) throw new Error("not unique");
+            return rows[0] ?? null;
+          },
+          first: async () => {
+            const rows = tables[tableName].filter((document) =>
+              constraints.every(
+                ({ field, value }) => readField(document, field) === value,
+              ),
+            );
             return rows[0] ?? null;
           },
         };
@@ -138,6 +150,15 @@ describe("minimal controlled synthetic MCP fixture", () => {
   beforeEach(() => {
     process.env.ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL = "1";
     process.env.MCP_CONTROLLED_SYNTHETIC_RAIL_MODE = "development";
+  });
+
+  it("resolves the owner profile on the Convex side from the authenticated Clerk subject", async () => {
+    const { ctx } = makeCtx();
+    const result = await internalResolveControlledSyntheticProofOwner._handler(
+      ctx as any,
+      { twoweeksClerkId: "clerk_owner", version: 1 },
+    );
+    expect(result).toBe(OWNER_A);
   });
 
   afterEach(() => {
