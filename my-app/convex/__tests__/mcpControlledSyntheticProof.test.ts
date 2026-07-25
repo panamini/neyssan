@@ -2,13 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   internalCleanupControlledSyntheticProof,
+  internalRecoverControlledSyntheticProof,
+  internalResolveControlledSyntheticProofOwner,
   internalSeedControlledSyntheticProof,
+  MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS,
 } from "../mcpControlledSyntheticProof";
+import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../../src/modules/local-mcp/mcpSafeSummaryProofMarker";
 
-const RECEIPT = "mcp-proof-v1:123e4567-e89b-42d3-a456-426614174000";
+const MARKER = MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5;
 const OWNER_A = "profile_A";
 const OWNER_B = "profile_B";
 const SEEDED_AT = 1_721_000_000_000;
+const RUN_ID_A = "mcp-safe-summary-run-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const RUN_ID_B = "mcp-safe-summary-run-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 type TableName =
   | "userProfiles"
@@ -31,8 +37,8 @@ function readField(document: Record<string, unknown>, field: string): unknown {
 function makeCtx() {
   const tables: Record<TableName, StoredDocument[]> = {
     userProfiles: [
-      { _id: OWNER_A, _creationTime: 1, version: 1 },
-      { _id: OWNER_B, _creationTime: 2, version: 1 },
+      { _id: OWNER_A, _creationTime: 1, clerkId: "clerk_owner", version: 1 },
+      { _id: OWNER_B, _creationTime: 2, clerkId: "clerk_other", version: 1 },
     ],
     candidateSourceDocuments: [],
     candidateFacts: [],
@@ -75,6 +81,19 @@ function makeCtx() {
             if (rows.length > 1) throw new Error("not unique");
             return rows[0] ?? null;
           },
+          first: async () => {
+            const rows = tables[tableName].filter((document) =>
+              constraints.every(
+                ({ field, value }) => readField(document, field) === value,
+              ),
+            );
+            return rows[0] ?? null;
+          },
+          collect: async () => tables[tableName].filter((document) =>
+            constraints.every(
+              ({ field, value }) => readField(document, field) === value,
+            ),
+          ),
         };
       },
     })),
@@ -116,20 +135,31 @@ function fixtureCount(tables: Record<TableName, StoredDocument[]>): number {
   );
 }
 
-function seedArgs(ownerProfileId = OWNER_A) {
+function seedArgs(ownerProfileId = OWNER_A, runId = RUN_ID_A) {
   return {
     ownerProfileId,
-    receipt: RECEIPT,
+    marker: MARKER,
+    runId,
     now: SEEDED_AT,
     version: 1 as const,
   };
 }
 
-function cleanupArgs(ownerProfileId = OWNER_A) {
+function cleanupArgs(ownerProfileId = OWNER_A, runId = RUN_ID_A) {
   return {
     ownerProfileId,
-    receipt: RECEIPT,
-    seededAt: SEEDED_AT,
+    marker: MARKER,
+    runId,
+    version: 1 as const,
+  };
+}
+
+function recoveryArgs(ownerProfileId = OWNER_A, runId = RUN_ID_A, now = SEEDED_AT) {
+  return {
+    ownerProfileId,
+    marker: MARKER,
+    runId,
+    now,
     version: 1 as const,
   };
 }
@@ -138,6 +168,15 @@ describe("minimal controlled synthetic MCP fixture", () => {
   beforeEach(() => {
     process.env.ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL = "1";
     process.env.MCP_CONTROLLED_SYNTHETIC_RAIL_MODE = "development";
+  });
+
+  it("resolves the owner profile on the Convex side from the authenticated Clerk subject", async () => {
+    const { ctx } = makeCtx();
+    const result = await internalResolveControlledSyntheticProofOwner._handler(
+      ctx as any,
+      { twoweeksClerkId: "clerk_owner", version: 1 },
+    );
+    expect(result).toBe(OWNER_A);
   });
 
   afterEach(() => {
@@ -174,14 +213,14 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(fixtureCount(tables)).toBe(0);
   });
 
-  it("rejects malformed receipts, timestamps, and absent owners", async () => {
+  it("rejects malformed markers, timestamps, and absent owners", async () => {
     const malformed = makeCtx();
     await expect(
       internalSeedControlledSyntheticProof._handler(malformed.ctx as any, {
         ...seedArgs(),
-        receipt: "not-a-receipt",
+        marker: "not-a-marker",
       } as any),
-    ).rejects.toThrow("invalid_controlled_receipt");
+    ).rejects.toThrow("invalid_controlled_marker");
     expect(fixtureCount(malformed.tables)).toBe(0);
 
     const invalidTimestamp = makeCtx();
@@ -201,6 +240,19 @@ describe("minimal controlled synthetic MCP fixture", () => {
       ),
     ).rejects.toThrow("controlled_owner_profile_required");
     expect(fixtureCount(missingOwner.tables)).toBe(0);
+  });
+
+  it("rejects malformed run identifiers before touching fixtures", async () => {
+    const { ctx, tables } = makeCtx();
+
+    await expect(
+      internalSeedControlledSyntheticProof._handler(
+        ctx as any,
+        { ...seedArgs(), runId: "not-a-run-id" } as any,
+      ),
+    ).rejects.toThrow("invalid_controlled_run_id");
+
+    expect(fixtureCount(tables)).toBe(0);
   });
 
   it("seeds exactly three non-PII rows and returns only safe counters", async () => {
@@ -223,7 +275,8 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(tables.candidateSourceDocuments).toHaveLength(1);
     expect(tables.candidateFacts).toHaveLength(1);
     expect(tables.applicationArtifacts).toHaveLength(1);
-    expect(JSON.stringify(result)).not.toContain(RECEIPT);
+    expect(tables.applicationArtifacts[0].runId).toBe(RUN_ID_A);
+    expect(JSON.stringify(result)).not.toContain(MARKER);
     expect(JSON.stringify(result)).not.toContain(OWNER_A);
     expect(JSON.stringify(tables)).not.toMatch(
       /@|email|phone|address|employer|person/i,
@@ -247,7 +300,7 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(fixtureCount(tables)).toBe(3);
   });
 
-  it("binds the opaque receipt to the owner profile", async () => {
+  it("binds the synthetic marker to the owner profile", async () => {
     const { ctx, db, tables } = makeCtx();
     await internalSeedControlledSyntheticProof._handler(
       ctx as any,
@@ -331,8 +384,45 @@ describe("minimal controlled synthetic MCP fixture", () => {
     });
     expect(db.delete).toHaveBeenCalledTimes(3);
     expect(fixtureCount(tables)).toBe(0);
-    expect(JSON.stringify(result)).not.toContain(RECEIPT);
+    expect(JSON.stringify(result)).not.toContain(MARKER);
     expect(JSON.stringify(result)).not.toContain(OWNER_A);
+  });
+
+  it("recovers an expired prior run after process restart without knowing its runId", async () => {
+    const { ctx, db, tables } = makeCtx();
+    await internalSeedControlledSyntheticProof._handler(
+      ctx as any,
+      seedArgs(OWNER_A, RUN_ID_A) as any,
+    );
+
+    const result = await internalRecoverControlledSyntheticProof._handler(
+      ctx as any,
+      recoveryArgs(
+        OWNER_A,
+        RUN_ID_B,
+        SEEDED_AT + MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS + 1,
+      ),
+    );
+
+    expect(result).toEqual({
+      status: "recovered",
+      deletedCount: 3,
+      residualCount: 0,
+      expectedCount: 3,
+      ownerBound: true,
+      version: 1,
+    });
+    expect(db.delete).toHaveBeenCalledTimes(3);
+    expect(fixtureCount(tables)).toBe(0);
+
+    const reseeded = await internalSeedControlledSyntheticProof._handler(
+      ctx as any,
+      {
+        ...seedArgs(OWNER_A, RUN_ID_B),
+        now: SEEDED_AT + MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS + 1,
+      } as any,
+    );
+    expect(reseeded).toMatchObject({ createdCount: 3, reusedCount: 0 });
   });
 
   it("refuses cleanup when any controlled row is absent", async () => {
@@ -353,5 +443,49 @@ describe("minimal controlled synthetic MCP fixture", () => {
 
     expect(db.delete).not.toHaveBeenCalled();
     expect(fixtureCount(tables)).toBe(2);
+  });
+
+  it("refuses a recent concurrent run and preserves its fixtures during recovery", async () => {
+    const { ctx, db, tables } = makeCtx();
+
+    const first = await internalSeedControlledSyntheticProof._handler(
+      ctx as any,
+      seedArgs(OWNER_A, RUN_ID_A) as any,
+    );
+    await expect(
+      internalSeedControlledSyntheticProof._handler(
+        ctx as any,
+        seedArgs(OWNER_A, RUN_ID_B) as any,
+      ),
+    ).rejects.toThrow("controlled_proof_already_running");
+
+    expect(first).toMatchObject({ createdCount: 3, reusedCount: 0 });
+    expect(fixtureCount(tables)).toBe(3);
+
+    const recovery = await internalRecoverControlledSyntheticProof._handler(
+      ctx as any,
+      recoveryArgs(OWNER_A, RUN_ID_B, SEEDED_AT + 1) as any,
+    );
+    expect(recovery.deletedCount).toBe(0);
+    expect(fixtureCount(tables)).toBe(3);
+
+    await internalCleanupControlledSyntheticProof._handler(
+      ctx as any,
+      cleanupArgs(OWNER_A, RUN_ID_A) as any,
+    );
+    expect(fixtureCount(tables)).toBe(0);
+
+    await internalSeedControlledSyntheticProof._handler(
+      ctx as any,
+      seedArgs(OWNER_A, RUN_ID_B) as any,
+    );
+    expect(fixtureCount(tables)).toBe(3);
+
+    await internalCleanupControlledSyntheticProof._handler(
+      ctx as any,
+      cleanupArgs(OWNER_A, RUN_ID_B) as any,
+    );
+    expect(fixtureCount(tables)).toBe(0);
+    expect(db.delete).toHaveBeenCalledTimes(6);
   });
 });

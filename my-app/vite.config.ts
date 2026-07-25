@@ -55,6 +55,24 @@ import {
   buildMcpProductionReadonlySummaryExecutor,
   type McpProductionReadonlySummaryQueryKeyV1,
 } from "./src/modules/local-mcp/mcpProductionReadonlySummaryExecutor";
+import {
+  buildMcpSafeSummaryControlledProofRunner,
+  buildMcpSafeSummaryControlledProofActivation,
+  MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
+  type McpSafeSummaryControlledProofRunnerV1,
+  type McpSafeSummaryControlledProofActivationV1,
+} from "./src/modules/local-mcp/mcpSafeSummaryControlledProofRunner";
+import {
+  buildMcpSafeSummaryLiveAdapterActivationV8,
+  buildMcpSafeSummaryLiveAdapterHandlerV8,
+  buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8,
+  buildMcpSafeSummaryLiveAdapterV8,
+  MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID,
+  MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION,
+  type McpSafeSummaryLiveAdapterInputV8,
+} from "./src/modules/local-mcp/mcpSafeSummaryLiveAdapter";
+import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "./src/modules/local-mcp/mcpSafeSummaryProofMarker";
+import { MCP_PRODUCTION_OPERATION_TIMEOUT_MS } from "./src/modules/local-mcp/mcpProductionOperationTimeout";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
 import {
   MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR,
@@ -103,6 +121,14 @@ const CONVEX_AUTH_TOKEN_VAR = "CONVEX_AUTH_TOKEN";
 const CONVEX_URL_VAR = "CONVEX_URL";
 const VITE_CONVEX_URL_VAR = "VITE_CONVEX_URL";
 const NEXT_PUBLIC_CONVEX_URL_VAR = "NEXT_PUBLIC_CONVEX_URL";
+const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_SUBJECT_VAR =
+  "MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_SUBJECT";
+const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_ISSUER_VAR =
+  "MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_ISSUER";
+const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_SUBJECT_VAR =
+  "MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_SUBJECT";
+const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_ISSUER_VAR =
+  "MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_ISSUER";
 const CLERK_JWT_ISSUER_DOMAIN_VAR = "CLERK_JWT_ISSUER_DOMAIN";
 const CLERK_CONVEX_AUDIENCE = "convex";
 const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
@@ -138,6 +164,18 @@ const ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION = makeFunctionReference(
 const VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY = makeFunctionReference(
   "mcpOAuthAuthorizationCodes:internalVerifyMcpOAuthAccessTokenForMcpBoundary",
 ) as FunctionReference<"query">;
+const RESOLVE_MCP_CONTROLLED_PROOF_OWNER_QUERY = makeFunctionReference(
+  "mcpControlledSyntheticProof:internalResolveControlledSyntheticProofOwner",
+) as FunctionReference<"query">;
+const SEED_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION = makeFunctionReference(
+  "mcpControlledSyntheticProof:internalSeedControlledSyntheticProof",
+) as FunctionReference<"mutation">;
+const CLEANUP_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION = makeFunctionReference(
+  "mcpControlledSyntheticProof:internalCleanupControlledSyntheticProof",
+) as FunctionReference<"mutation">;
+const RECOVER_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION = makeFunctionReference(
+  "mcpControlledSyntheticProof:internalRecoverControlledSyntheticProof",
+) as FunctionReference<"mutation">;
 const PRODUCTION_MCP_READONLY_SUMMARY_QUERY_REFERENCES = Object.freeze({
   applicationPackageSummary: makeFunctionReference(
     "mcpApplicationPackageSummary:internalSummarizeMcpApplicationPackage",
@@ -166,7 +204,45 @@ export type LocalMcpDevEndpointPluginOptions = Readonly<{
   oauthAuthorizationDependencies?: McpOAuthLocalDevRouteAdapterDependenciesV1;
   productionOAuthAuthorizationConfig?: McpOAuthProductionRouteAdapterConfigV1;
   productionOAuthAuthorizationDependencies?: McpOAuthProductionRouteAdapterDependenciesV1;
+  controlledSummaryProofRunner?: McpSafeSummaryControlledProofRunnerV1;
 }>;
+
+export function buildMcpSafeSummaryLiveAdapterContractV8(): Readonly<{
+  contractId: typeof MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID;
+  contractVersion: typeof MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION;
+}> {
+  return Object.freeze({
+    contractId: MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID,
+    contractVersion: MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION,
+  });
+}
+
+export function buildMcpSafeSummaryLiveAdapterActivationForV8(
+  env: Readonly<Record<string, string | undefined>>,
+) {
+  return buildMcpSafeSummaryLiveAdapterActivationV8(env);
+}
+
+export function buildMcpSafeSummaryLiveAdapterRunnerForV8(
+  input: McpSafeSummaryLiveAdapterInputV8,
+) {
+  return buildMcpSafeSummaryLiveAdapterV8(input);
+}
+
+export function buildMcpSafeSummaryLiveAdapterHandlerForV8(input: Readonly<{
+  config: McpOAuthProductionRouteAdapterConfigV1;
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1;
+  host: string;
+  remoteAddress: string;
+}>) {
+  return buildMcpSafeSummaryLiveAdapterHandlerV8(input);
+}
+
+export function buildMcpSafeSummaryLiveAdapterOAuthVerifierForV8(
+  input: Parameters<typeof buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8>[0],
+) {
+  return buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8(input);
+}
 
 export function createLocalMcpDevEndpointPlugin(
   options: LocalMcpDevEndpointPluginOptions = {},
@@ -177,7 +253,17 @@ export function createLocalMcpDevEndpointPlugin(
   const productionOAuthAuthorizationEnabled =
     isStrictEnabledFlag(env, MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG) ||
     options.productionOAuthAuthorizationConfig !== undefined;
-  if (!endpointEnabled && !oauthAuthorizationEnabled && !productionOAuthAuthorizationEnabled) return undefined;
+  const controlledSummaryProofActivation = buildMcpSafeSummaryControlledProofActivation(env);
+  const controlledSummaryProofRunner =
+    options.controlledSummaryProofRunner ??
+    (controlledSummaryProofActivation
+      ? buildProductionMcpSafeSummaryControlledProofRunner(env, controlledSummaryProofActivation)
+      : undefined);
+  const controlledSummaryProofEnabled =
+    controlledSummaryProofActivation !== undefined &&
+    controlledSummaryProofRunner !== undefined;
+  if (!endpointEnabled && !oauthAuthorizationEnabled && !productionOAuthAuthorizationEnabled && !controlledSummaryProofEnabled) return undefined;
+  const controlledSummaryProofFlight: ControlledSummaryProofFlightState = {};
   const fixtureDemoEnabled = endpointEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
   const authPolicyEnabled = endpointEnabled && fixtureDemoEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
   const authConfigInput = authPolicyEnabled ? readLocalMcpDevAuthConfigInput(env) : undefined;
@@ -215,6 +301,7 @@ export function createLocalMcpDevEndpointPlugin(
   const productionOAuthAuthorizationDependencies =
     options.productionOAuthAuthorizationDependencies ??
     buildProductionMcpOAuthRouteDependencies(env);
+  const controlledSummaryProofOperatorOwnerA = readControlledProofOwner(env, "A");
 
   const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     handleLocalMcpDevMiddlewareRequest(
@@ -228,6 +315,10 @@ export function createLocalMcpDevEndpointPlugin(
       productionOAuthAuthorizationEnabled,
       productionOAuthAuthorizationConfig,
       productionOAuthAuthorizationDependencies,
+      controlledSummaryProofEnabled,
+      controlledSummaryProofRunner,
+      controlledSummaryProofFlight,
+      controlledSummaryProofOperatorOwnerA,
     );
   };
 
@@ -253,8 +344,25 @@ function handleLocalMcpDevMiddlewareRequest(
   productionOAuthAuthorizationEnabled: boolean,
   productionOAuthAuthorizationConfig: McpOAuthProductionRouteAdapterConfigV1,
   productionOAuthAuthorizationDependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  controlledSummaryProofEnabled: boolean,
+  controlledSummaryProofRunner: McpSafeSummaryControlledProofRunnerV1 | undefined,
+  controlledSummaryProofFlight: ControlledSummaryProofFlightState,
+  controlledSummaryProofOperatorOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
+  if (controlledSummaryProofEnabled && pathName === MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH) {
+    void respondToControlledSummaryProofOperatorRoute(
+      req,
+      res,
+      controlledSummaryProofRunner,
+      controlledSummaryProofFlight,
+      productionOAuthAuthorizationDependencies.readAuthenticatedOwnerIdentity,
+      controlledSummaryProofOperatorOwnerA,
+    ).catch(() => {
+      sendInvalidLocalMcpDevRequest(res);
+    });
+    return;
+  }
   if (
     handleProductionOAuthMetadataRequest(
       req,
@@ -332,6 +440,140 @@ function handleLocalMcpDevMiddlewareRequest(
     return;
   }
   next();
+}
+
+type ControlledSummaryProofFlightState = {
+  inFlight?: Promise<void>;
+};
+
+async function respondToControlledSummaryProofOperatorRoute(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runner: McpSafeSummaryControlledProofRunnerV1 | undefined,
+  flight: ControlledSummaryProofFlightState,
+  readAuthenticatedOwnerIdentity: McpOAuthProductionRouteAdapterDependenciesV1["readAuthenticatedOwnerIdentity"],
+  expectedOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
+): Promise<void> {
+  if (req.method !== "POST" || !runner) {
+    sendLocalMcpJson(res, 405, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "unsupported_method",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
+  if (flight.inFlight) {
+    sendLocalMcpJson(res, 409, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "proof_run_already_in_progress",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
+  let runPromise: Promise<void>;
+  runPromise = Promise.resolve().then(async () => {
+    if (!await isControlledSummaryProofOperatorAuthorized(
+      req,
+      readAuthenticatedOwnerIdentity,
+      expectedOwnerA,
+    )) {
+      sendLocalMcpJson(res, 401, {
+        kind: "mcp_safe_summary_controlled_proof_operator_response",
+        status: "blocked",
+        reason: "operator_owner_not_authenticated_as_a",
+        safeForModel: true,
+        version: 1,
+      });
+      return;
+    }
+    try {
+      const result = await runner.run();
+      sendLocalMcpJson(res, 200, {
+        kind: "mcp_safe_summary_controlled_proof_operator_response",
+        status: result.completed ? "completed" : "stopped",
+        contractId: result.contractId,
+        contractVersion: result.contractVersion,
+        completed: result.completed,
+        liveCalls: result.liveCalls,
+        proof: result.proof,
+        safeForModel: true,
+        version: 1,
+      });
+    } catch {
+      sendLocalMcpJson(res, 500, {
+        kind: "mcp_safe_summary_controlled_proof_operator_response",
+        status: "blocked",
+        reason: "proof_runner_failed",
+        safeForModel: true,
+        version: 1,
+      });
+    }
+  }).finally(() => {
+    if (flight.inFlight === runPromise) flight.inFlight = undefined;
+  });
+  flight.inFlight = runPromise;
+  await runPromise;
+}
+
+async function isControlledSummaryProofOperatorAuthorized(
+  req: IncomingMessage,
+  readAuthenticatedOwnerIdentity: McpOAuthProductionRouteAdapterDependenciesV1["readAuthenticatedOwnerIdentity"],
+  expectedOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
+): Promise<boolean> {
+  if (!readAuthenticatedOwnerIdentity || !expectedOwnerA || !readRequestBearerToken(req.headers.authorization)) {
+    return false;
+  }
+  try {
+    const authenticated = await withMcpProductionOperationTimeout(() =>
+      readAuthenticatedOwnerIdentity({
+        method: req.method ?? "POST",
+        path: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
+        url: req.url ?? MCP_SAFE_SUMMARY_CONTROLLED_PROOF_PATH,
+        headers: {
+          authorization: req.headers.authorization,
+          host: headerValue(req.headers.host),
+        },
+        remoteAddress: req.socket?.remoteAddress,
+      })
+    );
+    return isValidControlledProofAuthenticatedIdentity(authenticated) &&
+      authenticated.subject === expectedOwnerA.subject &&
+      authenticated.issuer === expectedOwnerA.issuer;
+  } catch {
+    return false;
+  }
+}
+
+function withMcpProductionOperationTimeout<T>(operation: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("mcp_operation_timeout")), MCP_PRODUCTION_OPERATION_TIMEOUT_MS);
+    operation().then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        reject(new Error("mcp_operation_failed"));
+      },
+    );
+  });
+}
+
+function isValidControlledProofAuthenticatedIdentity(
+  value: McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined,
+): value is McpOAuthProductionAuthenticatedOwnerIdentityV1 {
+  return value !== undefined &&
+    typeof value.subject === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u.test(value.subject) &&
+    typeof value.issuer === "string" &&
+    isHttpsOrigin(value.issuer) &&
+    new URL(value.issuer).origin === value.issuer &&
+    value.version === 1;
 }
 
 async function respondToMcpOAuthLocalDevRouteRequest(
@@ -1105,7 +1347,13 @@ function buildProductionAccessTokenVerifyPort(
 function buildProductionReadonlySummaryExecutor(
   convexClient: ConvexHttpClient | undefined,
 ): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["executeReadonlySummaryTool"]> {
-  return buildMcpProductionReadonlySummaryExecutor(async (input) => {
+  return buildMcpProductionReadonlySummaryExecutor(buildProductionReadonlySummaryQueryPort(convexClient));
+}
+
+function buildProductionReadonlySummaryQueryPort(
+  convexClient: ConvexHttpClient | undefined,
+): Parameters<typeof buildMcpProductionReadonlySummaryExecutor>[0] {
+  return async (input) => {
     if (!convexClient) {
       throw new TypeError("Production MCP read-only summary storage unavailable.");
     }
@@ -1113,7 +1361,133 @@ function buildProductionReadonlySummaryExecutor(
       PRODUCTION_MCP_READONLY_SUMMARY_QUERY_REFERENCES[input.query],
       input.args,
     ) as Promise<unknown>;
+  };
+}
+
+function buildProductionMcpSafeSummaryControlledProofRunner(
+  env: Readonly<Record<string, string | undefined>>,
+  activation: McpSafeSummaryControlledProofActivationV1,
+): McpSafeSummaryControlledProofRunnerV1 | undefined {
+  const ownerConfig = readControlledProofOwnerConfig(env);
+  const convexClient = readConvexHttpClient(readConvexConnection(env));
+  if (!ownerConfig || !convexClient) return undefined;
+
+  const resolveIdentity = async (role: "A" | "B") => {
+    const configured = ownerConfig[role];
+    try {
+      const ownerProfileId = await convexClient.query(
+        RESOLVE_MCP_CONTROLLED_PROOF_OWNER_QUERY,
+        { twoweeksClerkId: configured.subject, version: 1 },
+      ) as unknown;
+      if (typeof ownerProfileId !== "string" || ownerProfileId.length === 0) return undefined;
+      return Object.freeze({
+        subject: configured.subject,
+        issuer: configured.issuer,
+        ownerProfileId,
+        version: 1 as const,
+      });
+    } catch {
+      return undefined;
+    }
+  };
+
+  return buildMcpSafeSummaryControlledProofRunner({
+    activation,
+    resolveIdentity,
+    resolveReference: async (_identity, toolName) => ({ id: controlledProofReferenceId(toolName) }),
+    runQuery: buildProductionReadonlySummaryQueryPort(convexClient),
+    seedA: async (identity, runId) => {
+      await convexClient.mutation(
+        RECOVER_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
+        {
+          ownerProfileId: identity.ownerProfileId,
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
+          now: Date.now(),
+          version: 1,
+        },
+        { skipQueue: true },
+      );
+      return convexClient.mutation(
+        SEED_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
+        {
+          ownerProfileId: identity.ownerProfileId,
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
+          now: Date.now(),
+          version: 1,
+        },
+        { skipQueue: true },
+      );
+    },
+    cleanupA: async (identity, runId) => {
+      return convexClient.mutation(
+        CLEANUP_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
+        {
+          ownerProfileId: identity.ownerProfileId,
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
+          version: 1,
+        },
+        { skipQueue: true },
+      );
+    },
+    runtime: {
+      // The controlled rail never replaces the Vite process; recovery is an explicit
+      // idempotent boundary that confirms the pre-existing runtime remains available.
+      start: async () => true,
+      recoverOldRuntime: async () => true,
+    },
   });
+}
+
+type ControlledProofOwnerConfig = Readonly<Record<"A" | "B", Readonly<{
+  subject: string;
+  issuer: string;
+}>>>;
+
+function readControlledProofOwnerConfig(
+  env: Readonly<Record<string, string | undefined>>,
+): ControlledProofOwnerConfig | undefined {
+  const ownerA = readControlledProofOwner(env, "A");
+  const ownerB = readControlledProofOwner(env, "B");
+  if (!ownerA || !ownerB || (ownerA.subject === ownerB.subject && ownerA.issuer === ownerB.issuer)) {
+    return undefined;
+  }
+  return Object.freeze({ A: ownerA, B: ownerB });
+}
+
+function readControlledProofOwner(
+  env: Readonly<Record<string, string | undefined>>,
+  role: "A" | "B",
+): Readonly<{ subject: string; issuer: string }> | undefined {
+  const subject = env[
+    role === "A"
+      ? MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_SUBJECT_VAR
+      : MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_SUBJECT_VAR
+  ]?.trim();
+  const issuer = env[
+    role === "A"
+      ? MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_A_ISSUER_VAR
+      : MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OWNER_B_ISSUER_VAR
+  ]?.trim();
+  if (!subject || !issuer || !isHttpsOrigin(issuer)) return undefined;
+  return Object.freeze({ subject, issuer: new URL(issuer).origin });
+}
+
+function controlledProofReferenceId(
+  toolName:
+    | "twoweeks.application_package.summarize"
+    | "twoweeks.evidence_graph.summarize"
+    | "twoweeks.resume_variant_plan.summarize"
+    | "twoweeks.review_cockpit.summarize",
+): string {
+  switch (toolName) {
+    case "twoweeks.application_package.summarize": return "mcp-safe-ref:application-package:latest";
+    case "twoweeks.evidence_graph.summarize": return "mcp-safe-ref:evidence-graph:profile";
+    case "twoweeks.resume_variant_plan.summarize": return "mcp-safe-ref:resume-variant-plan:latest";
+    case "twoweeks.review_cockpit.summarize": return "mcp-safe-ref:review-cockpit:latest";
+  }
 }
 
 type ConvexConnectionV1 = Readonly<{
@@ -1791,8 +2165,18 @@ function isStrictEnabledFlag(env: Readonly<Record<string, string | undefined>>, 
 // https://vitejs.dev/config/
 export default defineConfig(() => {
   const allowedHosts = buildMcpOAuthProductionViteAllowedHosts(process.env);
+  const controlledSummaryProofActivation = buildMcpSafeSummaryControlledProofActivation(process.env);
+  const controlledSummaryProofRunner = controlledSummaryProofActivation
+    ? buildProductionMcpSafeSummaryControlledProofRunner(process.env, controlledSummaryProofActivation)
+    : undefined;
   return {
-    plugins: [react(), createLocalMcpDevEndpointPlugin()].filter((plugin): plugin is Plugin => plugin !== undefined),
+    plugins: [
+      react(),
+      createLocalMcpDevEndpointPlugin({
+        env: process.env,
+        controlledSummaryProofRunner,
+      }),
+    ].filter((plugin): plugin is Plugin => plugin !== undefined),
     server: {
       host: "localhost",
       port: LOCAL_CLERK_SYNC_PORT,

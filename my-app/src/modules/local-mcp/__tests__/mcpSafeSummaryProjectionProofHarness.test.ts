@@ -213,6 +213,7 @@ function makeAdapter(overrides: Overrides = {}) {
     version: 1,
   };
   const effectObserver: McpSafeSummaryProofEffectObserver = {
+    independence: "separate_monotonic_ledger",
     async snapshot() {
       effectSnapshotOrdinal += 1;
       if (overrides.throwEffectSnapshotAt === effectSnapshotOrdinal) {
@@ -231,12 +232,10 @@ function execute(
   adapter: McpSafeSummaryProofAdapter,
   effectObserver: McpSafeSummaryProofEffectObserver,
   forbiddenSubstrings: readonly string[] = [],
-  effectObserverIndependent = true,
 ) {
   return runMcpSafeSummaryProjectionProof({
     adapter,
     effectObserver,
-    effectObserverIndependent,
     forbiddenSubstrings,
   });
 }
@@ -607,6 +606,25 @@ describe("runMcpSafeSummaryProjectionProof", () => {
     });
   });
 
+  it.each([
+    ["repairCount", { retryCount: 0, repairCount: 1, fallbackCount: 0, providerCallCount: 0, modelCallCount: 0 }],
+    ["fallbackCount", { retryCount: 0, repairCount: 0, fallbackCount: 1, providerCallCount: 0, modelCallCount: 0 }],
+    ["providerCallCount", { retryCount: 0, repairCount: 0, fallbackCount: 0, providerCallCount: 1, modelCallCount: 0 }],
+    ["modelCallCount", { retryCount: 0, repairCount: 0, fallbackCount: 0, providerCallCount: 0, modelCallCount: 1 }],
+  ] as const)("fails closed for a non-zero %s effect counter", async (_counter, counters) => {
+    const { adapter, effectObserver } = makeAdapter({
+      effectFinal: { ...counters, version: 1 },
+    });
+    const result = await execute(adapter, effectObserver);
+    expect(result).toMatchObject({
+      outcome: "STOPPED",
+      stopCode: "EFFECT_BUDGET_EXCEEDED",
+      protectedCallCount: 8,
+      cleanupCount: 3,
+      recovery: "RECOVERED",
+    });
+  });
+
   it("copies a reused mutable effect snapshot before the adapter can mutate it", async () => {
     const sharedMutableEffects: MutableEffectSnapshot = {
       retryCount: 0,
@@ -648,7 +666,13 @@ describe("runMcpSafeSummaryProjectionProof", () => {
 
   it("stops before the effect snapshot when observer independence is not attested", async () => {
     const { adapter, effectObserver, events } = makeAdapter();
-    const result = await execute(adapter, effectObserver, [], false);
+    const result = await runMcpSafeSummaryProjectionProof({
+      adapter,
+      effectObserver: {
+        ...effectObserver,
+        independence: "unverified",
+      } as unknown as McpSafeSummaryProofEffectObserver,
+    });
     expect(result).toMatchObject({
       outcome: "STOPPED",
       stopCode: "EFFECT_OBSERVER_FAILED",
