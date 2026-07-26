@@ -2427,7 +2427,7 @@ describe("export-renderers", () => {
         ?.find((paragraph) => paragraph.includes("15 avril 2026"));
 
       expect(documentXml).toMatch(
-        new RegExp(
+        new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- numeric fixture values
           `<w:pgSz[^>]*w:w="${widthTwip}"[^>]*w:h="${heightTwip}"[^>]*/>`,
         ),
       );

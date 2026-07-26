@@ -1163,7 +1163,7 @@ function hasCookieNamed(cookieHeader: string | readonly string[] | undefined, na
   const cookie = headerValue(cookieHeader);
   if (!cookie) return false;
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`(?:^|;)\\s*${escapedName}=`, "u").test(cookie);
+  return new RegExp(`(?:^|;)\\s*${escapedName}=`, "u").test(cookie); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- name is escaped
 }
 
 function isProductionOAuthBrowserContinuationFetch(

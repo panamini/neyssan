@@ -3892,7 +3892,7 @@ const CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE =
   "(?:i\\s+(?:am|was|have\\s+been)|i['’](?:m|ve\\s+been))";
 const PREMIUM_ENGLISH_CAPABILITY_VERB_PATTERNS =
   PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES.map(({ source, canonical }) => ({
-    pattern: new RegExp(`^(?:${source})$`, "u"),
+    pattern: new RegExp(`^(?:${source})$`, "u"), // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- fixed source table
     canonical,
   }));
 const CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE =
@@ -3939,7 +3939,7 @@ function resolvePremiumDemandSurface(value: string): {
   const withoutLeader = englishLeaderMatch?.[0]
     ? surface.slice(englishLeaderMatch[0].length).trim()
     : leader
-      ? surface.replace(new RegExp(`^${escapeRegExp(leader)}\\s+`, "iu"), "")
+      ? surface.replace(new RegExp(`^${escapeRegExp(leader)}\\s+`, "iu"), "") // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       : surface;
   const objectSurface = withoutLeader.replace(
     PREMIUM_OWNERSHIP_DEMAND_PREFIX_PATTERN,
@@ -3981,48 +3981,48 @@ function usesJobDemandAsCandidateExperience(args: {
         ? `(?:${escapedDemand}|${escapedDemandObject})`
       : escapedDemandObject;
     const ownershipPatterns = [
-      new RegExp(`\\bi\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`, "i"),
-      new RegExp(
+      new RegExp(`\\bi\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`, "i"), // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\bi\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
         "i",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
         "i",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\b(?:j['’]\\s*ai|je)\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\b${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `${escapedDemandReference}\\s*,?\\s+(?:which|that)\\s+i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
         "i",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `${escapedDemandReference}\\s*,?\\s+(?:que|ce\\s+que)\\s+${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `${escapedDemandReference}\\s+(?:was|were|is|are)\\s+(?:among\\s+)?(?:the\\s+)?(?:work|something|responsibilit(?:y|ies)|dut(?:y|ies)|tasks?)\\s+(?:that\\s+)?i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
         "i",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `${escapedDemandReference}\\s+(?:était|étaient|est|sont)\\s+(?:parmi\\s+)?(?:le|la|les|un|une|des)?\\s*(?:travail|responsabilit(?:é|és)|tâche(?:s)?)\\s+(?:que\\s+)?${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `${escapedDemandReference}\\s*[-–—,:]\\s*(?:(?:a|the|one\\s+of\\s+the)\\s+)?(?:responsibilit(?:y|ies)|dut(?:y|ies)|tasks?|work)\\s+(?:that\\s+)?i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
         "i",
       ),
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `${escapedDemandReference}\\s*[-–—,:]\\s*(?:(?:une|des|la|les)\\s+)?(?:responsabilit(?:é|és)|tâche(?:s)?|travail)\\s+(?:que\\s+)?${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ),
@@ -4033,18 +4033,18 @@ function usesJobDemandAsCandidateExperience(args: {
     const usesGenericCopularDemand =
       !resolvedDemand.ownershipPrefixStripped &&
       ((canonicalLeader === "be" &&
-        new RegExp(
+        new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
           `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
           "i",
         ).test(compact)) ||
         (canonicalLeader === "être" &&
-          new RegExp(
+          new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
             `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
             "iu",
           ).test(compact)));
     const usesFrenchSuivreDemand =
       canonicalLeader === "suivre" &&
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\bje\\s+suis\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
         "iu",
       ).test(compact);
@@ -4155,15 +4155,15 @@ function extractCandidateFactCapabilityVerbForDemand(args: {
     "\\s+",
   );
   const directActionPatterns = [
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "i",
     ),
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "iu",
     ),
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "iu",
     ),
@@ -4178,7 +4178,7 @@ function extractCandidateFactCapabilityVerbForDemand(args: {
   if (
     !resolvedDemand.ownershipPrefixStripped &&
     canonicalLeader === "be" &&
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `(?:^|[.!?]\\s+)(?:(?:${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}|was|were|is|are)\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "i",
     ).test(args.factText)
@@ -4188,7 +4188,7 @@ function extractCandidateFactCapabilityVerbForDemand(args: {
   if (
     !resolvedDemand.ownershipPrefixStripped &&
     canonicalLeader === "être" &&
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `(?:^|[.!?]\\s+)(?:(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été)|(?:était|étaient))\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "iu",
     ).test(args.factText)
@@ -4197,7 +4197,7 @@ function extractCandidateFactCapabilityVerbForDemand(args: {
   }
   if (
     canonicalLeader === "suivre" &&
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `(?:^|[.!?]\\s+)(?:je\\s+)?suis\\s+${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "iu",
     ).test(args.factText)
@@ -4205,11 +4205,11 @@ function extractCandidateFactCapabilityVerbForDemand(args: {
     return "suivre";
   }
   if (
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "i",
     ).test(args.factText) ||
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
       "iu",
     ).test(args.factText)
@@ -4237,15 +4237,15 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
     : PREMIUM_GENERATED_DEMAND_SURFACE_BOUNDARY_SOURCE;
   const verbs = new Set<string>();
   const directActionPatterns = [
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\bi\\s+(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandReference}${generatedDemandBoundary}`,
       "gi",
     ),
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\bj['’]\\s*ai\\s+(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}${generatedDemandBoundary}`,
       "giu",
     ),
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(?:je\\s+|j['’]\\s*)(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}${generatedDemandBoundary}`,
       "giu",
     ),
@@ -4264,7 +4264,7 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
   if (
     !resolvedDemand.ownershipPrefixStripped &&
     canonicalLeader === "be" &&
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+${escapedDemandObject}${generatedDemandBoundary}`,
       "i",
     ).test(args.generatedText)
@@ -4274,7 +4274,7 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
   if (
     !resolvedDemand.ownershipPrefixStripped &&
     canonicalLeader === "être" &&
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${escapedDemandObject}${generatedDemandBoundary}`,
       "iu",
     ).test(args.generatedText)
@@ -4283,7 +4283,7 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
   }
   if (
     canonicalLeader === "suivre" &&
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\bje\\s+suis\\s+${escapedDemandObject}${generatedDemandBoundary}`,
       "iu",
     ).test(args.generatedText)
@@ -4292,11 +4292,11 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
   }
 
   if (
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandReference}${generatedDemandBoundary}`,
       "i",
     ).test(args.generatedText) ||
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandReference}${generatedDemandBoundary}`,
       "iu",
     ).test(args.generatedText)
@@ -4306,13 +4306,13 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
 
   if (
     resolvedDemand.leader &&
-    (new RegExp(
+    (new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `\\bi\\s+${escapedDemand}${generatedDemandBoundary}`,
       "i",
     ).test(
       args.generatedText,
     ) ||
-      new RegExp(
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
         `\\b(?:j['’]\\s*ai|je)\\s+${escapedDemand}${generatedDemandBoundary}`,
         "iu",
       ).test(args.generatedText))
@@ -4321,15 +4321,15 @@ function extractGeneratedPremiumCapabilityVerbForDemand(args: {
   }
 
   const trailingActionPatterns = [
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\bi\\s+(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
       "gi",
     ),
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\bj['’]\\s*ai\\s+(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\b`,
       "giu",
     ),
-    new RegExp(
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
       `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\b(?:je\\s+|j['’]\\s*)(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\b`,
       "giu",
     ),

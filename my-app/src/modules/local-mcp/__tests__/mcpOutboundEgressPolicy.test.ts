@@ -289,7 +289,7 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
       "javascript:alert(1)",
       "ftp://api.allowed.example/v1/messages",
       "gopher://api.allowed.example/v1/messages",
-      "ws://api.allowed.example/v1/messages",
+      "ws://api.allowed.example/v1/messages", // nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket -- rejection fixture
       "wss://api.allowed.example/v1/messages",
       "mailto:user@example.test",
     ] as const) {
