@@ -231,6 +231,7 @@ export function ProposalPrintPage(): JSX.Element {
           content={payload.content}
           proposalDocument={payload.proposalDocument}
           proposalType={payload.proposalType as FormValues["proposalType"] | null}
+          documentLanguage={payload.locale}
           templateId={payload.templateId}
           stylePreset={payload.stylePreset}
           railTitle={payload.railTitle}

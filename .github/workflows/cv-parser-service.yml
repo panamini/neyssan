@@ -29,21 +29,21 @@ jobs:
 
       - name: Smoke test service
         run: |
-          docker run -d --rm -p 8000:8000 --name cv-parser-service cv-parser-service
+          docker run -d --rm -e PORT=8010 -p 8010:8010 --name cv-parser-service cv-parser-service
           # Wait for the service to start
           for i in {1..360}; do
-            if curl -fsS http://localhost:8000/healthz > /dev/null; then
+            if curl -fsS http://localhost:8010/healthz > /dev/null; then
               echo "Service healthy";
               break;
             fi
             sleep 2
           done
-          if ! curl -fsS http://localhost:8000/healthz > /dev/null; then
+          if ! curl -fsS http://localhost:8010/healthz > /dev/null; then
             echo "::error::cv-parser-service did not become healthy within the wait window"
             docker logs cv-parser-service || true
             exit 1
           fi
-          curl -fsS http://localhost:8000/healthz
+          curl -fsS http://localhost:8010/healthz
         shell: bash
 
       - name: Stop container

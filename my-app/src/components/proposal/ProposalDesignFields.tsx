@@ -97,6 +97,8 @@ export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
 
 const CANONICAL_PROPOSAL_TEMPLATE_DEFINITION =
   getProposalTemplateDefinition(CANONICAL_PROPOSAL_TEMPLATE_ID);
+const FRENCH_PROPOSAL_TEMPLATE_DEFINITION =
+  getProposalTemplateDefinition("modernist_signal");
 const EDITORIAL_PROPOSAL_TEMPLATE_DEFINITION =
   getProposalTemplateDefinition("editorial_wide");
 
@@ -106,6 +108,12 @@ const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
     eyebrow: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
     label: "Minimal",
     description: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.description,
+  },
+  {
+    id: "modernist_signal",
+    eyebrow: FRENCH_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
+    label: "French",
+    description: FRENCH_PROPOSAL_TEMPLATE_DEFINITION.description,
   },
   {
     id: "editorial_wide",
@@ -169,9 +177,11 @@ function railStylesEqual(
 function ProposalDesignFontPairMenu({
   value,
   onSelectFontPair,
+  disabled = false,
 }: {
   value: VerbatiStylePreset["typography"];
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
+  disabled?: boolean;
 }): JSX.Element {
   const activeOption = getVerbatiFontPairOption(value);
 
@@ -211,7 +221,11 @@ function ProposalDesignFontPairMenu({
         },
       ]}
       trigger={
-        <button type="button" className="dasti-proposal-font-menu-trigger">
+        <button
+          type="button"
+          className="dasti-proposal-font-menu-trigger"
+          disabled={disabled}
+        >
           <span
             className="dasti-proposal-font-menu-trigger__label"
             style={
@@ -235,6 +249,7 @@ export type ProposalDesignFieldsProps = {
   proposalTemplateId?: ProposalTemplateId | null;
   onSelectProposalLayout?: (templateId: ProposalTemplateId) => void;
   stylePreset: VerbatiStylePreset;
+  styleControlsDisabled?: boolean;
   styleTemplateBundleBaseStyle?: VerbatiStylePreset | null;
   styleTemplateBundleId: ProposalTemplateBundleId | null;
   onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
@@ -247,6 +262,7 @@ export type ProposalDesignFieldsProps = {
   handwrittenSignatureAvailable?: boolean;
   handwrittenSignatureEnabled?: boolean;
   documentDecoration?: DocumentDecoration | null;
+  documentDecorationControlsDisabled?: boolean;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationUpload?: (
     file: File,
@@ -263,6 +279,7 @@ export function ProposalDesignFields({
   proposalTemplateId,
   onSelectProposalLayout,
   stylePreset,
+  styleControlsDisabled = false,
   styleTemplateBundleBaseStyle,
   styleTemplateBundleId,
   onSelectStyleBundle,
@@ -275,6 +292,7 @@ export function ProposalDesignFields({
   handwrittenSignatureAvailable = false,
   handwrittenSignatureEnabled = false,
   documentDecoration,
+  documentDecorationControlsDisabled = false,
   onDocumentDecorationChange,
   onDocumentDecorationUpload,
   documentIconSettings,
@@ -360,16 +378,17 @@ export function ProposalDesignFields({
   const documentDecorationMeta = `${documentDecorationFitLabel} • ${documentDecorationSizeLabel}`;
   const updateDocumentDecoration = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
+      if (documentDecorationControlsDisabled) return;
       setDocumentDecorationUploadError(null);
       onDocumentDecorationChange?.(normalizeDocumentDecoration(nextDecoration));
     },
-    [onDocumentDecorationChange],
+    [documentDecorationControlsDisabled, onDocumentDecorationChange],
   );
   const handleDocumentDecorationUpload = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const [file] = Array.from(event.currentTarget.files ?? []);
       event.currentTarget.value = "";
-      if (!file) return;
+      if (!file || documentDecorationControlsDisabled) return;
       setDocumentDecorationUploadError(null);
       if (!onDocumentDecorationUpload) {
         setDocumentDecorationUploadError("Image upload is unavailable.");
@@ -377,8 +396,18 @@ export function ProposalDesignFields({
       }
       onDocumentDecorationUpload(file, resolvedDocumentDecoration);
     },
-    [onDocumentDecorationUpload, resolvedDocumentDecoration],
+    [
+      documentDecorationControlsDisabled,
+      onDocumentDecorationUpload,
+      resolvedDocumentDecoration,
+    ],
   );
+  React.useEffect(() => {
+    if (styleControlsDisabled) {
+      setIsCustomColorPickerOpen(false);
+    }
+  }, [styleControlsDisabled]);
+
   React.useEffect(() => {
     if (!isDocumentImagePopoverOpen) return;
 
@@ -440,6 +469,7 @@ export function ProposalDesignFields({
               data-selected={isSelected ? "true" : undefined}
               aria-pressed={isSelected}
               title={option.description}
+              disabled={styleControlsDisabled}
               onClick={() => {
                 setIsCustomColorPickerOpen(false);
                 onSelectStyleBundle(option.id);
@@ -467,6 +497,7 @@ export function ProposalDesignFields({
             className="dasti-proposal-skeleton-rail__style-reset dasti-proposal-design-fields__reset"
             aria-label={`Reset ${activeTemplateBundleLabel}`}
             title={`Reset ${activeTemplateBundleLabel} to the current Settings color, font, and layout.`}
+            disabled={styleControlsDisabled}
             onClick={() => {
               setIsCustomColorPickerOpen(false);
               onResetStyleBundle(activeTemplateBundleId);
@@ -487,6 +518,7 @@ export function ProposalDesignFields({
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Typography</div>
       <ProposalDesignFontPairMenu
         value={stylePreset.typography}
+        disabled={styleControlsDisabled}
         onSelectFontPair={(typography) => {
           setIsCustomColorPickerOpen(false);
           onSelectStyleTypography(typography);
@@ -520,6 +552,7 @@ export function ProposalDesignFields({
               }
               aria-label={`Use ${swatch.label} accent`}
               aria-pressed={isSelected}
+              disabled={styleControlsDisabled}
               data-selected={isSelected ? "true" : undefined}
               onClick={() => {
                 setIsCustomColorPickerOpen(false);
@@ -547,6 +580,7 @@ export function ProposalDesignFields({
               title={isSelected ? `Custom accent ${customAccentColor}` : "Open custom color picker"}
               aria-label="Open custom color picker"
               aria-pressed={isSelected}
+              disabled={styleControlsDisabled}
               data-selected={isSelected ? "true" : undefined}
               onClick={() => setIsCustomColorPickerOpen(true)}
             >
@@ -598,7 +632,7 @@ export function ProposalDesignFields({
       <BulletStyleControl
         settings={resolvedDocumentIconSettings}
         onChange={(settings) => onDocumentIconSettingsChange?.(settings)}
-        disabled={!onDocumentIconSettingsChange}
+        disabled={styleControlsDisabled || !onDocumentIconSettingsChange}
       />
       <div ref={documentImageControlRef} className="dasti-proposal-design-image">
         <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Image</div>
@@ -608,7 +642,9 @@ export function ProposalDesignFields({
           type="file"
           aria-label="Upload decoration image"
           accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
-          disabled={!onDocumentDecorationUpload}
+          disabled={
+            documentDecorationControlsDisabled || !onDocumentDecorationUpload
+          }
           onChange={handleDocumentDecorationUpload}
         />
         {!hasDocumentDecorationAsset ? (
@@ -676,7 +712,10 @@ export function ProposalDesignFields({
                       type="button"
                       aria-pressed={isSelected}
                       data-selected={isSelected ? "true" : undefined}
-                      disabled={!onDocumentDecorationChange}
+                      disabled={
+                        documentDecorationControlsDisabled ||
+                        !onDocumentDecorationChange
+                      }
                       onClick={() => {
                         updateDocumentDecoration(
                           applyDocumentDecorationSizePreset(
@@ -706,7 +745,10 @@ export function ProposalDesignFields({
                       type="button"
                       aria-pressed={isSelected}
                       data-selected={isSelected ? "true" : undefined}
-                      disabled={!onDocumentDecorationChange}
+                      disabled={
+                        documentDecorationControlsDisabled ||
+                        !onDocumentDecorationChange
+                      }
                       onClick={() => {
                         updateDocumentDecoration({
                           ...resolvedDocumentDecoration,
@@ -731,8 +773,12 @@ export function ProposalDesignFields({
             <button
               type="button"
               className="dasti-proposal-design-image__remove"
-              disabled={!onDocumentDecorationChange}
+              disabled={
+                documentDecorationControlsDisabled ||
+                !onDocumentDecorationChange
+              }
               onClick={() => {
+                if (documentDecorationControlsDisabled) return;
                 setDocumentDecorationUploadError(null);
                 onDocumentDecorationChange?.(
                   removeDocumentDecorationAsset(resolvedDocumentDecoration),

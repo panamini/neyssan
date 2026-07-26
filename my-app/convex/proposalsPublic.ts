@@ -1,4 +1,7 @@
+import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import {
   PROPOSAL_TEMPLATE_IDS,
@@ -119,6 +122,8 @@ const proposalDocumentDecorationChoice = v.object({
   yMm: v.optional(v.number()),
 });
 
+type ProposalDocumentDecoration = Infer<typeof proposalDocumentDecorationChoice>;
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -186,27 +191,29 @@ function projectDocumentAppearanceSnapshot(value: unknown) {
 }
 
 async function resolveRuntimeDocumentDecoration(
-  ctx: any,
+  ctx: QueryCtx,
   decoration: unknown,
   resolvedUrlCache: Map<string, string | null>,
-) {
-  if (!decoration || typeof decoration !== "object" || Array.isArray(decoration)) {
-    return decoration;
-  }
+): Promise<ProposalDocumentDecoration | undefined> {
+  const projected = projectProposalDocumentDecoration(decoration);
+  if (!projected) return undefined;
 
-  const next = { ...(decoration as Record<string, unknown>) };
-  delete next.dataUrl;
-  delete next.resolvedUrl;
-  delete next.assetMissing;
+  const {
+    dataUrl: _dataUrl,
+    resolvedUrl: _resolvedUrl,
+    assetMissing: _assetMissing,
+    ...safeDecoration
+  } = projected;
+  const next: ProposalDocumentDecoration = { ...safeDecoration };
 
-  if (typeof next.assetId !== "string" || !next.assetId) {
+  if (!next.assetId) {
     return next;
   }
 
   let resolvedUrl = resolvedUrlCache.get(next.assetId);
   if (resolvedUrl === undefined) {
     try {
-      const storageUrl = await ctx.storage.getUrl(next.assetId as any);
+      const storageUrl = await ctx.storage.getUrl(next.assetId as Id<"_storage">);
       resolvedUrl = typeof storageUrl === "string" && storageUrl ? storageUrl : null;
     } catch {
       resolvedUrl = null;
@@ -221,6 +228,72 @@ async function resolveRuntimeDocumentDecoration(
   }
 
   return next;
+}
+
+function projectProposalDocumentDecoration(
+  value: unknown,
+): ProposalDocumentDecoration | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.visible !== "boolean" ||
+    record.source !== "upload" ||
+    !isDocumentDecorationSizePreset(record.sizePreset) ||
+    !isDocumentDecorationFit(record.fit) ||
+    !isDocumentDecorationPlacementMode(record.placementMode)
+  ) {
+    return undefined;
+  }
+
+  const mimeType = isDocumentDecorationMimeType(record.mimeType)
+    ? record.mimeType
+    : undefined;
+
+  return {
+    visible: record.visible,
+    source: "upload",
+    ...(typeof record.suppressed === "boolean" ? { suppressed: record.suppressed } : {}),
+    ...(typeof record.assetId === "string" ? { assetId: record.assetId } : {}),
+    ...(typeof record.dataUrl === "string" ? { dataUrl: record.dataUrl } : {}),
+    ...(typeof record.resolvedUrl === "string" ? { resolvedUrl: record.resolvedUrl } : {}),
+    ...(typeof record.assetMissing === "boolean" ? { assetMissing: record.assetMissing } : {}),
+    ...(typeof record.fileName === "string" ? { fileName: record.fileName } : {}),
+    ...(mimeType ? { mimeType } : {}),
+    ...(typeof record.alt === "string" ? { alt: record.alt } : {}),
+    sizePreset: record.sizePreset,
+    ...(typeof record.customSizeMm === "number" ? { customSizeMm: record.customSizeMm } : {}),
+    fit: record.fit,
+    placementMode: record.placementMode,
+    ...(typeof record.xMm === "number" ? { xMm: record.xMm } : {}),
+    ...(typeof record.yMm === "number" ? { yMm: record.yMm } : {}),
+  };
+}
+
+function isDocumentDecorationSizePreset(
+  value: unknown,
+): value is ProposalDocumentDecoration["sizePreset"] {
+  return value === 18 || value === 35 || value === 52 || value === "custom";
+}
+
+function isDocumentDecorationFit(
+  value: unknown,
+): value is ProposalDocumentDecoration["fit"] {
+  return value === "contain" || value === "cover";
+}
+
+function isDocumentDecorationPlacementMode(
+  value: unknown,
+): value is ProposalDocumentDecoration["placementMode"] {
+  return value === "default" || value === "custom";
+}
+
+function isDocumentDecorationMimeType(
+  value: unknown,
+): value is NonNullable<ProposalDocumentDecoration["mimeType"]> {
+  return value === "image/png" || value === "image/jpeg" || value === "image/svg+xml";
 }
 
 /**
@@ -255,6 +328,7 @@ export default query({
         tags: v.optional(v.array(v.string())),
         sourceJobTitle: v.optional(v.string()),
         sourceJobDescription: v.optional(v.string()),
+        targetEmployerName: v.optional(v.string()),
         sourceUrl: v.optional(v.string()),
         sourceCvId: v.optional(v.string()),
         planned_path: v.optional(v.string()),
@@ -274,6 +348,7 @@ export default query({
         premium_quality_gate_passed: v.optional(v.union(v.boolean(), v.null())),
         requestedLanguage: v.optional(v.union(v.string(), v.null())),
         resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+        pageSize: v.optional(v.union(v.literal("a4"), v.literal("letter"))),
         languageSource: v.optional(v.string()),
         jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
         voicePreset: v.optional(proposalVoicePresetChoice),
@@ -393,6 +468,8 @@ export default query({
         sourceJobTitle: proposal.metadata.sourceJobTitle ?? undefined,
         sourceJobDescription:
           proposal.metadata.sourceJobDescription ?? undefined,
+        targetEmployerName:
+          proposal.metadata.targetEmployerName ?? undefined,
         sourceUrl: proposal.metadata.sourceUrl ?? undefined,
         sourceCvId: proposal.metadata.sourceCvId ?? undefined,
         planned_path: proposal.metadata.planned_path ?? undefined,
@@ -454,6 +531,7 @@ export default query({
         characterLimitValue: proposal.metadata.characterLimitValue ?? undefined,
         requestedLanguage: proposal.metadata.requestedLanguage ?? undefined,
         resolvedLanguage: proposal.metadata.resolvedLanguage ?? undefined,
+        pageSize: proposal.metadata.pageSize ?? undefined,
         languageSource: proposal.metadata.languageSource ?? undefined,
         jobDetectedLanguage:
           proposal.metadata.jobDetectedLanguage ?? undefined,

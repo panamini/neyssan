@@ -1,0 +1,2122 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { assertLocalMcpPrivacySafeOutput } from "../privacyRedactionFixtures";
+import {
+  buildLocalMcpComponentDataPolicySafeRefusal,
+  validateLocalMcpComponentDataPolicy,
+  type LocalMcpComponentDataPolicyInputV1,
+  type LocalMcpComponentDataPolicyResultV1,
+  type LocalMcpComponentDataSurfaceV1,
+} from "../mcpComponentDataPolicy";
+
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const POLICY_SOURCE_FILE = resolve(TEST_DIR, "../mcpComponentDataPolicy.ts");
+const TEST_SOURCE_FILE = resolve(TEST_DIR, "mcpComponentDataPolicy.test.ts");
+
+function policyInput(
+  surface: LocalMcpComponentDataSurfaceV1,
+  payload: unknown,
+): LocalMcpComponentDataPolicyInputV1 {
+  return {
+    kind: "local_mcp_component_data_policy_input",
+    surface,
+    payload,
+    version: 1,
+  };
+}
+
+function expectAllowed(result: LocalMcpComponentDataPolicyResultV1): void {
+  expect(result.allowed).toBe(true);
+  if (!result.allowed)
+    throw new TypeError("expected component data policy to allow payload");
+  expect(result.capabilities).toEqual({
+    componentData: "policy_checked",
+    componentRendering: "blocked",
+    componentRuntime: "blocked",
+    uiBridgeRuntime: "blocked",
+    toolCalls: "blocked",
+    modelContextRuntime: "blocked",
+    dataWrites: "blocked",
+    productionConnector: "blocked",
+    networkAccess: "blocked",
+    modelCalls: "blocked",
+    rawDataProjection: "blocked",
+    credentialStorage: "none",
+    version: 1,
+  });
+  assertPolicyResultSafe(result);
+}
+
+function expectBlocked(input: unknown): LocalMcpComponentDataPolicyResultV1 {
+  const result = validateLocalMcpComponentDataPolicy(input);
+  expect(result.allowed).toBe(false);
+  if (result.allowed)
+    throw new TypeError("expected component data policy to block payload");
+  expect(result.safeRefusal).toEqual(
+    buildLocalMcpComponentDataPolicySafeRefusal(),
+  );
+  expect(result).not.toHaveProperty("safePayload");
+  assertPolicyResultSafe(result);
+  return result;
+}
+
+function assertPolicyResultSafe(result: unknown): void {
+  assertLocalMcpPrivacySafeOutput(result);
+  const serialized = JSON.stringify(result);
+  for (const fragment of [
+    "RAW_CV_TEXT_SENTINEL_DO_NOT_EXPOSE",
+    "RAW_RESUME_TEXT_SENTINEL_DO_NOT_EXPOSE",
+    "RAW_SOURCE_DOCUMENT_SENTINEL_DO_NOT_EXPOSE",
+    "SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE",
+    "PRIVATE_FACT_SENTINEL_DO_NOT_EXPOSE",
+    "NEVER_USE_SENTINEL_DO_NOT_EXPOSE",
+    "GENERATED_FULL_TEXT_SENTINEL_DO_NOT_EXPOSE",
+    "SECRET_TOKEN_SENTINEL_DO_NOT_EXPOSE",
+    "SESSION_DETAIL_SENTINEL_DO_NOT_EXPOSE",
+    "real-user@example.test",
+    "clerk_DO_NOT_EXPOSE",
+    "stytch_subject_DO_NOT_EXPOSE",
+    "j97convexdocumentid",
+  ] as const) {
+    expect(serialized).not.toContain(fragment);
+  }
+  expect(serialized).not.toMatch(/Bearer\s+[A-Za-z0-9._-]+/u);
+}
+
+function summaryCapabilities(dataReads: string) {
+  return {
+    adapter: "pr59_read_only_adapter_verified",
+    dataReads,
+    dataWrites: "blocked",
+    handlerExecution: "blocked",
+    productionConnector: "blocked",
+    networkAccess: "blocked",
+    modelCalls: "blocked",
+    writeActions: "blocked",
+    exportActions: "blocked",
+    rawDataProjection: "blocked",
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
+function applicationPackageSummary() {
+  return {
+    kind: "mcp_real_application_package_summary_result",
+    allowed: true,
+    status: "available",
+    packageRef: {
+      id: "mcp-safe-ref:application-package:latest",
+      label: "Application pkg availability",
+      status: "available",
+      category: "application_package",
+      count: 2,
+      updatedAt: "2026-06-15T11:30:00.000Z",
+      version: 1,
+    },
+    availability: {
+      src: "convex_application_package_summary",
+      ownerState: "resolved",
+      version: 1,
+    },
+    safeCounts: {
+      packages: 1,
+      artifacts: 2,
+      provenanceLinks: 7,
+      reviewItems: 1,
+      warnings: 0,
+      blockers: 0,
+      version: 1,
+    },
+    safeCategories: {
+      packageStatus: "ready_for_review",
+      resumeVariantArtifactStatus: "ready_for_generation",
+      coverLetterArtifactStatus: "ready_for_review",
+      version: 1,
+    },
+    capabilities: summaryCapabilities("convex_application_package_summary"),
+    modelVisible: true,
+    version: 1,
+  } as const;
+}
+
+function evidenceGraphSummary() {
+  return {
+    kind: "mcp_real_evidence_graph_summary_result",
+    allowed: true,
+    status: "available",
+    evidenceGraphRef: {
+      id: "mcp-safe-ref:evidence-graph:profile",
+      label: "Candidate evidence availability",
+      status: "available",
+      category: "evidence_graph",
+      count: 3,
+      version: 1,
+    },
+    availability: {
+      src: "convex_evidence_graph_summary",
+      ownerState: "resolved",
+      version: 1,
+    },
+    safeCounts: {
+      sourceDocuments: 1,
+      candidateFacts: 2,
+      approvedFacts: 1,
+      pendingFacts: 1,
+      rejectedFacts: 0,
+      restrictedEvidence: 0,
+      archivedEvidence: 0,
+      provenanceLinks: 4,
+      evidenceMatches: 1,
+      allowedClaims: 1,
+      missingEvidence: 0,
+      riskFlags: 0,
+      staleSources: 0,
+      warnings: 1,
+      blockers: 0,
+      version: 1,
+    },
+    safeCategories: {
+      evidenceCoverage: "complete",
+      provenanceCoverage: "complete",
+      qualityStatus: "needs_review",
+      blockerCategory: "none",
+      nextReviewHint: "ready_for_review",
+      version: 1,
+    },
+    capabilities: summaryCapabilities("convex_evidence_graph_summary"),
+    modelVisible: true,
+    version: 1,
+  } as const;
+}
+
+function resumeVariantPlanSummary() {
+  return {
+    kind: "mcp_real_resume_variant_plan_summary_result",
+    allowed: true,
+    status: "available",
+    resumeVariantPlanRef: {
+      id: "mcp-safe-ref:resume-variant-plan:latest",
+      label: "Resume variant plan availability",
+      status: "available",
+      category: "resume_variant_plan",
+      count: 1,
+      version: 1,
+    },
+    availability: {
+      src: "convex_resume_variant_plan_summary",
+      ownerState: "resolved",
+      version: 1,
+    },
+    safeCounts: {
+      plans: 1,
+      planItems: 4,
+      claimBackedItems: 2,
+      missingInputItems: 1,
+      reviewNeededItems: 2,
+      acceptedItems: 1,
+      rejectedItems: 0,
+      blockedItems: 1,
+      warnings: 2,
+      blockers: 1,
+      restrictedFactBlockers: 1,
+      excludedFactBlockers: 0,
+      artifactTextBlockers: 0,
+      allowedClaims: 2,
+      sourceFacts: 2,
+      evidenceMatches: 2,
+      demands: 3,
+      riskFlags: 1,
+      version: 1,
+    },
+    safeCategories: {
+      planStatus: "blocked",
+      targetDocumentKind: "resume",
+      tailoringCompleteness: "partial",
+      blockerCategory: "private_fact",
+      missingInputCategory: "missing_evidence",
+      reviewNeededCategory: "blocked",
+      nextReviewHint: "review_blockers",
+      version: 1,
+    },
+    capabilities: summaryCapabilities("convex_resume_variant_plan_summary"),
+    modelVisible: true,
+    version: 1,
+  } as const;
+}
+
+function reviewCockpitSummary() {
+  return {
+    kind: "mcp_real_review_cockpit_summary_result",
+    allowed: true,
+    status: "available",
+    reviewCockpitRef: {
+      id: "mcp-safe-ref:review-cockpit:latest",
+      label: "Review cockpit availability",
+      status: "available",
+      category: "review_cockpit",
+      count: 4,
+      version: 1,
+    },
+    availability: {
+      src: "convex_review_cockpit_summary",
+      ownerState: "resolved",
+      version: 1,
+    },
+    safeCounts: {
+      reviewContexts: 1,
+      reviewRuns: 2,
+      reviewArtifacts: 2,
+      applicationPackages: 1,
+      pendingReviews: 2,
+      approvedReviews: 1,
+      blockedReviews: 1,
+      failedRuns: 0,
+      blockedRuns: 1,
+      blockedArtifacts: 0,
+      blockedPackages: 0,
+      missingReviewItems: 2,
+      approvalNeeded: 4,
+      staleInputs: 1,
+      overLimitCollections: 0,
+      version: 1,
+    },
+    safeCategories: {
+      reviewReadiness: "blocked",
+      reviewGateStatus: "blocked",
+      blockerCategory: "blocked_run",
+      missingReviewCategory: "pending_review_items",
+      nextReviewHint: "review_blockers",
+      nextUserAction: "review_blockers",
+      version: 1,
+    },
+    safeFlags: {
+      approvalNeeded: true,
+      staleData: true,
+      overLimit: false,
+      version: 1,
+    },
+    capabilities: summaryCapabilities("convex_review_cockpit_summary"),
+    modelVisible: true,
+    version: 1,
+  } as const;
+}
+
+function generatedArtifactBoundarySummary() {
+  return {
+    kind: "mcp_generated_artifact_boundary_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    artifactRef: {
+      id: "mcp-safe-ref:cover-letter:latest",
+      label: "Generated artifact availability",
+      status: "human_review_required",
+      category: "cover_letter",
+      count: 1,
+      updatedAt: "2026-06-16T18:55:00.000Z",
+      version: 1,
+    },
+    status: "human_review_required",
+    category: "cover_letter",
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    safeSummary:
+      "Generated artifact boundary accepted. Full content is restricted.",
+    nextUserAction: "review_pending_items",
+    refIds: ["mcp-safe-ref:cover-letter:latest"],
+    safeCounts: {
+      artifacts: 1,
+      artifactTextBlockers: 0,
+      blockers: 0,
+      warnings: 1,
+      version: 1,
+    },
+    safeCategories: {
+      artifactKind: "cover_letter",
+      artifactStatus: "human_review_required",
+      visibilityCategory: "safe_summary_only",
+      retentionCategory: "retention_pending",
+      nextUserAction: "review_pending_items",
+      version: 1,
+    },
+    safeFlags: {
+      humanReviewRequired: true,
+      approvedForPreview: false,
+      fullContentRestricted: true,
+      retentionPending: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function coverLetterApplicationMessagePreviewSummary() {
+  return {
+    kind: "mcp_cover_letter_application_message_preview_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    previewStatus: "cover_letter_preview_created",
+    artifactRef: {
+      id: "mcp-safe-ref:cover-letter:preview",
+      label: "Cover letter artifact",
+      status: "human_review_required",
+      category: "cover_letter",
+      count: 1,
+      updatedAt: "2026-06-17T00:00:00.000Z",
+      version: 1,
+    },
+    status: "human_review_required",
+    category: "cover_letter",
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    safeSummary: "Cover letter preview created. Full content is restricted.",
+    nextUserAction: "review_pending_items",
+    refIds: ["mcp-safe-ref:cover-letter:preview"],
+    safeCounts: {
+      artifacts: 1,
+      artifactTextBlockers: 0,
+      blockers: 0,
+      warnings: 1,
+      allowedClaims: 2,
+      sourceFacts: 2,
+      evidenceMatches: 2,
+      version: 1,
+    },
+    safeCategories: {
+      artifactKind: "cover_letter",
+      artifactStatus: "human_review_required",
+      previewStatus: "cover_letter_preview_created",
+      visibilityCategory: "safe_summary_only",
+      retentionCategory: "retention_pending",
+      nextUserAction: "review_pending_items",
+      version: 1,
+    },
+    safeFlags: {
+      humanReviewRequired: true,
+      approvedForPreview: false,
+      approvedForExport: false,
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      retentionPending: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function generatedArtifactHumanApprovalWorkflowSummary() {
+  const artifactRef = {
+    id: "mcp-safe-ref:cover-letter:preview",
+    label: "Cover letter artifact",
+    status: "approved_for_preview",
+    category: "cover_letter",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+
+  const safeCounts = {
+    artifacts: 1,
+    blockers: 0,
+    warnings: 1,
+    changedSections: 2,
+    redactedChangedSections: 2,
+    version: 1,
+  } as const;
+
+  const safeCategories = {
+    artifactKind: "cover_letter",
+    workflowStatus: "approved_for_preview",
+    decisionStatus: "approved_for_preview",
+    visibilityCategory: "safe_summary_only",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_generated_artifact_human_approval_workflow_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "approved_for_preview",
+    workflowStatus: "approved_for_preview",
+    decision: "approve_preview",
+    decisionStatus: "approved_for_preview",
+    artifactRef,
+    visibilityCategory: "safe_summary_only",
+    safeSummary: "Preview approval recorded. Full content remains restricted.",
+    nextUserAction: "ready_for_review",
+    refIds: ["mcp-safe-ref:cover-letter:preview"],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: false,
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    diffReview: {
+      kind: "mcp_generated_artifact_human_approval_diff_review",
+      artifactKind: "cover_letter",
+      artifactRef,
+      decisionStatus: "approved_for_preview",
+      safeCounts,
+      safeCategories,
+      nextUserAction: "ready_for_review",
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_generated_artifact_human_approval_audit_event",
+      eventKind: "human_approval_decision_recorded",
+      artifactKind: "cover_letter",
+      artifactRef,
+      decision: "approve_preview",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T05:10:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function generatedArtifactRevisionLoopSummary() {
+  const previousArtifactRef = {
+    id: "mcp-safe-ref:cover-letter:preview",
+    label: "Cover letter artifact",
+    status: "edit_requested",
+    category: "cover_letter",
+    count: 1,
+    updatedAt: "2026-06-17T15:50:00.000Z",
+    version: 1,
+  } as const;
+  const newArtifactRevisionRef = {
+    id: "mcp-safe-ref:cover-letter:preview:revision-1",
+    label: "Cover letter artifact",
+    status: "human_review_required",
+    category: "cover_letter",
+    count: 1,
+    updatedAt: "2026-06-17T15:52:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    artifactTextBlockers: 0,
+    blockers: 0,
+    warnings: 1,
+    changedSections: 2,
+    redactedChangedSections: 2,
+    revisionIndex: 1,
+    revisionCount: 1,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    revisionStatus: "revision_created",
+    revisionIntent: "shorter",
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    nextUserAction: "review_pending_items",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_generated_artifact_revision_loop_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    revisionStatus: "revision_created",
+    revisionIntent: "shorter",
+    previousArtifactRef,
+    newArtifactRevisionRef,
+    artifactRef: newArtifactRevisionRef,
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    safeSummary: "Artifact revision created. Full content is restricted.",
+    nextUserAction: "review_pending_items",
+    refIds: [
+      "mcp-safe-ref:cover-letter:preview",
+      "mcp-safe-ref:cover-letter:preview:revision-1",
+    ],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: true,
+      approvedForPreview: false,
+      approvedForExport: false,
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      retentionPending: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    revisionAuditEvent: {
+      kind: "mcp_generated_artifact_revision_audit_event",
+      eventKind: "artifact_revision_created",
+      artifactKind: "cover_letter",
+      previousArtifactRef,
+      newArtifactRevisionRef,
+      revisionIntent: "shorter",
+      revisionStatus: "revision_created",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T15:52:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function generatedArtifactExportDownloadPolicySummary() {
+  const artifactRef = {
+    id: "mcp-safe-ref:resume-variant:preview",
+    label: "Resume variant artifact",
+    status: "approved_for_preview",
+    category: "resume_variant",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    blockers: 0,
+    warnings: 1,
+    revisionCount: 0,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    visibilityCategory: "safe_summary_only",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_generated_artifact_export_download_policy_summary",
+    allowed: true,
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    artifactRef,
+    visibilityCategory: "safe_summary_only",
+    suggestedFilename: "resume-variant-export-policy",
+    safeSummary:
+      "Export/download policy eligibility confirmed. No product action executed.",
+    nextUserAction: "ready_for_review",
+    refIds: ["mcp-safe-ref:resume-variant:preview"],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      eligibleForLaterExport: true,
+      eligibleForLaterDownload: true,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      persisted: false,
+      bytesCreated: false,
+      filePayloadCreated: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_generated_artifact_export_download_policy_audit_event",
+      eventKind: "export_download_policy_authorized",
+      artifactKind: "resume_variant",
+      artifactRef,
+      policyStatus: "export_download_policy_allowed",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T17:10:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function resumeExportSummary() {
+  const artifactRef = {
+    id: "mcp-safe-ref:resume-variant:preview",
+    label: "Resume variant artifact",
+    status: "approved_for_preview",
+    category: "resume_variant",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+  const exportRef = {
+    id: "mcp-safe-ref:resume-variant:export-file",
+    label: "Resume export file",
+    status: "resume_export_created",
+    category: "resume_variant",
+    count: 1,
+    updatedAt: "2026-06-17T17:30:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    files: 1,
+    blockers: 0,
+    warnings: 1,
+    revisionCount: 0,
+    characterCount: 1536,
+    byteCount: 1536,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    exportStatus: "resume_export_created",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    visibilityCategory: "safe_summary_only",
+    fileName: "resume-export.md",
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_resume_export_summary",
+    allowed: true,
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    exportStatus: "resume_export_created",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    artifactRef,
+    exportRef,
+    visibilityCategory: "safe_summary_only",
+    fileName: "resume-export.md",
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    characterCount: 1536,
+    byteCount: 1536,
+    checksum: "fnv1a32:7f6a2b11",
+    safeSummary: "Resume export representation created. File body is restricted.",
+    nextUserAction: "ready_for_review",
+    refIds: [
+      "mcp-safe-ref:resume-variant:preview",
+      "mcp-safe-ref:resume-variant:export-file",
+    ],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      persisted: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_resume_export_audit_event",
+      eventKind: "resume_export_authorized",
+      artifactKind: "resume_variant",
+      artifactRef,
+      exportRef,
+      exportStatus: "resume_export_created",
+      policyStatus: "export_download_policy_allowed",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T17:30:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function coverLetterApplicationPackageExportSummary(
+  artifactKind: "cover_letter" | "application_package" = "cover_letter",
+) {
+  const config = {
+    cover_letter: {
+      artifactRef: {
+        id: "mcp-safe-ref:cover-letter:preview",
+        label: "Cover letter artifact",
+        category: "cover_letter",
+      },
+      exportRef: {
+        id: "mcp-safe-ref:cover-letter:export-file",
+        label: "Cover letter export file",
+        status: "cover_letter_export_created",
+        category: "cover_letter",
+      },
+      exportStatus: "cover_letter_export_created",
+      fileName: "cover-letter-export.md",
+      safeSummary:
+        "Cover letter export representation created. File body is restricted.",
+    },
+    application_package: {
+      artifactRef: {
+        id: "mcp-safe-ref:application-package:message-preview",
+        label: "Application pkg artifact",
+        category: "application_package",
+      },
+      exportRef: {
+        id: "mcp-safe-ref:application-package:export-file",
+        label: "Application pkg export file",
+        status: "application_package_export_created",
+        category: "application_package",
+      },
+      exportStatus: "application_package_export_created",
+      fileName: "application-package-export.md",
+      safeSummary:
+        "Application package export representation created. File body is restricted.",
+    },
+  } as const;
+  const selected = config[artifactKind];
+  const artifactRef = {
+    ...selected.artifactRef,
+    status: "approved_for_preview",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+  const exportRef = {
+    ...selected.exportRef,
+    count: 1,
+    updatedAt: "2026-06-17T17:30:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    files: 1,
+    blockers: 0,
+    warnings: 1,
+    revisionCount: 0,
+    characterCount: 1536,
+    byteCount: 1536,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind,
+    artifactStatus: "approved_for_preview",
+    exportStatus: selected.exportStatus,
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    visibilityCategory: "safe_summary_only",
+    fileName: selected.fileName,
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_cover_letter_application_package_export_summary",
+    allowed: true,
+    artifactKind,
+    artifactStatus: "approved_for_preview",
+    exportStatus: selected.exportStatus,
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    artifactRef,
+    exportRef,
+    visibilityCategory: "safe_summary_only",
+    fileName: selected.fileName,
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    characterCount: 1536,
+    byteCount: 1536,
+    checksum: "fnv1a32:7f6a2b11",
+    safeSummary: selected.safeSummary,
+    nextUserAction: "ready_for_review",
+    refIds: [artifactRef.id, exportRef.id],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      persisted: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_cover_letter_application_package_export_audit_event",
+      eventKind: "cover_letter_application_package_export_authorized",
+      artifactKind,
+      artifactRef,
+      exportRef,
+      exportStatus: selected.exportStatus,
+      policyStatus: "export_download_policy_allowed",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T17:30:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
+function stripStringAndPatternLiterals(source: string): string {
+  return source
+    .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
+    .replace(/"(?:\\.|[^"\\])*"/gmu, '""')
+    .replace(/'(?:\\.|[^'\\])*'/gmu, '""')
+    .replace(/\/(?:\\.|[^/\\\n])+\/[a-z]*/gimu, "/_/u");
+}
+
+function sourceFiles(): readonly string[] {
+  return [POLICY_SOURCE_FILE, TEST_SOURCE_FILE].map((file) =>
+    readFileSync(file, "utf8"),
+  );
+}
+
+function implementationSource(): string {
+  return stripStringAndPatternLiterals(
+    readFileSync(POLICY_SOURCE_FILE, "utf8"),
+  );
+}
+
+function importSpecifiers(source: string): readonly string[] {
+  return [
+    ...source.matchAll(/^\s*import(?:\s+type)?[\s\S]*?\sfrom\s+"([^"]+)";/gmu),
+  ].map((match) => match[1]);
+}
+
+describe("PR65 component UI data policy", () => {
+  it("allows safe component data and safe content blocks", () => {
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_meta", {
+          kind: "local_mcp_component_data_policy_safe_meta",
+          status: "ready_for_review",
+          availability: {
+            source: "convex_review_cockpit_summary",
+            ownerState: "resolved",
+            version: 1,
+          },
+          refIds: ["mcp-safe-ref:review-cockpit:latest"],
+          safeCounts: {
+            pendingReviews: 2,
+            blockers: 0,
+            version: 1,
+          },
+          safeCategories: {
+            reviewGateStatus: "ready",
+            nextUserAction: "review_pending_items",
+            version: 1,
+          },
+          version: 1,
+        }),
+      ),
+    );
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_content", [
+          { type: "text", text: "Review gate is ready." },
+          { type: "text", text: "Next action: review pending items." },
+        ]),
+      ),
+    );
+  });
+
+  it.each([
+    ["application package", applicationPackageSummary()],
+    ["evidence graph", evidenceGraphSummary()],
+    ["resume variant plan", resumeVariantPlanSummary()],
+    ["review cockpit", reviewCockpitSummary()],
+  ] as const)(
+    "allows safe PR60-PR64 %s summary-shaped payloads",
+    (_label, payload) => {
+      const result = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", payload),
+      );
+      expectAllowed(result);
+      if (!result.allowed)
+        throw new TypeError("expected summary payload to be allowed");
+      expect(result.safePayload).toEqual(payload);
+    },
+  );
+
+  it("allows exact PR68 generated artifact safe-summary enums and refs", () => {
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput(
+        "component_visible_structured_content",
+        generatedArtifactBoundarySummary(),
+      ),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected generated artifact summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(generatedArtifactBoundarySummary());
+
+    for (const refId of [
+      "mcp-safe-ref:resume-variant:latest",
+      "mcp-safe-ref:cover-letter:latest",
+      "mcp-safe-ref:application-package:latest",
+      "mcp-safe-ref:review-notes:latest",
+    ] as const) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_meta", {
+            kind: "local_mcp_component_data_policy_safe_meta",
+            artifactRef: {
+              id: refId,
+              label: "Generated artifact availability",
+              status: "preview_required",
+              category:
+                refId === "mcp-safe-ref:resume-variant:latest"
+                  ? "resume_variant"
+                  : refId === "mcp-safe-ref:cover-letter:latest"
+                    ? "cover_letter"
+                    : refId === "mcp-safe-ref:application-package:latest"
+                      ? "application_package"
+                      : "review_notes",
+              count: 1,
+              version: 1,
+            },
+            visibilityCategory: "safe_summary_only",
+            retentionCategory: "retention_pending",
+            refIds: [refId],
+            version: 1,
+          }),
+        ),
+      );
+    }
+  });
+
+  it("allows exact PR70 preview safe-summary enums, refs, and approval flags", () => {
+    const coverLetterSummary = coverLetterApplicationMessagePreviewSummary();
+    const applicationMessageSummary = {
+      ...coverLetterSummary,
+      artifactKind: "application_package",
+      previewStatus: "application_message_preview_created",
+      artifactRef: {
+        id: "mcp-safe-ref:application-package:message-preview",
+        label: "Application package artifact",
+        status: "human_review_required",
+        category: "application_package",
+        count: 1,
+        updatedAt: "2026-06-17T00:00:00.000Z",
+        version: 1,
+      },
+      category: "application_package",
+      safeSummary:
+        "Application message preview created. Full content is restricted.",
+      refIds: ["mcp-safe-ref:application-package:message-preview"],
+      safeCategories: {
+        ...coverLetterSummary.safeCategories,
+        artifactKind: "application_package",
+        previewStatus: "application_message_preview_created",
+      },
+    } as const;
+
+    expect(coverLetterSummary.safeFlags).toMatchObject({
+      approvedForDownload: false,
+      approvedForSubmit: false,
+    });
+    expect(coverLetterSummary.safeRefusal).toBeUndefined();
+
+    for (const payload of [coverLetterSummary, applicationMessageSummary]) {
+      const result = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", payload),
+      );
+      expectAllowed(result);
+      if (!result.allowed) {
+        throw new TypeError("expected PR70 preview summary to be allowed");
+      }
+      expect(result.safePayload).toEqual(payload);
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...coverLetterSummary,
+        previewStatus: "application_message_sent",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...applicationMessageSummary,
+        artifactKind: "application_message",
+        category: "application_message",
+        safeCategories: {
+          ...applicationMessageSummary.safeCategories,
+          artifactKind: "application_message",
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_error", {
+        kind: "local_mcp_component_data_policy_safe_error",
+        code: "application_message_preview_blocked",
+        msg: "Refused. Application message preview blocked.",
+        safeForModel: true,
+        rawDataExposed: false,
+        componentDataExposed: false,
+        writeActionExecuted: false,
+        version: 1,
+      }),
+    );
+  });
+
+  it("allows exact PR71 human approval workflow safe-summary enums, refs, diff, audit, and flags", () => {
+    const summary = generatedArtifactHumanApprovalWorkflowSummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected PR71 approval workflow summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    for (const editIntent of [
+      "shorter",
+      "more_formal",
+      "focus_on_requirements",
+      "preserve_never_use",
+    ] as const) {
+      const editRequestedSafeCategories = {
+        ...summary.safeCategories,
+        workflowStatus: "edit_requested",
+        decisionStatus: "edit_requested",
+        editIntent,
+        nextUserAction: "review_pending_items",
+      } as const;
+      const editRequestedSummary = {
+        ...summary,
+        artifactStatus: "edit_requested",
+        workflowStatus: "edit_requested",
+        decision: "request_edit",
+        decisionStatus: "edit_requested",
+        editIntent,
+        nextUserAction: "review_pending_items",
+        safeFlags: {
+          ...summary.safeFlags,
+          humanReviewRequired: true,
+          approvedForPreview: false,
+        },
+        safeCategories: editRequestedSafeCategories,
+        diffReview: {
+          ...summary.diffReview,
+          decisionStatus: "edit_requested",
+          nextUserAction: "review_pending_items",
+          safeCategories: editRequestedSafeCategories,
+        },
+        auditEvent: {
+          ...summary.auditEvent,
+          decision: "request_edit",
+        },
+      } as const;
+
+      const editRequestedResult = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", editRequestedSummary),
+      );
+      expectAllowed(editRequestedResult);
+      expect(editRequestedSummary.safeFlags).toMatchObject({
+        approvedForExport: false,
+        approvedForDownload: false,
+        approvedForSend: false,
+        approvedForSubmit: false,
+        approvedForApply: false,
+      });
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "generated_artifact_human_approval_workflow_blocked",
+          msg: "Refused. Generated artifact approval workflow blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        decision: "approve_export",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        auditEvent: {
+          ...summary.auditEvent,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        rawApprovalNote: "Looks good.",
+      }),
+    );
+  });
+
+  it("allows exact PR72 artifact revision loop safe-summary enums, refs, audit, and flags", () => {
+    const summary = generatedArtifactRevisionLoopSummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected PR72 revision loop summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    for (const revisionIntent of [
+      "shorter",
+      "more_formal",
+      "focus_on_requirements",
+      "preserve_never_use",
+    ] as const) {
+      const revisionSummary = {
+        ...summary,
+        revisionIntent,
+        safeCategories: {
+          ...summary.safeCategories,
+          revisionIntent,
+        },
+        revisionAuditEvent: {
+          ...summary.revisionAuditEvent,
+          revisionIntent,
+        },
+      } as const;
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", revisionSummary),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "generated_artifact_revision_loop_blocked",
+          msg: "Refused. Generated artifact revision loop blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        revisionStatus: "export_ready",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        revisionAuditEvent: {
+          ...summary.revisionAuditEvent,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        rawGeneratedRevisionText: "GENERATED_FULL_TEXT_SENTINEL_DO_NOT_EXPOSE",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        newArtifactRevisionRef: {
+          ...summary.newArtifactRevisionRef,
+          id: "mcp-safe-ref:cover-letter:raw-text",
+        },
+      }),
+    );
+  });
+
+  it("allows exact PR73 export/download policy safe-summary enums, refs, audit, filename, and flags", () => {
+    const summary = generatedArtifactExportDownloadPolicySummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError(
+        "expected PR73 export/download policy summary to be allowed",
+      );
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    for (const suggestedFilename of [
+      "resume-variant-export-policy",
+      "cover-letter-export-policy",
+      "application-package-export-policy",
+    ] as const) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", {
+            ...summary,
+            suggestedFilename,
+          }),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "generated_artifact_export_download_policy_blocked",
+          msg: "Refused. Generated artifact export/download policy blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expect(summary.safeFlags).toMatchObject({
+      approvedForExport: true,
+      approvedForDownload: true,
+      eligibleForLaterExport: true,
+      eligibleForLaterDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      bytesCreated: false,
+      filePayloadCreated: false,
+      urlCreated: false,
+      persisted: false,
+      writeActionExecuted: false,
+    });
+
+    for (const unsafeFilename of [
+      "resume-variant-export-policy.pdf",
+      "resume/variant-export-policy",
+      "real-user@example.test",
+      "https://example.test/file",
+      "cmVzdW1lLXZhcmlhbnQ=",
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          suggestedFilename: unsafeFilename,
+        }),
+      );
+    }
+
+    for (const unsafeStatus of [
+      { policyStatus: "resume_export_ready" },
+      { confirmationStatus: "free_form_confirmed" },
+      { freshnessStatus: "revised_after_approval" },
+      { retentionPolicyStatus: "delete_real_file" },
+      { deletePolicyStatus: "deleted_from_storage" },
+      { rollbackStatus: "rollback_executed" },
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          ...unsafeStatus,
+        }),
+      );
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        auditEvent: {
+          ...summary.auditEvent,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          bytesCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        downloadUrl: "https://example.test/file",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        base64: "cmVzdW1l",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        attachment: { name: "resume.pdf" },
+      }),
+    );
+  });
+
+  it("allows exact PR74 resume export safe metadata while blocking payload leakage", () => {
+    const summary = resumeExportSummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected PR74 resume export summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "resume_export_blocked",
+          msg: "Refused. Resume export blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expect(summary.safeCounts.byteCount).toBeGreaterThan(1000);
+    expect(summary.safeCounts.characterCount).toBeGreaterThan(1000);
+    expect(summary.fileName).toBe("resume-export.md");
+    expect(summary.fileExtension).toBe(".md");
+    expect(summary.mimeType).toBe("text/markdown");
+    expect(summary.checksum).toMatch(/^fnv1a32:[a-f0-9]{8}$/u);
+    expect(summary.safeFlags).toMatchObject({
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      urlCreated: false,
+      persisted: false,
+      writeActionExecuted: false,
+    });
+
+    for (const unsafeMetadata of [
+      { fileName: "pana-resume.md" },
+      { fileName: "resume/export.md" },
+      { fileName: "resume-export.pdf" },
+      { fileExtension: ".pdf" },
+      { mimeType: "application/pdf" },
+      { checksum: "sha256:abc123" },
+      { downloadUrl: "https://example.test/resume-export.md" },
+      { signedUrl: "https://example.test/signed" },
+      { fullContent: "Work Experience:\nPrivate resume body." },
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          ...unsafeMetadata,
+        }),
+      );
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          filePayloadCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        byteCount: 50_001,
+      }),
+    );
+  });
+
+  it("allows exact PR75 cover letter/application package export safe metadata while blocking payload leakage", () => {
+    for (const artifactKind of [
+      "cover_letter",
+      "application_package",
+    ] as const) {
+      const summary = coverLetterApplicationPackageExportSummary(artifactKind);
+
+      const result = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", summary),
+      );
+      expectAllowed(result);
+      if (!result.allowed) {
+        throw new TypeError("expected PR75 export summary to be allowed");
+      }
+      expect(result.safePayload).toEqual(summary);
+
+      expect(summary.fileName).toBe(
+        artifactKind === "cover_letter"
+          ? "cover-letter-export.md"
+          : "application-package-export.md",
+      );
+      expect(summary.fileExtension).toBe(".md");
+      expect(summary.mimeType).toBe("text/markdown");
+      expect(summary.checksum).toMatch(/^fnv1a32:[a-f0-9]{8}$/u);
+      expect(summary.safeFlags).toMatchObject({
+        approvedForExport: true,
+        approvedForDownload: true,
+        approvedForSend: false,
+        approvedForSubmit: false,
+        approvedForApply: false,
+        urlCreated: false,
+        persisted: false,
+        writeActionExecuted: false,
+      });
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "cover_letter_application_package_export_blocked",
+          msg: "Refused. Cover letter/app pkg export blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    const summary = coverLetterApplicationPackageExportSummary();
+    for (const unsafeMetadata of [
+      { fileName: "pana-cover-letter.md" },
+      { fileName: "../cover-letter-export.md" },
+      { fileName: "cover-letter-export.pdf" },
+      { fileName: "real-user@example.test" },
+      { fileExtension: ".pdf" },
+      { mimeType: "application/pdf" },
+      { checksum: "sha256:abc123" },
+      { downloadUrl: "https://example.test/cover-letter-export.md" },
+      { signedUrl: "https://example.test/signed" },
+      { fullContent: "Dear Hiring Manager, private body." },
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          ...unsafeMetadata,
+        }),
+      );
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          urlCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        byteCount: 50_001,
+      }),
+    );
+  });
+
+  it("rejects unknown PR68 generated artifact enum and unsafe ref values", () => {
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...generatedArtifactBoundarySummary(),
+        artifactStatus: "submitted",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...generatedArtifactBoundarySummary(),
+        refIds: ["mcp-safe-ref:resume-variant:raw-cv"],
+      }),
+    );
+  });
+
+  it.each([
+    [
+      "component structured text",
+      "component_visible_structured_content",
+      "short safe-looking text",
+    ],
+    ["model structured count", "model_visible_structured_content", 123],
+    [
+      "component structured boolean",
+      "component_visible_structured_content",
+      true,
+    ],
+    ["meta scalar", "component_visible_meta", "safe-looking metadata"],
+    ["props scalar", "component_visible_props", 1],
+    ["bridge payload scalar", "component_visible_bridge_payload", false],
+    ["state snapshot scalar", "component_visible_state_snapshot", "state"],
+    [
+      "model-context update scalar",
+      "component_visible_model_context_update",
+      "update",
+    ],
+    ["error scalar", "component_visible_error", "blocked"],
+  ] as const)(
+    "rejects top-level scalar payloads for %s",
+    (_label, surface, payload) => {
+      expectBlocked(policyInput(surface, payload));
+    },
+  );
+
+  it("treats _meta as component-visible and rejects raw or sensitive data there", () => {
+    expectBlocked(
+      policyInput("component_visible_meta", {
+        kind: "local_mcp_component_data_policy_safe_meta",
+        rawResumeText: "RAW_RESUME_TEXT_SENTINEL_DO_NOT_EXPOSE",
+        version: 1,
+      }),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_meta", {
+        kind: "local_mcp_component_data_policy_safe_meta",
+        call_tool_result: {
+          accessToken: "SECRET_TOKEN_SENTINEL_DO_NOT_EXPOSE",
+          bearer: "Bearer abc.def.ghi",
+        },
+        version: 1,
+      }),
+    );
+  });
+
+  it("rejects raw structuredContent and raw content text", () => {
+    expectBlocked(
+      policyInput("model_visible_structured_content", {
+        kind: "mcp_real_review_cockpit_summary_result",
+        rawCvText: "WORK EXPERIENCE:\nBuilt payment systems for ACME.",
+        version: 1,
+      }),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_content", [
+        {
+          type: "text",
+          text: "WORK EXPERIENCE:\nSenior engineer at ACME from 2020 to 2024.",
+        },
+      ]),
+    );
+  });
+
+  it("rejects raw component props, state snapshots, and model-context updates", () => {
+    expectBlocked(
+      policyInput("component_visible_props", {
+        kind: "local_mcp_component_data_policy_safe_props",
+        email: "real-user@example.test",
+        version: 1,
+      }),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_state_snapshot", {
+        kind: "local_mcp_component_data_policy_safe_state_snapshot",
+        resumeText: "RAW_CV_TEXT_SENTINEL_DO_NOT_EXPOSE",
+        version: 1,
+      }),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_model_context_update", {
+        kind: "local_mcp_component_data_policy_safe_model_context_update",
+        sourceQuote: "SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE",
+        version: 1,
+      }),
+    );
+  });
+
+  it("fails closed for unknown fields, nested unsafe fields, and descriptor hazards", () => {
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        kind: "local_mcp_component_data_policy_safe_props",
+        safeSummary: "Safe summary only.",
+        surprise: true,
+        version: 1,
+      }),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_bridge_payload", {
+        kind: "local_mcp_component_data_policy_safe_bridge_payload",
+        safeCategories: {
+          reviewGateStatus: "ready",
+          nested: {
+            privateFact: "PRIVATE_FACT_SENTINEL_DO_NOT_EXPOSE",
+          },
+          version: 1,
+        },
+        version: 1,
+      }),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_meta", {
+        kind: "local_mcp_component_data_policy_safe_meta",
+        securitySchemes: [{ type: "oauth2" }],
+        outputTemplate: "component.html",
+        version: 1,
+      }),
+    );
+  });
+
+  it("fails closed for revoked proxy payloads", () => {
+    const { proxy, revoke } = Proxy.revocable(
+      {},
+      {
+        getPrototypeOf() {
+          throw new TypeError("revoked");
+        },
+      },
+    );
+    revoke();
+
+    expectBlocked(policyInput("component_visible_structured_content", proxy));
+  });
+
+  it.each([
+    ["raw CV text", { text: "CV text: RAW_CV_TEXT_SENTINEL_DO_NOT_EXPOSE" }],
+    ["raw resume sections", { resumeSections: ["Experience: built billing"] }],
+    [
+      "generated artifact content",
+      { text: "generated resume variant content" },
+    ],
+    [
+      "raw job content",
+      { text: "raw job description text for a private role" },
+    ],
+    [
+      "raw proposal content",
+      { text: "raw proposal content for the application" },
+    ],
+    [
+      "cover letter content",
+      { text: "Dear Hiring Manager, I am excited to apply..." },
+    ],
+    [
+      "source quote",
+      { text: "source quote: SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE" },
+    ],
+    ["private fact", { text: "private fact detail" }],
+    ["never use fact", { text: "never_use fact detail" }],
+    ["token", { text: "Bearer abc.def.ghi" }],
+    ["mixed-case sentinel", { text: "Do_NoT_ExPoSe" }],
+    ["raw claims", { rawClaims: { sub: "stytch_subject_DO_NOT_EXPOSE" } }],
+    ["identity field", { clerkId: "clerk_DO_NOT_EXPOSE" }],
+    ["Convex document id", { id: "j97convexdocumentid" }],
+  ] as const)(
+    "rejects forbidden component-visible material: %s",
+    (_label, payload) => {
+      expectBlocked(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "component_data_policy_blocked",
+          message: "Refused. Component data policy blocked.",
+          ...payload,
+          version: 1,
+        }),
+      );
+    },
+  );
+
+  it("allows only exact PR67 UX state enums and safe refusal code", () => {
+    const pr67StateValues = [
+      "loading",
+      "missing_consent",
+      "missing_auth",
+      "missing_account_link",
+      "expired_auth",
+      "privacy_blocked",
+      "unavailable_review_data",
+      "budget_exceeded",
+      "unsafe_action_refused",
+      "safe_unavailable",
+      "safe_refusal",
+      "unavailable",
+      "error",
+      "refusal",
+      "pending",
+      "refresh_inputs",
+    ] as const;
+
+    for (const value of pr67StateValues) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", {
+            kind: "mcp_component_error_loading_refusal_ux_state",
+            allowed: true,
+            status: "pending",
+            reason: value,
+            category: "loading",
+            title: "Review state pending",
+            message: "Review state is loading.",
+            safeSummary: "Review state is pending.",
+            nextUserAction: "refresh_inputs",
+            refIds: ["mcp-safe-ref:review-cockpit:latest"],
+            safeCounts: {
+              blockers: 0,
+              warnings: 0,
+              version: 1,
+            },
+            safeFlags: {
+              approvalNeeded: false,
+              staleData: false,
+              overLimit: false,
+              version: 1,
+            },
+            modelVisible: true,
+            componentVisible: true,
+            version: 1,
+          }),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "component_error_loading_refusal_ux_blocked",
+          message: "Refused. Component UX state blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        kind: "mcp_component_error_loading_refusal_ux_state",
+        allowed: true,
+        status: "retry_later",
+        reason: "retry_later",
+        category: "loading",
+        title: "Review state pending",
+        message: "Review state is loading.",
+        safeSummary: "Review state is pending.",
+        nextUserAction: "refresh_inputs",
+        refIds: ["mcp-safe-ref:review-cockpit:latest"],
+        safeCounts: {
+          blockers: 0,
+          warnings: 0,
+          version: 1,
+        },
+        safeFlags: {
+          approvalNeeded: false,
+          staleData: false,
+          overLimit: false,
+          version: 1,
+        },
+        modelVisible: true,
+        componentVisible: true,
+        version: 1,
+      }),
+    );
+  });
+
+  it("allows safe next-action labels and rejects write/export/download/send/submit/apply labels", () => {
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_action_label", "review_blockers"),
+      ),
+    );
+
+    for (const unsafeAction of [
+      "write",
+      "export",
+      "download",
+      "send",
+      "submit",
+      "apply",
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_action_label", unsafeAction),
+      );
+    }
+  });
+
+  it("does not expose PR66 UI behavior or runtime bridge wiring", () => {
+    const implementation = implementationSource();
+    expect(implementation).not.toMatch(
+      /ReadOnlyReviewComponent|window\.openai|postMessage|React|tsx|jsx|iframe|render/u,
+    );
+    expect(implementation).not.toMatch(
+      /@modelcontextprotocol|express|hono|fastify/u,
+    );
+    expect(implementation).not.toMatch(
+      /\b(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/u,
+    );
+    expect(implementation).not.toMatch(
+      /\b(registerTool|registerResource|tools\/call|ui\/message)\b/u,
+    );
+    expect(implementation).not.toMatch(
+      /\b(mutation|action|internalMutation|internalAction)\s*\(/u,
+    );
+
+    const imports = importSpecifiers(readFileSync(POLICY_SOURCE_FILE, "utf8"));
+    expect(imports).toEqual([]);
+  });
+
+  it("keeps test fixtures and implementation scoped to policy-only component data", () => {
+    for (const source of sourceFiles().map(stripStringAndPatternLiterals)) {
+      expect(source).not.toMatch(
+        /from\s+["'].*(?:components|pages|routes|convex)/iu,
+      );
+      expect(source).not.toMatch(
+        /\bwindow\.openai\b|\bReact\b|\biframe\b|\btsx\b|\bjsx\b/u,
+      );
+      expect(source).not.toMatch(
+        /\b(fetch|axios|XMLHttpRequest|OpenAI|chat\.completions|responses\.create)\b/u,
+      );
+      expect(source).not.toMatch(/\b(download|send|submit|apply)\s*\(/u);
+    }
+  });
+});

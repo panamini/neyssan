@@ -20,7 +20,14 @@ import {
 
 function LocationProbe(): JSX.Element {
   const location = useLocation();
-  return <div data-testid="location">{location.pathname}</div>;
+  return (
+    <>
+      <div data-testid="location">{location.pathname}</div>
+      <div data-testid="location-state">
+        {JSON.stringify(location.state ?? null)}
+      </div>
+    </>
+  );
 }
 
 function RegisterTemplates({
@@ -408,6 +415,26 @@ describe("forge template entry points", () => {
     expect(onSelect).toHaveBeenCalledWith("schematic");
   });
 
+  it("keeps the current saved proposal route when opening the full template gallery", () => {
+    renderEntryPoint(
+      "/proposal?view=saved&id=proposal_beta",
+      <ProposalTemplateEntryPoint onSelect={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+    const panel = screen.getByRole("complementary", {
+      name: "Proposal templates",
+    });
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Open Templates" }),
+    );
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/templates");
+    expect(screen.getByTestId("location-state")).toHaveTextContent(
+      '"proposalReturnTo":"/proposal?view=saved&id=proposal_beta"',
+    );
+  });
+
   it("opens proposal heading from the proposal stage bar as a current document panel", () => {
     renderEntryPoint(
       "/proposal",
@@ -571,7 +598,7 @@ describe("forge template entry points", () => {
     ],
     [
       "/proposal",
-      "Draft proposal",
+      "Job & CV",
       "Proposal draft",
       <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
     ],

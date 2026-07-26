@@ -24,6 +24,7 @@ import { analyzeProposalDraft } from "../proposalEnforcement";
 import {
   validatePremiumCoverLetterBodyParts,
   validatePremiumWriterOutputV1,
+  type PremiumCoverLetterFinalProvenance,
 } from "../premiumCoverLetter";
 
 const BASE_ARGS = {
@@ -1121,6 +1122,548 @@ describe("proposal writer prompt contract", () => {
     ).toThrow(/candidate-backed evidence/i);
   });
 
+  it("allows trusted premium provenance to satisfy the final candidate guard only when tied to final text", () => {
+    const opening =
+      "Weekly QA reporting, field notes, and issue handoffs shaped the operating discipline behind my support work.";
+    const proof =
+      "Those habits are useful where escalation records and follow-up notes need to stay clear across shifts.";
+    const employerValue =
+      "That record discipline fits teams that need reliable support handoffs without losing context.";
+    const closeLine = "I would be glad to discuss the position further.";
+    const content = [
+      "Dear Hiring Manager,",
+      "",
+      opening,
+      "",
+      proof,
+      "",
+      employerValue,
+      "",
+      closeLine,
+      "",
+      "Sincerely,",
+      "Casey Reed",
+    ].join("\n");
+    const baseArgs = {
+      content,
+      format: "cover_letter" as const,
+      outputLanguage: "English" as const,
+      candidateName: "Casey Reed",
+      voicePreset: "signature" as const,
+      noContextMode: false,
+      requiresCandidateEvidence: true,
+    };
+    const premiumFinalProvenance: PremiumCoverLetterFinalProvenance = {
+      version: "premium_cover_letter_final_provenance_v1",
+      status: "validated_final_text",
+      origin: "provider_reported",
+      contextClass: "cv_direct",
+      candidateFactIds: ["fact_cv_support_reporting"],
+      verifiedCandidateFactIds: ["fact_cv_support_reporting"],
+      candidateFacts: [
+        {
+          id: "fact_cv_support_reporting",
+          section: "opening",
+          text: "Completed weekly QA reports, field notes, and issue handoffs for support escalations.",
+          source: "cv",
+          metrics: [],
+          entities: [],
+        },
+      ],
+      sections: {
+        opening: {
+          section: "opening",
+          text: opening,
+          claimIds: ["claim_opening"],
+          factIds: ["fact_cv_support_reporting"],
+          demandIds: [],
+          candidateFactIds: ["fact_cv_support_reporting"],
+          verifiedCandidateFactIds: ["fact_cv_support_reporting"],
+        },
+        proofBlock: {
+          section: "proofBlock",
+          text: proof,
+          claimIds: ["claim_proof"],
+          factIds: [],
+          demandIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock",
+          text: employerValue,
+          claimIds: ["claim_employer_value"],
+          factIds: [],
+          demandIds: ["demand_core"],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+        closeLine: {
+          section: "closeLine",
+          text: closeLine,
+          claimIds: ["claim_close"],
+          factIds: [],
+          demandIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+      },
+    };
+
+    expect(() => finalizeProposalForPersistence(baseArgs)).toThrow(
+      /candidate-backed evidence/i,
+    );
+
+    const saved = finalizeProposalForPersistence({
+      ...baseArgs,
+      premiumFinalProvenance,
+    });
+    expect(saved).toContain("Weekly QA reporting");
+    expect(saved).toContain("Casey Reed");
+
+    const decorativeFactIdOnly = {
+      ...premiumFinalProvenance,
+      candidateFactIds: ["fact_cv_unrelated"],
+      verifiedCandidateFactIds: ["fact_cv_unrelated"],
+      candidateFacts: [
+        {
+          id: "fact_cv_unrelated",
+          section: "opening" as const,
+          text: "Reconciled vendor invoices and purchase orders for the finance team.",
+          source: "cv" as const,
+          metrics: [],
+          entities: [],
+        },
+      ],
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        ...baseArgs,
+        premiumFinalProvenance: decorativeFactIdOnly,
+      }),
+    ).toThrow(/candidate-backed evidence/i);
+
+    expect(() =>
+      finalizeProposalForPersistence({
+        ...baseArgs,
+        premiumFinalProvenance: {
+          ...premiumFinalProvenance,
+          status: "untrusted_legacy_wrapped",
+          origin: "legacy_wrapped",
+        },
+      }),
+    ).toThrow(/candidate-backed evidence/i);
+  });
+
+  it("preserves GPT premium finalization when validated provenance has two visible CV-backed sentences", () => {
+    const content = [
+      "Dear Hiring Manager,",
+      "",
+      "I led a design system migration used across four product squads, which is the clearest example of the frontend work I would bring into a Senior Frontend Engineer role.",
+      "",
+      "At Acme, I worked as a Senior Frontend Engineer with a focus on design systems. That work included leading the migration across four product squads and improving release consistency across shared interface work.",
+      "",
+      "For a team maintaining a shared design system, that background means I can contribute to interface work that multiple product teams rely on while helping releases stay more consistent.",
+      "",
+      "I would bring senior frontend experience, design-system focus, and a record of improving consistency across shared interface work.",
+      "",
+      "Sincerely,",
+      "Alex Martin",
+    ].join("\n");
+    const premiumFinalProvenance: PremiumCoverLetterFinalProvenance = {
+      version: "premium_cover_letter_final_provenance_v1",
+      status: "validated_final_text",
+      origin: "provider_reported",
+      contextClass: "cv_direct",
+      candidateFactIds: [
+        "fact_experience_001_highlight_001",
+        "fact_experience_001_role",
+        "fact_summary_001",
+        "fact_experience_001_highlight_002",
+      ],
+      verifiedCandidateFactIds: [
+        "fact_experience_001_highlight_001",
+        "fact_experience_001_role",
+        "fact_summary_001",
+        "fact_experience_001_highlight_002",
+      ],
+      candidateFacts: [
+        {
+          id: "fact_experience_001_highlight_001",
+          section: "opening",
+          text: "Led a design system migration used across four product squads.",
+          source: "cv",
+          metrics: [],
+          entities: ["Led"],
+        },
+        {
+          id: "fact_experience_001_role",
+          section: "proofBlock",
+          text: "Senior Frontend Engineer at Acme.",
+          source: "cv",
+          metrics: [],
+          entities: ["Senior", "Frontend", "Engineer", "Acme"],
+        },
+        {
+          id: "fact_summary_001",
+          section: "proofBlock",
+          text: "Frontend engineer focused on design systems.",
+          source: "cv",
+          metrics: [],
+          entities: ["Frontend"],
+        },
+        {
+          id: "fact_experience_001_highlight_002",
+          section: "proofBlock",
+          text: "Improved release consistency across shared interface work.",
+          source: "cv",
+          metrics: [],
+          entities: ["Improved"],
+        },
+      ],
+      sections: {
+        opening: {
+          section: "opening",
+          text: "I led a design system migration used across four product squads, which is the clearest example of the frontend work I would bring into a Senior Frontend Engineer role.",
+          claimIds: ["claim_opening_001"],
+          factIds: ["fact_experience_001_highlight_001"],
+          demandIds: [],
+          candidateFactIds: ["fact_experience_001_highlight_001"],
+          verifiedCandidateFactIds: ["fact_experience_001_highlight_001"],
+        },
+        proofBlock: {
+          section: "proofBlock",
+          text: "At Acme, I worked as a Senior Frontend Engineer with a focus on design systems. That work included leading the migration across four product squads and improving release consistency across shared interface work.",
+          claimIds: ["claim_proof_001"],
+          factIds: [
+            "fact_experience_001_highlight_001",
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+          demandIds: [],
+          candidateFactIds: [
+            "fact_experience_001_highlight_001",
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+          verifiedCandidateFactIds: [
+            "fact_experience_001_highlight_001",
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock",
+          text: "For a team maintaining a shared design system, that background means I can contribute to interface work that multiple product teams rely on while helping releases stay more consistent.",
+          claimIds: ["claim_employer_value_001"],
+          factIds: [
+            "fact_experience_001_highlight_001",
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+          demandIds: ["demand_core_001"],
+          candidateFactIds: [
+            "fact_experience_001_highlight_001",
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+          verifiedCandidateFactIds: ["fact_experience_001_highlight_001"],
+        },
+        closeLine: {
+          section: "closeLine",
+          text: "I would bring senior frontend experience, design-system focus, and a record of improving consistency across shared interface work.",
+          claimIds: ["claim_close_001"],
+          factIds: [
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+          demandIds: [],
+          candidateFactIds: [
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+          verifiedCandidateFactIds: [
+            "fact_experience_001_role",
+            "fact_summary_001",
+            "fact_experience_001_highlight_002",
+          ],
+        },
+      },
+    };
+
+    const saved = finalizeProposalForPersistence({
+      content,
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Alex Martin",
+      voicePreset: "signature",
+      noContextMode: false,
+      requiresCandidateEvidence: true,
+      premiumFinalProvenance,
+    });
+
+    expect(saved).toContain(
+      "I led a design system migration used across four product squads",
+    );
+    expect(saved).toContain("At Acme, I worked as a Senior Frontend Engineer");
+    expect(saved).toContain(
+      "improving release consistency across shared interface work",
+    );
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Alex Martin",
+      voicePreset: "signature",
+      noContextMode: false,
+      requiresCandidateEvidence: true,
+      premiumFinalProvenance,
+    });
+    expect(trace.errorMessage).toBeUndefined();
+    expect(trace.substantiveBodyAssertion).toMatchObject({
+      passed: true,
+    });
+    expect(trace.substantiveBodyAssertion?.body).toContain(
+      "At Acme, I worked as a Senior Frontend Engineer",
+    );
+
+    const oneSentenceVerifiedProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      verifiedCandidateFactIds: ["fact_experience_001_highlight_001"],
+      candidateFacts: [
+        {
+          id: "fact_experience_001_highlight_001",
+          section: "opening",
+          text: "Led a design system migration used across four product squads.",
+          source: "cv",
+          metrics: [],
+          entities: ["Led"],
+        },
+      ],
+      sections: {
+        ...premiumFinalProvenance.sections,
+        proofBlock: {
+          ...premiumFinalProvenance.sections.proofBlock,
+          verifiedCandidateFactIds: [],
+        },
+        employerValueBlock: {
+          ...premiumFinalProvenance.sections.employerValueBlock,
+          verifiedCandidateFactIds: [],
+        },
+        closeLine: {
+          ...premiumFinalProvenance.sections.closeLine,
+          verifiedCandidateFactIds: [],
+        },
+      },
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: oneSentenceVerifiedProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
+
+    const candidateFactIdsOnlyProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      verifiedCandidateFactIds: [],
+      sections: {
+        opening: {
+          ...premiumFinalProvenance.sections.opening,
+          verifiedCandidateFactIds: [],
+        },
+        proofBlock: {
+          ...premiumFinalProvenance.sections.proofBlock,
+          verifiedCandidateFactIds: [],
+        },
+        employerValueBlock: {
+          ...premiumFinalProvenance.sections.employerValueBlock,
+          verifiedCandidateFactIds: [],
+        },
+        closeLine: {
+          ...premiumFinalProvenance.sections.closeLine,
+          verifiedCandidateFactIds: [],
+        },
+      },
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: candidateFactIdsOnlyProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
+
+    const demandOnlyProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      candidateFactIds: [],
+      verifiedCandidateFactIds: [],
+      candidateFacts: [],
+      sections: {
+        opening: {
+          ...premiumFinalProvenance.sections.opening,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+        proofBlock: {
+          ...premiumFinalProvenance.sections.proofBlock,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+        employerValueBlock: {
+          ...premiumFinalProvenance.sections.employerValueBlock,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+        closeLine: {
+          ...premiumFinalProvenance.sections.closeLine,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+      },
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: demandOnlyProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
+
+    const untrustedNoCvProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      status: "untrusted_no_cv",
+      contextClass: "no_cv",
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: untrustedNoCvProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
+  });
+
+  it("keeps generic GPT premium prose fail-closed even when provenance is present", () => {
+    const genericContent = [
+      "Dear Hiring Manager,",
+      "",
+      "I am excited about the opportunity to join your team and contribute to the work described in the role.",
+      "",
+      "My background would help me support the team and bring value to the position.",
+      "",
+      "I would welcome the chance to discuss my interest in the role.",
+      "",
+      "Sincerely,",
+      "Alex Martin",
+    ].join("\n");
+    const genericProvenance: PremiumCoverLetterFinalProvenance = {
+      version: "premium_cover_letter_final_provenance_v1",
+      status: "validated_final_text",
+      origin: "provider_reported",
+      contextClass: "cv_direct",
+      candidateFactIds: ["fact_experience_001_role"],
+      verifiedCandidateFactIds: ["fact_experience_001_role"],
+      candidateFacts: [
+        {
+          id: "fact_experience_001_role",
+          section: "opening",
+          text: "Senior Frontend Engineer at Acme.",
+          source: "cv",
+          metrics: [],
+          entities: ["Senior", "Frontend", "Engineer", "Acme"],
+        },
+      ],
+      sections: {
+        opening: {
+          section: "opening",
+          text: "I am excited about the opportunity to join your team and contribute to the work described in the role.",
+          claimIds: ["claim_opening_001"],
+          factIds: ["fact_experience_001_role"],
+          demandIds: [],
+          candidateFactIds: ["fact_experience_001_role"],
+          verifiedCandidateFactIds: ["fact_experience_001_role"],
+        },
+        proofBlock: {
+          section: "proofBlock",
+          text: "My background would help me support the team and bring value to the position.",
+          claimIds: ["claim_proof_001"],
+          factIds: ["fact_experience_001_role"],
+          demandIds: [],
+          candidateFactIds: ["fact_experience_001_role"],
+          verifiedCandidateFactIds: ["fact_experience_001_role"],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock",
+          text: "I would welcome the chance to discuss my interest in the role.",
+          claimIds: ["claim_employer_value_001"],
+          factIds: [],
+          demandIds: ["demand_core_001"],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+        closeLine: {
+          section: "closeLine",
+          text: "I would welcome the chance to discuss my interest in the role.",
+          claimIds: ["claim_close_001"],
+          factIds: [],
+          demandIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+      },
+    };
+
+    expect(() =>
+      finalizeProposalForPersistence({
+        content: genericContent,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: genericProvenance,
+      }),
+    ).toThrow(/substantive body content|candidate-backed evidence/i);
+  });
+
   it("accepts duration-led first-person CV evidence during premium finalization", () => {
     const saved = finalizeProposalForPersistence({
       content: [
@@ -1276,10 +1819,139 @@ describe("proposal writer prompt contract", () => {
     });
 
     expect(saved.content).toContain(
+      "I can bring that same discipline to the store team.",
+    );
+    expect(saved.content).not.toContain(
+      "I would be glad to discuss the position further.",
+    );
+    expect(saved.qualityShadow?.issues).not.toContain("generic_tone");
+  });
+
+  it("reports a thin premium artifact from final-visible text instead of fallback body parts", () => {
+    const fallbackBodyParts = {
+      opening:
+        "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      proofBlock:
+        "As a Customer Success Manager at Lumio Health, I managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+      employerValueBlock:
+        "This experience would help the team identify account risk earlier and strengthen retention.",
+      closeLine:
+        "I would bring that same structured approach to your enterprise accounts.",
+    };
+    const thinContent = [
+      "Dear Hiring Manager,",
+      "",
+      fallbackBodyParts.opening,
+      "",
+      fallbackBodyParts.proofBlock,
+      "",
+      "Sincerely,",
+      "Priya Sharma",
+    ].join("\n");
+
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content: thinContent,
+        sections: [{ type: "text", content: thinContent }],
+        bodyParts: fallbackBodyParts,
+        qualityShadow: { passed: true, score: 100, issues: [] },
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Priya Sharma",
+      voicePreset: "engaging",
+      hasCandidateContext: true,
+    });
+
+    expect(saved.content).toContain(fallbackBodyParts.closeLine);
+    expect(saved.content).not.toContain(
       "I would be glad to discuss the position further.",
     );
     expect(saved.qualityShadow?.passed).toBe(false);
-    expect(saved.qualityShadow?.issues).toContain("generic_tone");
+    expect(saved.qualityShadow?.issues).toContain("weak_employer_argument");
+  });
+
+  it("preserves trusted structured premium employer value and close text", () => {
+    const bodyParts = {
+      opening:
+        "My customer-success work has centered on structured onboarding and proactive account management.",
+      proofBlock:
+        "At Lumio Health, I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      employerValueBlock:
+        "For a team focused on account health, that combination of onboarding discipline and reporting would keep risk visible earlier.",
+      closeLine:
+        "I would bring that same structured approach to your enterprise accounts.",
+    };
+    const content = [
+      "Dear Hiring Manager,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Sincerely,",
+      "Priya Sharma",
+    ].join("\n");
+    const candidateFact = {
+      id: "fact_retention",
+      section: "proofBlock" as const,
+      text: bodyParts.proofBlock,
+      source: "cv" as const,
+      metrics: ["18%"],
+      entities: ["Lumio Health"],
+    };
+    const section = (
+      name: keyof typeof bodyParts,
+      factIds: string[] = [],
+    ) => ({
+      section: name,
+      text: bodyParts[name],
+      claimIds: [`claim_${name}`],
+      factIds,
+      demandIds: name === "employerValueBlock" ? ["demand_account_health"] : [],
+      candidateFactIds: factIds,
+      verifiedCandidateFactIds: factIds,
+    });
+    const finalProvenance: PremiumCoverLetterFinalProvenance = {
+      version: "premium_cover_letter_final_provenance_v1",
+      status: "validated_final_text",
+      origin: "provider_reported",
+      contextClass: "cv_direct",
+      candidateFactIds: [candidateFact.id],
+      verifiedCandidateFactIds: [candidateFact.id],
+      candidateFacts: [candidateFact],
+      sections: {
+        opening: section("opening"),
+        proofBlock: section("proofBlock", [candidateFact.id]),
+        employerValueBlock: section("employerValueBlock"),
+        closeLine: section("closeLine"),
+      },
+    };
+
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+        finalProvenance,
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Priya Sharma",
+      voicePreset: "engaging",
+      hasCandidateContext: true,
+    });
+
+    expect(saved.content).toBe(content);
+    expect(saved.content).toContain(bodyParts.employerValueBlock);
+    expect(saved.content).toContain(bodyParts.closeLine);
+    expect(saved.content).not.toContain(
+      "I would be glad to discuss the position further.",
+    );
   });
 
   it("applies the same candidate-evidence guard to premium persistence payloads", () => {
@@ -4456,6 +5128,249 @@ describe("proposal writer prompt contract", () => {
         noContextMode: true,
       }),
     ).toThrow(/substantive body content/i);
+  });
+
+  it("preserves safe French no-CV premium role-surface content through persistence finalization", () => {
+    const bodyParts = {
+      opening:
+        "Ce poste demande de la rigueur, une communication claire et un suivi régulier.",
+      proofBlock:
+        "La mission repose sur l’organisation des tâches quotidiennes et la gestion des échanges.",
+      employerValueBlock:
+        "J’aborderais ce travail avec méthode, attention aux détails et communication claire.",
+      closeLine:
+        "Je serais ravi d’échanger sur la manière dont j’aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.opening);
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+    expect(finalized.content).toContain(bodyParts.employerValueBlock);
+    expect(finalized.content).toContain(bodyParts.closeLine);
+    expect(finalized.qualityShadow?.issues ?? []).not.toContain("generic_tone");
+  });
+
+  it("preserves French no-CV role-surface content when the operational detail is in the consequence sentence", () => {
+    const bodyParts = {
+      opening:
+        "Je suis intéressé par ce poste d'Assistant administratif en raison de son accent sur la rigueur et l'organisation quotidienne.",
+      proofBlock:
+        "Le rôle implique une communication claire et un suivi régulier pour soutenir une équipe active.",
+      employerValueBlock:
+        "Une gestion structurée des échanges et des tâches permet à l'équipe de maintenir son rythme.",
+      closeLine:
+        "Je serais ravi d'échanger sur la manière dont j'aborderais ce travail avec rigueur et suivi.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(trace.failureStage).toBeUndefined();
+    expect(
+      trace.cleanedBodySelection.aggressive.groundedOperationalSentenceCount,
+    ).toBeGreaterThanOrEqual(1);
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+    expect(finalized.content).toContain(bodyParts.employerValueBlock);
+  });
+
+  it("preserves French no-CV interest openers when role surface follows the interest phrase", () => {
+    const bodyParts = {
+      opening:
+        "Je suis intéressé par ce poste qui implique de gérer l'organisation quotidienne et de coordonner les échanges avec les équipes.",
+      proofBlock:
+        "Le rôle demande de suivre les dossiers et de maintenir une communication claire avec les interlocuteurs internes.",
+      employerValueBlock:
+        "Ce suivi fiable aide les équipes à garder les tâches lisibles.",
+      closeLine:
+        "Je serais ravi d'échanger sur la manière dont j'aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(trace.failureStage).toBeUndefined();
+    expect(
+      trace.cleanedBodySelection.aggressive.groundedOperationalSentenceCount,
+    ).toBeGreaterThanOrEqual(2);
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.opening);
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+  });
+
+  it("preserves French no-CV role continuations after the role has been introduced", () => {
+    const bodyParts = {
+      opening:
+        "Ce poste, centré sur le suivi administratif et la coordination des tâches, m'intéresse particulièrement.",
+      proofBlock:
+        "Il implique une organisation rigoureuse des dossiers, une communication fluide avec les équipes et une planification fiable.",
+      employerValueBlock:
+        "Une gestion structurée des échanges aide les équipes à garder un suivi régulier.",
+      closeLine:
+        "Je serais ravi d'échanger sur la manière dont j'aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(trace.failureStage).toBeUndefined();
+    expect(
+      trace.cleanedBodySelection.aggressive.groundedOperationalSentenceCount,
+    ).toBeGreaterThanOrEqual(2);
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.opening);
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+  });
+
+  it("still fails closed for French no-CV generic close without role-surface substance", () => {
+    const trace = inspectProposalFinalization({
+      content: [
+        "Je serais ravi d’échanger sur la manière dont j’aborderais ce type de mission.",
+        "",
+        "Je vous remercie pour votre temps et votre considération.",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+
+    expect(trace.finalOutput).toBeUndefined();
+    expect(trace.failureStage).toBe("cleaned_body_selection");
+    expect(trace.errorMessage).toMatch(/substantive body content/i);
+  });
+
+  it("still fails closed for French no-CV candidate-operation claims during finalization", () => {
+    const trace = inspectProposalFinalization({
+      content: [
+        "Je coordonne les opérations quotidiennes avec attention à la planification et à la communication.",
+        "",
+        "Je gère les échanges entre équipes et je m’occupe de garder les dossiers à jour.",
+        "",
+        "Je veille à maintenir des flux de travail organisés.",
+        "",
+        "Je suis spécialisé dans la coordination administrative.",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+
+    expect(trace.finalOutput).toBeUndefined();
+    expect(trace.failureStage).toBe("cleaned_body_selection");
+    expect(trace.errorMessage).toMatch(/substantive body content/i);
   });
 
   it("still fails closed for nearby weak shells with entity names containing initials and periods", () => {

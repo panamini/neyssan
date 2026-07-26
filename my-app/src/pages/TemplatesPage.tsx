@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui";
 import ResumePage from "../features/verbati/resume/ResumePage";
 import { ResumeTemplateRenderer } from "../features/verbati/resume/ResumeTemplateRenderer";
@@ -10,7 +10,7 @@ import { ProposalDocumentRenderer } from "../components/proposal-render/Proposal
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
-import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import { DOCUMENT_PAGE_SIZES } from "../lib/document-page-size";
 import { buildStyledResumePrintSource } from "../lib/document-export-models";
 import {
   resolvePreviewCanonicalAppearance,
@@ -18,7 +18,11 @@ import {
 } from "../lib/layout/documentAppearance";
 import { getResumeTemplateDefinition } from "../lib/layout/resumeTemplates";
 import { planWorkshopResumePages } from "../lib/resume/resumePagination";
-import { createProposalWorkspaceResetState } from "../lib/proposal-workspace-state";
+import {
+  buildProposalTemplateApplyRoute,
+  createProposalWorkspaceResetState,
+  readProposalTemplateReturnTo,
+} from "../lib/proposal-workspace-state";
 import { templatePreviewApplicant, templatePreviewProposal } from "./templatePreviewSamples";
 import type { CvDocument } from "../types/cvDocument";
 import { translateUi, type UiMessageKey } from "../lib/i18n";
@@ -53,7 +57,7 @@ export type TemplateFamily =
   | "joella-frame-letterhead"
   | "bayer-letterhead";
 
-type TemplateCard = {
+export type TemplateCard = {
   id: string;
   name: string;
   kind: "Cover letter" | "Resume";
@@ -103,17 +107,17 @@ const TEMPLATES: TemplateCard[] = [
   },
   {
     id: "minimal-letter",
-    name: "Minimal",
+    name: "Minimal · US Letter",
     kind: "Cover letter",
     family: "minimal",
-    descriptionKey: "templates.description.minimalLetter",
+    descriptionKey: "templates.description.minimalUsLetter",
   },
   {
     id: "bold-letter",
-    name: "French",
+    name: "French · A4",
     kind: "Cover letter",
     family: "bold",
-    descriptionKey: "templates.description.boldLetter",
+    descriptionKey: "templates.description.frenchA4Letter",
   },
   {
     id: "letterpress-letter",
@@ -158,6 +162,13 @@ const TEMPLATES: TemplateCard[] = [
     descriptionKey: "templates.description.letterpressLetter",
   },
   {
+    id: "joella-frame-letterhead",
+    name: "Joella Frame Letterhead",
+    kind: "Cover letter",
+    family: "joella-frame-letterhead",
+    descriptionKey: "templates.description.letterpressLetter",
+  },
+  {
     id: "bayer-letterhead",
     name: "Bayer",
     kind: "Cover letter",
@@ -165,6 +176,10 @@ const TEMPLATES: TemplateCard[] = [
     descriptionKey: "templates.description.letterpressLetter",
   },
 ];
+
+export const COVER_LETTER_TEMPLATES = TEMPLATES.filter(
+  (template) => template.kind === "Cover letter",
+);
 
 const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
   "workshop-onecol": resolveVerbatiStyle({
@@ -307,20 +322,35 @@ function getCoverLetterTemplateIntent(
 ): CoverLetterTemplateIntent | null {
   if (family === "minimal") return "minimal";
   if (family === "bold") return "direct";
-  if (family === "letterpress") return "editorial";
+  if (family === "letterpress" || family === "editorial-letterhead") {
+    return "editorial";
+  }
   return null;
 }
 
-function getCoverLetterRouteTemplateIntent(
+export function getCoverLetterRouteTemplateIntent(
   template: TemplateCard,
 ): TemplateRouteIntent | null {
-  const styleSlotIntent = getCoverLetterTemplateIntent(template.family);
-  if (styleSlotIntent) return styleSlotIntent;
-
   const directTemplateId = PROPOSAL_PREVIEW_TEMPLATES[template.family] ?? null;
-  return directTemplateId && template.family.includes("letterhead")
-    ? directTemplateId
-    : null;
+  if (directTemplateId) return directTemplateId;
+
+  return getCoverLetterTemplateIntent(template.family);
+}
+
+function getCoverLetterCreationPageSizeIntent(
+  template: TemplateCard,
+): "a4" | "letter" | null {
+  if (template.family === "minimal") return "letter";
+  if (template.family === "bold") return "a4";
+  return null;
+}
+
+function isCanonicalCoverLetterTemplateStart(template: TemplateCard): boolean {
+  return (
+    template.family === "minimal" ||
+    template.family === "bold" ||
+    template.family === "editorial-letterhead"
+  );
 }
 
 export function TemplateDocumentPreview({
@@ -389,6 +419,11 @@ export function TemplateDocumentPreview({
     );
   }
 
+  const proposalPageSize =
+    family === "minimal"
+      ? DOCUMENT_PAGE_SIZES.letter
+      : DOCUMENT_PAGE_SIZES.a4;
+
   return (
     <ProposalDocumentRenderer
       content={templatePreviewProposal.content}
@@ -404,7 +439,8 @@ export function TemplateDocumentPreview({
       applicantHeader={templatePreviewApplicant}
       headerVisibility={templatePreviewProposal.headerVisibility}
       documentTypography={getProposalDocumentTypography("direct", stylePreset)}
-      pageWidth={A4_PAGE_WIDTH_PX}
+      pageSize={proposalPageSize}
+      pageWidth={proposalPageSize.widthPx}
       stylePreset={stylePreset}
       documentThemeVars={serializeProposalDocumentThemeVars(
         resolvePreviewCanonicalAppearance(stylePreset),
@@ -415,6 +451,7 @@ export function TemplateDocumentPreview({
 
 export function TemplatesPage(): JSX.Element {
   const navigate = useNavigate();
+  const location = useLocation();
   const { resolvedLanguage } = useUiLanguagePreference();
   const t = React.useCallback(
     (key: UiMessageKey) => translateUi(resolvedLanguage, key),
@@ -470,7 +507,22 @@ export function TemplatesPage(): JSX.Element {
       }
 
       const templateIdParam = getCoverLetterRouteTemplateIntent(template);
-      navigate(`/proposal${templateIdParam ? `?templateId=${templateIdParam}` : ""}`, {
+      const routeParams = new URLSearchParams();
+      if (templateIdParam) {
+        routeParams.set("templateId", templateIdParam);
+      }
+      const pageSizeIntent = getCoverLetterCreationPageSizeIntent(template);
+      if (pageSizeIntent) {
+        routeParams.set("pageSize", pageSizeIntent);
+      }
+      const styleSlotIntent = getCoverLetterTemplateIntent(template.family);
+      if (styleSlotIntent) {
+        routeParams.set("styleSlot", styleSlotIntent);
+      }
+      if (isCanonicalCoverLetterTemplateStart(template)) {
+        routeParams.set("templateStart", "1");
+      }
+      navigate(`/proposal${routeParams.size ? `?${routeParams.toString()}` : ""}`, {
         state: createProposalWorkspaceResetState(),
       });
     },
@@ -484,9 +536,18 @@ export function TemplatesPage(): JSX.Element {
       }
 
       const templateIdParam = getCoverLetterRouteTemplateIntent(template);
-      navigate(`/proposal${templateIdParam ? `?templateId=${templateIdParam}` : ""}`);
+      const styleSlotIntent = getCoverLetterTemplateIntent(template.family);
+      navigate(
+        templateIdParam
+          ? buildProposalTemplateApplyRoute(
+              location.state,
+              templateIdParam,
+              styleSlotIntent ?? undefined,
+            )
+          : readProposalTemplateReturnTo(location.state) ?? "/proposal",
+      );
     },
-    [navigate],
+    [location.state, navigate],
   );
 
   return (

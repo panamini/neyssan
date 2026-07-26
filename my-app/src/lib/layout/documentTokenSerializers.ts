@@ -1811,6 +1811,10 @@ export type ResumeDocxSurfaceTokens = {
 };
 
 export type ProposalDocxSurfaceTokens = {
+  pageSizeTwip: {
+    width: number;
+    height: number;
+  };
   pageMarginsTwip: {
     top: number;
     right: number;
@@ -1872,6 +1876,10 @@ export function resolveProposalDocxSurfaceTokens(
   tokens: CanonicalDocumentTokens,
 ): ProposalDocxSurfaceTokens {
   return {
+    pageSizeTwip: {
+      width: mmToTwip(tokens.geometry.page.widthMm),
+      height: mmToTwip(tokens.geometry.page.heightMm),
+    },
     pageMarginsTwip: {
       top: mmToTwip(tokens.geometry.page.margin.topMm),
       right: mmToTwip(tokens.geometry.page.margin.rightMm),
@@ -1894,7 +1902,7 @@ export function resolveProposalDocxSurfaceTokens(
       tokens.flow.type.meta.lineHeight,
     ),
     sectionGapTwip: mmToTwip(tokens.flow.rhythm.sectionGapMm ?? 0),
-    compactGapTwip: mmToTwip(tokens.flow.rhythm.stackGapMm ?? 3),
+    compactGapTwip: mmToTwip(tokens.flow.rhythm.listGapMm ?? 1.3),
     bodyGapTwip: mmToTwip(tokens.flow.rhythm.stackGapMm ?? 3),
     salutationGapTwip: mmToTwip(tokens.flow.rhythm.stackGapMm ?? 3),
     closingBeforeTwip: mmToTwip(tokens.flow.rhythm.closingGapMm ?? 7),

@@ -2,6 +2,10 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import {
+  bestEffortDeleteMcpReadSidePackageForStoredProposal,
+  bestEffortMaterializeMcpReadSideForStoredProposal,
+} from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -181,6 +185,7 @@ export const storeProposal = internalMutation({
       tags: v.optional(v.array(v.string())),
       sourceJobTitle: v.optional(v.string()),
       sourceJobDescription: v.optional(v.string()),
+      targetEmployerName: v.optional(v.string()),
       sourceUrl: v.optional(v.string()),
       sourceCvId: v.optional(v.string()),
       planned_path: v.optional(v.string()),
@@ -238,6 +243,7 @@ export const storeProposal = internalMutation({
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
       requestedLanguage: v.optional(v.union(v.string(), v.null())),
       resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+      pageSize: v.optional(v.union(v.literal("a4"), v.literal("letter"))),
       languageSource: v.optional(v.union(v.string(), v.null())),
       jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
       closing: v.optional(proposalClosingChoice),
@@ -256,10 +262,17 @@ export const storeProposal = internalMutation({
     }),
   },
   handler: async (ctx, args) => {
-    return ctx.db.insert("proposals", {
+    const proposal = {
       ...args,
       metadata: sanitizeRemoteMetadataImages(args.metadata) as typeof args.metadata,
+    };
+    const proposalId = await ctx.db.insert("proposals", proposal);
+    await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
+      _id: proposalId,
+      ...proposal,
     });
+
+    return proposalId;
   },
 });
 
@@ -304,6 +317,7 @@ export const updateProposal = internalMutation({
       tags: v.optional(v.array(v.string())),
       sourceJobTitle: v.optional(v.string()),
       sourceJobDescription: v.optional(v.string()),
+      targetEmployerName: v.optional(v.string()),
       sourceUrl: v.optional(v.string()),
       sourceCvId: v.optional(v.string()),
       planned_path: v.optional(v.string()),
@@ -361,6 +375,7 @@ export const updateProposal = internalMutation({
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
       requestedLanguage: v.optional(v.union(v.string(), v.null())),
       resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+      pageSize: v.optional(v.union(v.literal("a4"), v.literal("letter"))),
       languageSource: v.optional(v.union(v.string(), v.null())),
       jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
       closing: v.optional(proposalClosingChoice),
@@ -381,13 +396,20 @@ export const updateProposal = internalMutation({
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
-    return ctx.db.patch(id, {
+    const patch = {
       ...updates,
       metadata: sanitizeRemoteMetadataImages(
         updates.metadata,
       ) as typeof updates.metadata,
       updatedAt: Date.now(),
-    });
+    };
+
+    await ctx.db.patch(id, patch);
+
+    const proposal = await ctx.db.get(id);
+    if (proposal) {
+      await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, proposal);
+    }
   },
 });
 
@@ -396,6 +418,11 @@ export const deleteProposal = internalMutation({
     id: v.id("proposals"),
   },
   handler: async (ctx, args) => {
+    const proposal = await ctx.db.get(args.id);
+    if (proposal) {
+      await bestEffortDeleteMcpReadSidePackageForStoredProposal(ctx, proposal);
+    }
+
     return ctx.db.delete(args.id);
   },
 });

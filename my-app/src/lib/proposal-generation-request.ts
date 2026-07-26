@@ -8,6 +8,7 @@ import type { ProposalGenerationPersonalizationPayload } from "./proposal-person
 export type ProposalGenerationRequestPayload = {
   jobTitle: FormValues["jobTitle"];
   jobDescription: FormValues["jobDescription"];
+  targetEmployerName: string | null;
   jobId?: string;
   clientRunId?: string;
   proposalType: FormValues["proposalType"];
@@ -49,6 +50,7 @@ export function buildProposalGenerationRequest(
   voicePresetOverride?: FormValues["voicePreset"] | null,
   jobId?: string | null,
   languageMetadata?: DocumentLanguageGenerationMetadata,
+  targetEmployerName?: string | null,
 ): ProposalGenerationRequestPayload {
   const normalizedValues = applyProposalVoiceSelection(
     values,
@@ -57,6 +59,7 @@ export function buildProposalGenerationRequest(
   const payload: ProposalGenerationRequestPayload = {
     jobTitle: normalizedValues.jobTitle,
     jobDescription: normalizedValues.jobDescription,
+    targetEmployerName: targetEmployerName?.trim() || null,
     ...(jobId ? { jobId } : {}),
     proposalType: normalizedValues.proposalType,
     modelType: normalizedValues.modelType,

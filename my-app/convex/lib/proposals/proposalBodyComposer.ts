@@ -325,6 +325,7 @@ function buildGlobalProgressionBrief(args: {
       ? [
           "- For adjacent or distant-role cases, state only factual overlap supported by the plan. If relevance is limited, keep it limited.",
           "- Do not imply target-role readiness or use abstract transfer rhetoric when the plan does not support it.",
+          "- Evidence chain for each paragraph: name the job priority, use only the paragraph's source-backed candidate fact or allowed theme, then state why that evidence matters for the role.",
         ]
       : []),
   ];

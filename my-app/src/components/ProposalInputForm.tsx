@@ -133,6 +133,7 @@ interface ProposalInputFormProps {
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
   canonicalJobId?: string | null;
+  targetEmployerName?: string | null;
   jobSourceLanguage?: string | null;
 }
 
@@ -412,6 +413,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   sourceUrl: liveSourceUrl = null,
   sourcePlatform: liveSourcePlatform = null,
   canonicalJobId = null,
+  targetEmployerName = null,
   jobSourceLanguage = null,
 }) => {
   const navigate = useNavigate();
@@ -1051,6 +1053,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     );
 
     const normalizedValues = normalizeProposalFormValues(values);
+    const submittedTargetEmployerName =
+      targetEmployerName &&
+      externalComposeDraft &&
+      (normalizedValues.jobTitle.trim() !==
+        (externalComposeDraft.jobTitle ?? "").trim() ||
+        normalizedValues.jobDescription.trim() !==
+          (externalComposeDraft.jobDescription ?? "").trim())
+        ? null
+        : targetEmployerName;
 
     try {
       shouldNotifySubmitAnimationCompleteRef.current = false;
@@ -1073,6 +1084,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           undefined,
           canonicalJobId,
           languageMetadata,
+          submittedTargetEmployerName,
         ),
         clientRunId,
       };

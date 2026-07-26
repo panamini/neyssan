@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -194,7 +195,56 @@ async function resolveRenderedResumePageLocator(
   );
 }
 
-function resolveFrontendBaseUrls(): string[] {
+function isDockerRuntime(): boolean {
+  const override = process.env.DOCUMENT_EXPORT_DOCKER_HOST_FALLBACK_FIRST;
+  if (override === "1" || override === "true") {
+    return true;
+  }
+  if (override === "0" || override === "false") {
+    return false;
+  }
+
+  if (existsSync("/.dockerenv")) {
+    return true;
+  }
+
+  try {
+    const cgroup = readFileSync("/proc/self/cgroup", "utf8");
+    return /\b(docker|containerd|kubepods)\b/i.test(cgroup);
+  } catch {
+    return false;
+  }
+}
+
+function expandFrontendBaseUrlCandidate(candidate: unknown): string[] {
+  const trimmed = String(candidate ?? "").trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalized = trimmed.replace(/\/+$/, "");
+  const expanded = [normalized];
+  try {
+    const parsed = new URL(normalized);
+    if (
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1"
+    ) {
+      parsed.hostname = "host.docker.internal";
+      const dockerHostCandidate = parsed.toString().replace(/\/$/, "");
+      if (isDockerRuntime()) {
+        expanded.unshift(dockerHostCandidate);
+      } else {
+        expanded.push(dockerHostCandidate);
+      }
+    }
+  } catch {
+    // Keep the original candidate; navigation will surface an actionable error.
+  }
+  return expanded;
+}
+
+export function resolveFrontendBaseUrls(): string[] {
   const candidates = [
     process.env.DOCUMENT_EXPORT_FRONTEND_URL,
     process.env.CLIENT_ORIGIN,
@@ -206,11 +256,9 @@ function resolveFrontendBaseUrls(): string[] {
 
   const resolved: string[] = [];
   for (const candidate of candidates) {
-    const trimmed = String(candidate ?? "").trim();
-    if (trimmed) {
-      const normalized = trimmed.replace(/\/+$/, "");
-      if (!resolved.includes(normalized)) {
-        resolved.push(normalized);
+    for (const value of expandFrontendBaseUrlCandidate(candidate)) {
+      if (!resolved.includes(value)) {
+        resolved.push(value);
       }
     }
   }
@@ -726,7 +774,13 @@ async function main(): Promise<void> {
   });
 }
 
-void main().catch((error) => {
-  console.error("[document-export-worker] failed", error);
-  process.exit(1);
-});
+const isDirectExecution =
+  typeof process.argv[1] === "string" &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  void main().catch((error) => {
+    console.error("[document-export-worker] failed", error);
+    process.exit(1);
+  });
+}

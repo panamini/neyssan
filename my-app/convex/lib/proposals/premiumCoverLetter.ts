@@ -2,7 +2,11 @@ import { z } from "zod";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 
-import { llmConfig } from "../../../config/llmConfig";
+import {
+  llmConfig,
+  resolveOpenAIProposalReasoningEffort,
+  type OpenAIProposalReasoningEffort,
+} from "../../../config/llmConfig";
 import {
   getDeterministicCopyLanguage,
   type ProposalOutputLanguage,
@@ -17,8 +21,34 @@ import {
   FRENCH_DEFAULT_SIGNOFF,
   FRENCH_SALUTATION,
 } from "./proposalRenderer";
+import {
+  buildOpenAIResponsesRequest,
+  extractOpenAIJsonPayload as extractOpenAIJsonPayloadFromTransport,
+  generateOpenAIResponsesStructured,
+  type OpenAIResponsesProviderResponseMetadata,
+} from "./premiumCoverLetterOpenAITransport";
+import {
+  validateEnglishCvBackedQualityGate,
+  type EnglishCvBackedQualityGateIssueCode,
+} from "./premiumCoverLetterEnglishQualityGate";
+import {
+  buildPremiumCoverLetterNumericEvidenceProjection,
+  matchPremiumCoverLetterNumericEvidence,
+  numericEvidenceNormalizedValues,
+  premiumCoverLetterFactGraphNumericMetrics,
+  type PremiumCoverLetterNumericEvidenceProjection,
+} from "./premiumCoverLetterNumericEvidence";
+import {
+  canonicalizePremiumCoverLetterToken,
+  expandPremiumCoverLetterTokenVariants,
+} from "./premiumCoverLetterTokenNormalization";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
+import {
+  MISSING_TARGET_EMPLOYER,
+  resolveTargetEmployerAuthorities,
+  type TargetEmployerResolution,
+} from "./premiumCoverLetterTargetEmployer";
 
 export type PremiumCoverLetterContextClass =
   | "cv_direct"
@@ -34,6 +64,22 @@ export type PremiumCoverLetterWriterProvider =
   | "mistral"
   | "qwen"
   | "unknown";
+
+const ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES =
+  new Set<EnglishCvBackedQualityGateIssueCode>([
+    "incomplete_sentence",
+    "missing_fact_reference",
+    "unexpected_writer_reuse",
+    "duplicate_visible_sentence",
+    "duplicate_visible_metric",
+    "unsupported_visible_metric",
+    "employer_value_not_grounded",
+  ]);
+
+const ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES =
+  new Set<EnglishCvBackedQualityGateIssueCode>([
+    "duplicate_visible_sentence",
+  ]);
 
 export type AllowedFact = {
   text: string;
@@ -165,7 +211,7 @@ export type CoverLetterBrief = {
   contextClass: PremiumCoverLetterContextClass;
   candidateEvidenceAvailable: boolean;
   targetRole: string;
-  employerName?: string;
+  targetEmployer: TargetEmployerResolution;
   topEvidence: string[];
   supportEvidence: string[];
   transferCore?: string[];
@@ -210,9 +256,96 @@ export type PremiumWriterOutputV1 = {
   };
 };
 
+export type PremiumCoverLetterNumericEvidenceValidationContext = Readonly<{
+  projection: PremiumCoverLetterNumericEvidenceProjection;
+  allowMeasurementTranslation: boolean;
+  provenanceBySection: Readonly<
+    Record<
+      ClaimPlanSection,
+      Readonly<{
+        claimIds: readonly string[];
+        factIds: readonly string[];
+        demandIds: readonly string[];
+      }>
+    >
+  >;
+}>;
+
+function numericEvidenceValidationContext(args: {
+  projection: PremiumCoverLetterNumericEvidenceProjection;
+  writerOutput: PremiumWriterOutputV1;
+  allowMeasurementTranslation: boolean;
+}): PremiumCoverLetterNumericEvidenceValidationContext {
+  return {
+    projection: args.projection,
+    allowMeasurementTranslation: args.allowMeasurementTranslation,
+    provenanceBySection: Object.fromEntries(
+      CLAIM_PLAN_SECTIONS.map((section) => {
+        const part = args.writerOutput.bodyParts[section];
+        return [
+          section,
+          {
+            claimIds: part.claimIds,
+            factIds: part.factIds,
+            demandIds: part.demandIds,
+          },
+        ];
+      }),
+    ) as Record<
+      ClaimPlanSection,
+      { claimIds: string[]; factIds: string[]; demandIds: string[] }
+    >,
+  };
+}
+
+export type PremiumCoverLetterFinalProvenanceStatus =
+  | "validated_final_text"
+  | "validated_after_structured_repair"
+  | "invalidated_by_late_mutation"
+  | "untrusted_legacy_wrapped"
+  | "untrusted_no_cv"
+  | "untrusted_no_candidate_fact";
+
+export type PremiumCoverLetterFinalProvenanceOrigin =
+  | "provider_reported"
+  | "provider_normalized"
+  | "legacy_wrapped";
+
+export type PremiumCoverLetterFinalProvenanceFact = {
+  id: string;
+  section: ClaimPlanSection;
+  text: string;
+  source: "cv";
+  metrics: string[];
+  entities: string[];
+};
+
+export type PremiumCoverLetterFinalProvenanceSection = {
+  section: ClaimPlanSection;
+  text: string;
+  claimIds: string[];
+  factIds: string[];
+  demandIds: string[];
+  candidateFactIds: string[];
+  verifiedCandidateFactIds: string[];
+};
+
+export type PremiumCoverLetterFinalProvenance = {
+  version: "premium_cover_letter_final_provenance_v1";
+  status: PremiumCoverLetterFinalProvenanceStatus;
+  origin: PremiumCoverLetterFinalProvenanceOrigin;
+  contextClass: PremiumCoverLetterContextClass;
+  candidateFactIds: string[];
+  verifiedCandidateFactIds: string[];
+  candidateFacts: PremiumCoverLetterFinalProvenanceFact[];
+  sections: Record<ClaimPlanSection, PremiumCoverLetterFinalProvenanceSection>;
+};
+
 export type PremiumCoverLetterGenerationResult = {
   bodyParts: CoverLetterBodyParts;
   qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  qualityRepair?: PremiumCoverLetterQualityRepairTrace;
+  finalProvenance?: PremiumCoverLetterFinalProvenance;
   mode: "direct" | "transfer" | "no_cv";
   evidenceUsed: string[];
   omittedWeakEvidence: string[];
@@ -242,6 +375,32 @@ export type PremiumCoverLetterEligibility = {
     | "no_allowed_facts";
 };
 
+export type PremiumCoverLetterQualityRepairOutcome =
+  | "disabled"
+  | "not_needed"
+  | "attempted_accepted"
+  | "rejected_invalid_output"
+  | "rejected_validation"
+  | "rejected_provenance"
+  | "rejected_not_improved"
+  | "provider_error"
+  | "canceled";
+
+export type PremiumCoverLetterQualityRepairTrace = {
+  enabled: boolean;
+  eligible: boolean;
+  attempted: boolean;
+  outcome: PremiumCoverLetterQualityRepairOutcome;
+  rejectionCategory?: Exclude<
+    PremiumCoverLetterQualityRepairOutcome,
+    "disabled" | "not_needed" | "attempted_accepted" | "canceled"
+  >;
+  qualityBefore: PremiumCoverLetterQualityShadowResult;
+  qualityAfter?: PremiumCoverLetterQualityShadowResult;
+  finalProvenanceStatus?: PremiumCoverLetterFinalProvenanceStatus;
+  verifiedCandidateFactCount?: number;
+};
+
 export type PremiumCoverLetterAttemptResult =
   PremiumCoverLetterGenerationResult & {
     content: string;
@@ -260,6 +419,9 @@ export type PremiumCoverLetterWriter = (args: {
   signal?: AbortSignal;
 }) => Promise<unknown>;
 
+export type PremiumCoverLetterProviderResponseMetadata =
+  OpenAIResponsesProviderResponseMetadata;
+
 export const PREMIUM_COVER_LETTER_OPENAI_MODEL: PremiumCoverLetterWriterModel =
   "gpt-5.5";
 export const PREMIUM_COVER_LETTER_WRITER_MODELS = [
@@ -272,6 +434,26 @@ export const PREMIUM_COVER_LETTER_SUPPORTED_PRESETS = [
   "expert",
   "engaging",
 ] as const satisfies readonly PremiumCoverLetterPreset[];
+
+export const PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_VERSION =
+  "premium_cover_letter_prompt_v2_mistral";
+
+const PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_GUIDANCE = [
+  `Premium cover-letter prompt version: ${PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_VERSION}.`,
+  "This V2 block is Mistral-only and feature-flagged. It refines writing behavior without changing ClaimPlan, facts, provenance, schema, retries, or provider routing.",
+  "Offer appropriation: read the job offer as prioritization context, then write from the candidate's strongest relevant evidence. Do not summarize, repeat, enumerate, or paraphrase the offer back to the employer.",
+  "Requirement-to-candidate angle: transform each selected requirement into a candidate-side angle only when a CV fact supports the action, artifact, scope, stakeholder, tool, metric, environment, or operating habit.",
+  "Missing requirements are gaps, omissions, or non-claims. Never convert a job demand, preferred qualification, compliance framework, credential, or employer goal into candidate experience.",
+  "No job-offer listing: do not write a checklist of responsibilities, benefits, requirements, keywords, or company claims. Use job terms only when attached to structured CV evidence.",
+  "Factuality lock: do not invent facts, credentials, numbers, timelines, seniority, ownership, outcomes, motivation, values alignment, or company-specific admiration.",
+  "Atomic CV fact lock: CV facts are atomic and non-expandable. Reuse or narrowly paraphrase the exact CV fact; do not add plausible adjacent engineering, process, ownership, or system details unless explicitly present in candidate facts.",
+  "Migration boundary: \"migration\" describes movement only. It does not imply system redesign, process ownership, component governance, component versioning, token architecture, release process ownership, tooling ownership, or system standardization unless those details are explicitly present in CV evidence.",
+  "Design-system migration boundary: never infer component versioning, component governance, token architecture, release process ownership, tooling ownership, or system standardization from a design-system migration fact unless the CV evidence explicitly says that exact system or process detail.",
+  "If the CV says only design-system migration across squads and improved release consistency across shared interface work, write only those facts or a narrow paraphrase. Do not expand them into component standards, versioning, governance, token work, tooling ownership, release ownership, or system standardization.",
+  "Structured evidence lock: keep PremiumWriterOutputV1 provenance precise. Cite only claimIds, factIds, and demandIds actually used by that section; demandIds remain role context and never candidate proof.",
+  "Keep candidate proof structured and visible through the JSON ids while making the prose read like a natural premium cover letter.",
+  "Prefer one sharp CV-backed hiring case over comprehensive coverage of the offer.",
+];
 
 export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "Provider adapter: Mistral",
@@ -901,28 +1083,6 @@ const MAX_KEY_REQUIREMENTS = 2;
 const MAX_PREFERRED_QUALIFICATIONS = 2;
 const MAX_LOW_VALUE_CHECKLIST_ITEMS = 5;
 
-const TOKEN_CANONICALIZATION_RULES = [
-  { pattern: /^admin(?:istrat(?:ion|ive|or|ors)?)$/, canonical: "admin" },
-  {
-    pattern: /^coordinat(?:e|ed|es|ing|ion|or|ors)$/,
-    canonical: "coordinate",
-  },
-  {
-    pattern: /^document(?:ation|ed|ing|s)?$/,
-    canonical: "document",
-  },
-  { pattern: /^implement(?:ation|ed|ing|s|er|ers)?$/, canonical: "implement" },
-  { pattern: /^manag(?:e|ed|es|ing|ement|er|ers)$/, canonical: "manage" },
-  {
-    pattern: /^operat(?:e|ed|es|ing|ion|ions|ional|or|ors)$/,
-    canonical: "operate",
-  },
-  { pattern: /^record(?:ed|ing|s)?$/, canonical: "record" },
-  { pattern: /^report(?:ed|ing|s)?$/, canonical: "report" },
-  { pattern: /^schedul(?:e|ed|es|ing|er|ers)$/, canonical: "schedule" },
-  { pattern: /^track(?:ed|ing|ers|er|s)?$/, canonical: "track" },
-] as const;
-
 const STOPWORDS = new Set([
   "about",
   "across",
@@ -982,11 +1142,11 @@ const STOPWORDS = new Set([
 const ACHIEVEMENT_VERB_PATTERN =
   /\b(?:improv(?:e|ed|es|ing)|reduc(?:e|ed|es|ing)|increas(?:e|ed|es|ing)|grew|grown|boost(?:ed|ing)?|cut|sav(?:ed|ing)|deliver(?:ed|ing)|achiev(?:ed|ing)|drove|driven|expand(?:ed|ing)|optimiz(?:ed|ing)|streamlin(?:ed|ing)|accelerat(?:ed|ing)|surpass(?:ed|ing)|launched?)\b/i;
 const QUANTIFIED_PATTERN =
-  /(?:\d+(?:\.\d+)?%|\b\d+(?:\.\d+)?\s*(?:percent|points|hours|days|weeks|months|years|clients|projects|tickets|cases|units|stores|sites|teams|squads|markets|campaigns|experiments|deliverables)\b)/i;
+  /(?:\d+(?:\.\d+)?\s*%|\b\d+(?:\.\d+)?(?:\s+|[-‑–—])(?:(?:customer|client)\s+)?(?:percent|points|hours|days|weeks|months|years|accounts?|clients?|projects?|tickets?|cases?|units?|stores?|sites?|teams?|squads?|markets?|campaigns?|experiments?|deliverables?|comptes?|projets?|jours?|semaines?|mois|années?|équipes?)\b)/i;
 const RESPONSIBILITY_PATTERN =
   /\b(?:led|managed|owned|oversaw|coordinated|handled|supervised|supported|built|developed|implemented|maintained|operated|executed|delivered|trained|documented|reviewed|monitored)\b/i;
 const WORKFLOW_PATTERN =
-  /\b(?:workflow|process|operations?|handoffs?|sla|qa|quality|ticket|queue|dashboard|reports?|records?|logs?|recording|observations?|surveillance|patrols?|reporting|experiments?|testing|revision|coordination|support|intake|triage|delivery|planning|collaboration)\b/i;
+  /\b(?:workflow|process|operations?|handoffs?|sla|qa|quality|ticket|queue|dashboard|reports?|records?|logs?|recording|observations?|surveillance|patrols?|reporting|experiments?|testing|revision|coordination|support|intake|triage|delivery|planning|collaboration|tableau de bord|comptes? à risque|revues? trimestrielles?)\b/i;
 const TRAIT_PATTERN =
   /\b(?:reliable|adaptable|flexible|motivated|organized|detail-oriented|communicative|curious|proactive)\b/i;
 const TOOL_PATTERN =
@@ -1087,8 +1247,14 @@ const ADJACENT_UNSUPPORTED_OUTCOME_PHRASES = [
   "remove friction",
   "support smooth office operations",
 ] as const;
-const NO_CV_HISTORY_CLAIM_PATTERN =
-  /\b(?:in previous roles?|at my previous|during my|my experience|my background|experience includes|background includes|my experience includes|my background includes|i have worked with|i have managed|i worked(?: as| at)?|i served as|i led|i managed|i coordinated|i developed|i built|i improved|i delivered|i implemented|i maintained|i operated|i supervised|i trained|i documented|i reviewed|i monitored|i hold\b|i earned\b|i completed\b|i studied\b)\b/i;
+const NO_CV_HISTORY_CLAIM_PATTERNS = [
+  /\b(?:in previous roles?|at my previous|during my|my experience|my background|experience includes|background includes|my experience includes|my background includes|i have (?:experience|worked|managed|handled|coordinated|maintained|supported|specialized)\b|i worked(?: as| at)?|i served as|i led|i manage|i managed|i coordinate|i coordinated|i handle|i handled|i maintain|i maintained|i support|i supported|i specialize|i specialize in|i developed|i built|i improve|i improved|i deliver|i delivered|i implement|i implemented|i operate|i operated|i supervise|i supervised|i train|i trained|i document|i documented|i review|i reviewed|i monitor|i monitored|i focus on|i bring (?:experience|background|skills?|discipline|strength|capability|ability|expertise)\b|i hold\b|i earned\b|i completed\b|i studied\b|i(?:'m| am)\s+(?:a|an)\s+(?:administrator|analyst|assistant|coordinator|engineer|lead|manager|officer|operator|professional|specialist|supervisor|worker)\b)\b/i,
+  /\b(?:mon\s+(?:exp[ée]rience|parcours)|mes\s+exp[ée]riences|je\s+coordonne|je\s+g[eè]re|je\s+m(?:['’]|\s+)occupe\s+de|je\s+veille\s+(?:à|a)(?:\s|$)|je\s+suis\s+sp[eé]cialis[ée]e?(?:\s|$)|j(?:['’]|\s+)ai\s+(?:travaill[ée]e?|coordonn[ée]e?|g[ée]r[ée]e?|maintenu|d[ée]velopp[ée]e?|r[ée]alis[ée]e?|supervis[ée]e?|document[ée]e?|suivi))\b/iu,
+] as const;
+
+function hasNoCvHistoryClaim(value: string): boolean {
+  return NO_CV_HISTORY_CLAIM_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 function compactWhitespace(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
@@ -1351,32 +1517,42 @@ function normalizeTokens(value: string): string[] {
 }
 
 function expandNormalizedTokenVariants(token: string): string[] {
-  const variants = new Set<string>();
   if (token.length < 4 || STOPWORDS.has(token)) return [];
 
-  variants.add(token);
-
-  if (token.endsWith("ies") && token.length > 5) {
-    variants.add(`${token.slice(0, -3)}y`);
-  }
-
-  for (const rule of TOKEN_CANONICALIZATION_RULES) {
-    if (rule.pattern.test(token)) {
-      variants.add(rule.canonical);
-    }
-  }
-
-  return Array.from(variants).filter(
+  return expandPremiumCoverLetterTokenVariants(token).filter(
     (variant) => variant.length >= 4 && !STOPWORDS.has(variant),
   );
+}
+
+function isShortTechnicalIdentifierToken(value: string): boolean {
+  return (
+    /^[A-Z]{2,3}$/u.test(value) ||
+    ["R", "Go", "C#", "C++"].includes(value)
+  );
+}
+
+function normalizeCanonicalTokens(value: string): string[] {
+  const tokens = (
+    compactWhitespace(value).match(/[A-Za-z0-9]+(?:\+\+|#)?/gu) ?? []
+  )
+    .filter(
+      (token) =>
+        (token.length >= 4 || isShortTechnicalIdentifierToken(token)) &&
+        !STOPWORDS.has(token.toLowerCase()),
+    )
+    .map((token) => canonicalizePremiumCoverLetterToken(token.toLowerCase()));
+
+  return Array.from(new Set(tokens));
 }
 
 function countOverlap(a: string[], b: Set<string>): number {
   return a.reduce((count, token) => count + (b.has(token) ? 1 : 0), 0);
 }
 
+const SENTENCE_ENDING_PATTERN = /[.!?]+(?:["'”’»)\]}]+)?$/u;
+
 function hasSentenceEnding(value: string): boolean {
-  return /[.!?]$/u.test(compactWhitespace(value));
+  return SENTENCE_ENDING_PATTERN.test(compactWhitespace(value));
 }
 
 function ensureSentenceEnding(value: string): string {
@@ -1386,7 +1562,9 @@ function ensureSentenceEnding(value: string): string {
 }
 
 function splitSentences(value: string): string[] {
-  const matches = compactWhitespace(value).match(/[^.!?\n]+(?:[.!?]+|$)/g);
+  const matches = compactWhitespace(value).match(
+    /[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
+  );
   if (!matches) return [];
   return matches.map((sentence) => compactWhitespace(sentence)).filter(Boolean);
 }
@@ -1632,7 +1810,7 @@ function createFactNode(
     sourcePath,
     confidence: fact.confidence,
     category: fact.category,
-    metrics: extractNumericClaims(fact.text),
+    metrics: premiumCoverLetterFactGraphNumericMetrics(fact.text),
     entities: extractFactEntities(fact.text),
     allowedVerbs: extractAllowedVerbs(fact.text),
     forbiddenUpgrades: inferForbiddenUpgrades(fact.text),
@@ -1773,8 +1951,18 @@ export function buildAllowedFactsPackFromFactGraph(
 }
 
 function extractFactEntities(text: string): string[] {
-  const matches = compactWhitespace(text).match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g);
-  return dedupeStrings(matches ?? []).slice(0, 6);
+  const compact = compactWhitespace(text);
+  const namedEntities = compact.match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g) ?? [];
+  const contextualDigitLeadingEntities = Array.from(
+    compact.matchAll(
+      /\b(?:at|for|with|joined)\s+(\d+(?:[-–—]\d+)*(?:[-–—]?[A-Z][A-Za-z0-9&'.-]*))\b/gi,
+    ),
+    (match) => match[1],
+  );
+  return dedupeStrings([
+    ...namedEntities,
+    ...contextualDigitLeadingEntities,
+  ]).slice(0, 6);
 }
 
 function extractAllowedVerbs(text: string): string[] {
@@ -2010,14 +2198,6 @@ function isSecondaryQualification(fact: AllowedFact): boolean {
   );
 }
 
-function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
-  const candidate = (
-    jobTitle.match(/\bat\s+([A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+){0,3})/)?.[1] ??
-    jobDescription.match(/\b(?:join|at)\s+([A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+){0,3})/)?.[1]
-  )?.trim();
-  return candidate ? compactWhitespace(candidate) : undefined;
-}
-
 function resolveCloseFallback(language: string): string {
   const deterministicLanguage = getDeterministicCopyLanguage(language);
   if (!deterministicLanguage) return "";
@@ -2029,9 +2209,31 @@ function resolveCloseFallback(language: string): string {
 function isGenericPremiumClosingLine(value: string): boolean {
   const normalized = compactWhitespace(value);
   if (!normalized) return false;
-  return /\b(?:i\s+would\s+(?:welcome|be\s+glad|be\s+happy)\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+(?:the\s+)?(?:position|role|opportunity)\s+further|i\s+would\s+(?:welcome|be\s+glad|be\s+happy)\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+my\s+interest\s+in\s+(?:the\s+)?(?:position|role|opportunity)|would\s+welcome\s+the\s+(?:opportunity|chance)\s+to\s+(?:discuss|speak)\s+(?:the\s+)?(?:position|role|opportunity)|discuss\s+(?:the\s+)?(?:position|role|opportunity)\s+further|speak\s+further\s+about\s+(?:the\s+)?(?:position|role|opportunity))\b/i.test(
+  return /\b(?:i\s+(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+(?:the\s+)?(?:position|role|opportunity)\s+further|i\s+(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+my\s+interest\s+in\s+(?:the\s+)?(?:position|role|opportunity)|(?:would\s+)?welcome\s+the\s+(?:opportunity|chance)\s+to\s+(?:discuss|speak)\s+(?:the\s+)?(?:position|role|opportunity)(?:\s+further)?|discuss\s+(?:the\s+)?(?:position|role|opportunity)\s+further|speak\s+further\s+about\s+(?:the\s+)?(?:position|role|opportunity)|je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\s+(?:d['’]|de\s+(?:pouvoir\s+)?)(?:en\s+)?(?:échanger|discuter)|au\s+plaisir\s+d['’]échanger(?:\s+davantage)?(?:\s+(?:sur|à\s+propos\s+de|avec\s+vous))?)\b/iu.test(
     normalized,
   );
+}
+
+function preserveGroundedPremiumClosingClause(value: string): string {
+  const normalized = compactWhitespace(value);
+  const clauseBoundaries = [
+    /,\s+(?=(?:and\s+)?(?:i\s+)?(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\b)/giu,
+    /\s+and\s+(?=(?:i\s+)?(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\b)/giu,
+    /,\s+(?=(?:et\s+)?je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\b)/giu,
+    /\s+et\s+(?=je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\b)/giu,
+    /,\s+(?=(?:et\s+)?au\s+plaisir\s+d['’]échanger\b)/giu,
+    /\s+et\s+(?=au\s+plaisir\s+d['’]échanger\b)/giu,
+  ];
+
+  for (const boundaryPattern of clauseBoundaries) {
+    const match = boundaryPattern.exec(normalized);
+    if (!match) continue;
+    const suffix = normalized.slice(match.index + match[0].length);
+    if (!isGenericPremiumClosingLine(suffix)) continue;
+    return ensureSentenceEnding(normalized.slice(0, match.index));
+  }
+
+  return normalized;
 }
 
 function buildEvidenceGroundedCloseLine(brief: CoverLetterBrief): string {
@@ -2041,12 +2243,33 @@ function buildEvidenceGroundedCloseLine(brief: CoverLetterBrief): string {
     return resolveCloseFallback(brief.language);
   }
 
-  const anchors = adjacentOperatingAnchors(brief).slice(0, 3);
-  const anchorText = listAsNaturalText(anchors);
+  const anchors = adjacentOperatingAnchors(brief, brief.language, false).slice(
+    0,
+    3,
+  );
+  if (anchors.length === 0) {
+    return deterministicLanguage === "fr"
+      ? "Cette expérience continue de nourrir ma pratique professionnelle."
+      : "That experience continues to inform my work.";
+  }
+  const anchorText = listAsNaturalTextForLanguage(anchors, brief.language);
   if (deterministicLanguage === "fr") {
-    return ensureSentenceEnding(`J'apporte de la rigueur autour de ${anchorText}`);
+    return ensureSentenceEnding(`J'apporte de la rigueur dans ${anchorText}`);
   }
   return ensureSentenceEnding(`I bring discipline around ${anchorText}`);
+}
+
+function repairGenericPremiumClosingLine(args: {
+  closeLine: string;
+  brief: CoverLetterBrief;
+}): string {
+  const specificSentences = splitSentences(args.closeLine)
+    .map(preserveGroundedPremiumClosingClause)
+    .filter((sentence) => !isGenericPremiumClosingLine(sentence));
+  if (specificSentences.length > 0) {
+    return joinSentences(specificSentences);
+  }
+  return buildEvidenceGroundedCloseLine(args.brief) || args.closeLine;
 }
 
 export function isPremiumCoverLetterPreset(
@@ -2080,6 +2303,36 @@ export function isCoverLetterPremiumPathV1Enabled(
 ): boolean {
   const normalized = compactWhitespace(rawValue ?? "").toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+export function isCoverLetterPremiumPromptV2Enabled(
+  rawValue:
+    | string
+    | undefined = process.env.cover_letter_premium_prompt_v2 ??
+    process.env.COVER_LETTER_PREMIUM_PROMPT_V2 ??
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2,
+): boolean {
+  const normalized = compactWhitespace(rawValue ?? "").toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+export function isCoverLetterQualityRepairV1Enabled(
+  rawValue:
+    | string
+    | undefined = process.env.ENABLE_COVER_LETTER_QUALITY_REPAIR_V1,
+): boolean {
+  const normalized = compactWhitespace(rawValue ?? "").toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+export function isPremiumCoverLetterPromptV2MistralEnabled(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  rawFlagValue?: string;
+}): boolean {
+  return (
+    args.writerProvider === "mistral" &&
+    isCoverLetterPremiumPromptV2Enabled(args.rawFlagValue)
+  );
 }
 
 export function evaluatePremiumCoverLetterEligibility(args: {
@@ -2208,15 +2461,17 @@ export function rankAllowedFacts(args: {
       score: scoreFact({ fact, jobTokens, jobTitleTokens }),
     }))
     .sort((a, b) => b.score - a.score);
-  const cvAdjacentOperationalFacts =
-    args.contextClass === "cv_adjacent"
+  const cvBackedOperationalFacts =
+    args.contextClass !== "no_cv"
       ? scored
           .map((entry) => entry.fact)
           .filter(
             (fact) =>
               fact.source === "cv" &&
               !isWeakOrDoNotLeadWith(fact) &&
-              (fact.category === "achievement" ||
+              !isSecondaryQualification(fact) &&
+              (QUANTIFIED_PATTERN.test(fact.text) ||
+                fact.category === "achievement" ||
                 fact.category === "responsibility" ||
                 fact.category === "workflow"),
           )
@@ -2263,8 +2518,8 @@ export function rankAllowedFacts(args: {
         fact.category === "responsibility" ||
         fact.category === "workflow" ||
         (fact.category === "domain" &&
-          (args.contextClass !== "cv_adjacent" ||
-            strongestEvidence.length >= cvAdjacentOperationalFacts.length)))
+          (QUANTIFIED_PATTERN.test(fact.text) ||
+            strongestEvidence.length >= cvBackedOperationalFacts.length)))
     ) {
       strongestEvidence.push(fact);
       continue;
@@ -2380,6 +2635,142 @@ function firstDemandId(
   return demand ? [demand.id] : [];
 }
 
+function dedupeFactNodes(facts: FactNodeV1[]): FactNodeV1[] {
+  const seen = new Set<string>();
+  return facts.filter((fact) => {
+    if (seen.has(fact.id)) return false;
+    seen.add(fact.id);
+    return true;
+  });
+}
+
+function selectDistinctPremiumProofFacts(args: {
+  cvFacts: FactNodeV1[];
+  primaryCvFact: FactNodeV1 | undefined;
+}): FactNodeV1[] {
+  const concreteFacts = dedupeFactNodes(args.cvFacts).filter(
+    (fact) =>
+      fact.id !== args.primaryCvFact?.id &&
+      isConcretePremiumProofFact(fact),
+  );
+  const primaryMetrics = new Set(args.primaryCvFact?.metrics ?? []);
+  const factsWithDistinctMetrics = concreteFacts.filter((fact) =>
+    fact.metrics.every((metric) => !primaryMetrics.has(metric)),
+  );
+  const selected =
+    factsWithDistinctMetrics.length > 0 ? factsWithDistinctMetrics : concreteFacts;
+  return selected.slice(0, 2);
+}
+
+function isConcretePremiumProofFact(fact: FactNodeV1): boolean {
+  return (
+    fact.category === "achievement" ||
+    fact.category === "responsibility" ||
+    fact.category === "workflow"
+  );
+}
+
+type PremiumClaimPlanEditorialPolicyArgs = {
+  contextClass: PremiumCoverLetterContextClass;
+  outputLanguage: ProposalOutputLanguage;
+  cvFacts: FactNodeV1[];
+  primaryCvFact: FactNodeV1 | undefined;
+  secondaryCvFact: FactNodeV1 | undefined;
+  sectionCvFacts: FactNodeV1[];
+  roleContextDemandIds: string[];
+};
+
+type PremiumClaimPlanEditorialPolicy = Readonly<{
+  openingDemandIds: string[];
+  openingGuideline: string;
+  proofFacts: FactNodeV1[];
+  proofGuideline: string;
+  closeDemandIds: string[];
+  closeGuideline: string;
+}>;
+
+function resolveLegacyPremiumProofFacts(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+): FactNodeV1[] {
+  if (args.sectionCvFacts.length > 0) return args.sectionCvFacts;
+  if (args.secondaryCvFact) return [args.secondaryCvFact];
+  return args.primaryCvFact ? [args.primaryCvFact] : [];
+}
+
+function buildLegacyPremiumClaimPlanEditorialPolicy(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+  proofFacts: FactNodeV1[],
+): PremiumClaimPlanEditorialPolicy {
+  return {
+    openingDemandIds: [],
+    openingGuideline:
+      args.contextClass === "cv_adjacent"
+        ? "Open with a CV-backed operating strength, not direct target-role fit."
+        : "Open with the strongest CV-backed evidence.",
+    proofFacts,
+    proofGuideline:
+      "Develop one CV-backed proof point without upgrading ownership or metrics.",
+    closeDemandIds: [],
+    closeGuideline:
+      args.contextClass === "cv_adjacent"
+        ? "Restate CV-backed operating strengths only."
+        : "Restate grounded strengths only.",
+  };
+}
+
+function buildDeterministicPremiumClaimPlanEditorialPolicy(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+  legacyProofFacts: FactNodeV1[],
+): PremiumClaimPlanEditorialPolicy {
+  const distinctProofFacts = selectDistinctPremiumProofFacts({
+    cvFacts: args.cvFacts,
+    primaryCvFact: args.primaryCvFact,
+  });
+  const hasAssignedRoleContext = args.roleContextDemandIds.length > 0;
+  const hasDistinctProof = distinctProofFacts.length > 0;
+  const hasConcreteProof = args.cvFacts.some(isConcretePremiumProofFact);
+  return {
+    openingDemandIds: args.roleContextDemandIds,
+    openingGuideline: hasAssignedRoleContext
+      ? args.contextClass === "cv_adjacent"
+        ? "Open from the candidate's relevant experience, then relate it to the assigned responsibility without claiming direct target-role experience or teaching the employer how its work functions."
+        : "Open from the candidate's relevant experience, then relate it to the assigned responsibility without teaching the employer how its work functions."
+      : args.contextClass === "cv_adjacent"
+        ? "No role responsibility is assigned; open with concise professional context around the strongest CV-backed operating proof without claiming direct target-role experience or inventing job context."
+        : "No role responsibility is assigned; open with concise professional context around the strongest CV-backed evidence without inventing job context.",
+    proofFacts: hasDistinctProof ? distinctProofFacts : legacyProofFacts,
+    proofGuideline: hasDistinctProof
+      ? "Develop the distinct assigned CV-backed proof without repeating the opening evidence or upgrading ownership or metrics."
+      : hasConcreteProof
+        ? "Only one concrete CV proof is available; develop a different supported aspect of it once without restating its metric or result or upgrading ownership."
+        : "No concrete CV proof is available; use the assigned CV context only as bounded background, keep the section concise, and do not invent actions, ownership, metrics, or results.",
+    closeDemandIds: args.roleContextDemandIds,
+    closeGuideline: hasAssignedRoleContext
+      ? args.contextClass === "cv_adjacent"
+        ? "Close with one specific CV-backed operating contribution to the assigned responsibility, without a skills inventory or future-impact promise."
+        : "Close with one specific evidence-grounded contribution to the assigned responsibility, without a skills inventory."
+      : args.contextClass === "cv_adjacent"
+        ? "Close with one specific CV-backed operating contribution, without inventing job context, a skills inventory, or a future-impact promise."
+        : "Close with one specific evidence-grounded contribution, without inventing job context or using a skills inventory.",
+  };
+}
+
+function resolvePremiumClaimPlanEditorialPolicy(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+): PremiumClaimPlanEditorialPolicy {
+  const legacyProofFacts = resolveLegacyPremiumProofFacts(args);
+  if (
+    args.contextClass === "no_cv" ||
+    getDeterministicCopyLanguage(args.outputLanguage) === null
+  ) {
+    return buildLegacyPremiumClaimPlanEditorialPolicy(args, legacyProofFacts);
+  }
+  return buildDeterministicPremiumClaimPlanEditorialPolicy(
+    args,
+    legacyProofFacts,
+  );
+}
+
 export function buildPremiumClaimPlanV1(args: {
   factGraph: FactGraphV1;
   jobDemandGraph: JobDemandGraphV1;
@@ -2414,6 +2805,15 @@ export function buildPremiumClaimPlanV1(args: {
     "key_requirement",
     "preferred_qualification",
   ]);
+  const editorialPolicy = resolvePremiumClaimPlanEditorialPolicy({
+    contextClass: args.contextClass,
+    outputLanguage: args.outputLanguage,
+    cvFacts,
+    primaryCvFact,
+    secondaryCvFact,
+    sectionCvFacts,
+    roleContextDemandIds,
+  });
 
   const makeClaim = (
     section: ClaimPlanSection,
@@ -2445,7 +2845,7 @@ export function buildPremiumClaimPlanV1(args: {
           : safeFacts.map((fact) => fact.text),
       allowedVerbs:
         args.contextClass === "no_cv"
-          ? ["discuss", "understand", "focus"]
+          ? ["interested", "discuss", "approach"]
           : collectAllowedVerbs(safeFacts),
       forbiddenVerbs:
         args.contextClass === "no_cv"
@@ -2490,24 +2890,16 @@ export function buildPremiumClaimPlanV1(args: {
           makeClaim(
             "opening",
             primaryCvFact ? [primaryCvFact] : [],
-            [],
+            editorialPolicy.openingDemandIds,
             "source_backed",
-            args.contextClass === "cv_adjacent"
-              ? "Open with a CV-backed operating strength, not direct target-role fit."
-              : "Open with the strongest CV-backed evidence.",
+            editorialPolicy.openingGuideline,
           ),
           makeClaim(
             "proofBlock",
-            sectionCvFacts.length > 0
-              ? sectionCvFacts
-              : secondaryCvFact
-                ? [secondaryCvFact]
-                : primaryCvFact
-                  ? [primaryCvFact]
-                  : [],
+            editorialPolicy.proofFacts,
             [],
             "source_backed",
-            "Develop one CV-backed proof point without upgrading ownership or metrics.",
+            editorialPolicy.proofGuideline,
           ),
           makeClaim(
             "employerValueBlock",
@@ -2533,13 +2925,11 @@ export function buildPremiumClaimPlanV1(args: {
               : closeCvFact
                 ? [closeCvFact]
                 : primaryCvFact
-                  ? [primaryCvFact]
-                  : [],
-            [],
+                ? [primaryCvFact]
+                : [],
+            editorialPolicy.closeDemandIds,
             "source_backed",
-            args.contextClass === "cv_adjacent"
-              ? "Restate CV-backed operating strengths only."
-              : "Restate grounded strengths only.",
+            editorialPolicy.closeGuideline,
           ),
         ];
 
@@ -2641,7 +3031,9 @@ export function validatePremiumClaimPlanV1(args: {
       .filter((fact): fact is FactNodeV1 => Boolean(fact));
     const factMetrics = new Set(factNodes.flatMap((fact) => fact.metrics));
     for (const requiredElement of claim.requiredElements) {
-      for (const metric of extractNumericClaims(requiredElement)) {
+      for (const metric of premiumCoverLetterFactGraphNumericMetrics(
+        requiredElement,
+      )) {
         if (!factMetrics.has(metric)) {
           issues.push({
             code: "metric_not_in_fact",
@@ -2689,6 +3081,7 @@ export function buildPremiumCoverLetterBrief(args: {
   claimPlan?: ClaimPlanV1;
   factGraph?: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
+  targetEmployer?: TargetEmployerResolution;
 }): CoverLetterBrief {
   const jobOfferPriorityPack = buildJobOfferPriorityPack(args.jobDescription);
   const jobPostFacts = args.allowedFactsPack.facts
@@ -2709,7 +3102,7 @@ export function buildPremiumCoverLetterBrief(args: {
     contextClass: args.contextClass,
     candidateEvidenceAvailable: args.contextClass !== "no_cv",
     targetRole: compactWhitespace(args.jobTitle),
-    employerName: extractEmployerName(args.jobTitle, args.jobDescription),
+    targetEmployer: args.targetEmployer ?? MISSING_TARGET_EMPLOYER,
     topEvidence: args.rankedEvidencePack.strongestEvidence
       .slice(0, MAX_EVIDENCE_ITEMS)
       .map((fact) => fact.text),
@@ -2799,6 +3192,14 @@ export function buildPremiumCoverLetterBrief(args: {
   };
 }
 
+function targetEmployerPromptGuidance(
+  targetEmployer: TargetEmployerResolution,
+): string {
+  return targetEmployer.status === "RESOLVED"
+    ? "Structured target employer: use only the targetEmployer.displayName value from the structured brief; never override it from title/description."
+    : "No structured target employer is resolved: do not infer, name, or personalize an employer from the title or description.";
+}
+
 export function buildPremiumCoverLetterPrompt(args: {
   brief: CoverLetterBrief;
   generationControlsBlock?: string;
@@ -2812,10 +3213,16 @@ export function buildPremiumCoverLetterPrompt(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
-  const { requiredMoves, forbiddenMoves, companyValuesPack, ...briefRest } =
-    args.brief;
+  const {
+    requiredMoves,
+    forbiddenMoves,
+    companyValuesPack,
+    targetEmployer,
+    ...briefRest
+  } = args.brief;
   const structuredBrief = {
     ...briefRest,
+    ...(targetEmployer.status === "RESOLVED" ? { targetEmployer } : {}),
     ...(companyValuesPack
       ? {
           companyValuesPack: {
@@ -2841,6 +3248,11 @@ export function buildPremiumCoverLetterPrompt(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
+  const promptVersionGuidance = resolvePremiumCoverLetterPromptVersionGuidance({
+    writerProvider: args.writerProvider,
+  });
+  const editorialQualityGuidance =
+    resolvePremiumCoverLetterEditorialQualityGuidance(args.brief);
   return [
     "Write premium cover-letter body parts.",
     "The ClaimPlan owns strategy. Do not choose claims. Realize only the claim assigned to each section.",
@@ -2859,6 +3271,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "topResponsibilities lead; keyRequirements sharpen; the rest stay secondary.",
     "lowValueChecklist is diagnostic-only. Do not quote it, paraphrase it, or use it as employer-value language in the letter.",
     "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them. Bind ATS and JD terms to a concrete CV-backed action, artifact, responsibility, or result. Never use a JD keyword as a floating adjective or implied experience.",
+    targetEmployerPromptGuidance(targetEmployer),
     ...(companyValuesPack
       ? [
           "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
@@ -2869,10 +3282,21 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'.",
     "Do not narrate the writing plan or provenance. Never write 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'this letter shows', 'the claim is', 'work surface', or 'concrete bridge'.",
     "Do not use self-scoring or section-label openings such as 'my strongest match', 'my best match', 'the strongest evidence', 'my fit for this role', or 'the main reason I am a fit'.",
-    "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
-    "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
+    ...(args.brief.contextClass !== "no_cv"
+      ? [
+          "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+        ]
+      : []),
+    ...(args.brief.contextClass === "no_cv"
+      ? [
+          "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+          "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
+        ]
+      : []),
     presetGuidance,
     args.generationControlsBlock,
+    ...promptVersionGuidance,
+    ...editorialQualityGuidance,
     ...contextGuidance,
     "Do not include greeting, signoff, signature, candidate name, date, subject, sender block, recipient block, markdown, XML, citations, audit, or explanation.",
     "Return only PremiumWriterOutputV1 JSON.",
@@ -2914,6 +3338,82 @@ export function buildPremiumCoverLetterPrompt(args: {
     providerAdapter,
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].filter((line): line is string => typeof line === "string").join("\n");
+}
+
+function resolvePremiumEditorialAllocationState(brief: CoverLetterBrief): {
+  hasAssignedRoleContext: boolean;
+  hasConcreteProof: boolean;
+  hasDistinctProof: boolean;
+} {
+  if (!brief.claimPlan) {
+    return {
+      hasAssignedRoleContext: true,
+      hasConcreteProof: true,
+      hasDistinctProof: true,
+    };
+  }
+  const openingClaim = claimForSection(brief.claimPlan, "opening");
+  const proofClaim = claimForSection(brief.claimPlan, "proofBlock");
+  const openingFactIds = new Set(openingClaim?.factIds ?? []);
+  return {
+    hasAssignedRoleContext: (openingClaim?.demandIds.length ?? 0) > 0,
+    hasConcreteProof:
+      proofClaim?.requiredElements.some((text) =>
+        ["achievement", "responsibility", "workflow"].includes(
+          classifyCvFactCategory(text, "cv"),
+        ),
+      ) ?? false,
+    hasDistinctProof:
+      (proofClaim?.factIds.length ?? 0) > 0 &&
+      (proofClaim?.factIds.every((factId) => !openingFactIds.has(factId)) ??
+        false),
+  };
+}
+
+function buildNaturalCvBackedEditorialGuidance(brief: CoverLetterBrief): string[] {
+  const { hasAssignedRoleContext, hasConcreteProof, hasDistinctProof } =
+    resolvePremiumEditorialAllocationState(brief);
+  return [
+    "CV-backed editorial quality contract: write a natural first paragraph rooted in the candidate's relevant experience, not a résumé bullet, standalone metric, abstract maxim, or lesson about the employer's work.",
+    hasAssignedRoleContext
+      ? "Connect that experience to the assigned responsibility as role context, never candidate history; do not use generic setups such as 'X is most valuable when...' or 'X demande/exige...' before the proof."
+      : "No role responsibility is assigned; open with concise professional context around the assigned CV proof and do not invent or select unassigned job context.",
+    hasDistinctProof
+      ? "Use the distinct fact assigned to proofBlock and never repeat an opening metric, result, employer, duty, or cadence."
+      : hasConcreteProof
+        ? "Only one concrete CV proof is assigned; develop a different supported aspect of it once without restating the same metric or result."
+        : "No concrete CV proof is assigned; use the assigned CV context only as bounded background, keep the proof section concise, and do not invent actions, ownership, metrics, or results.",
+    hasAssignedRoleContext
+      ? "Every sentence must contain a complete thought with a subject and finite predicate, never a CV fragment; explain why the selected evidence matters to the assigned responsibility rather than stating abstract advice; close with one specific evidence-grounded contribution to the assigned responsibility, not a skills inventory or résumé-summary label."
+      : "Every sentence must contain a complete thought with a subject and finite predicate, never a CV fragment; explain the concrete value of the selected evidence without inventing job context or stating abstract advice; close with one specific evidence-grounded contribution, not a skills inventory or résumé-summary label.",
+  ];
+}
+
+function resolvePremiumCoverLetterEditorialQualityGuidance(
+  brief: CoverLetterBrief,
+): string[] {
+  if (brief.contextClass === "no_cv") return [];
+
+  const shared =
+    "CV-backed editorial quality contract: build one hiring case, not a CV inventory; use one role-specific opening, select one or two concrete candidate proofs, state why each proof is relevant to one top responsibility, and end with one short evidence-grounded sentence rather than an interview request.";
+  const naturalCvBackedShared = buildNaturalCvBackedEditorialGuidance(brief);
+
+  const deterministicLanguage = getDeterministicCopyLanguage(brief.language);
+  if (deterministicLanguage === "fr") {
+    return [
+      ...naturalCvBackedShared,
+      "French editorial contract: compose in idiomatic professional French, not translated English cadence; avoid 'je serais ravi de', 'se traduit par', 's'aligne avec', 'apporter de la valeur', 'mon socle', repeated discussion invitations, and untranslated handoffs, rollouts, or enterprise when normal French equivalents exist.",
+    ];
+  }
+
+  if (deterministicLanguage === "en") {
+    return [
+      ...naturalCvBackedShared,
+      "English editorial contract: use concise professional English, direct verbs, and concrete nouns; avoid résumé-summary cadence, 'I am writing to apply', generic enthusiasm, alignment claims, and discussion invitations.",
+    ];
+  }
+
+  return [shared];
 }
 
 function isMistralWriterIdentity(args: {
@@ -3029,12 +3529,17 @@ function resolvePremiumCoverLetterContextGuidance(args: {
     if (args.contextClass === "no_cv") {
       return [
         "Mistral no_cv contract:",
-        "- There is no candidate history. Do not write a role summary, process memo, detached noun phrases, or fake experience.",
-        "- Keep a modest first-person candidate voice without claiming prior work.",
-        "- opening: one sentence beginning with I, focused on the role's work surface.",
+        "- There is no CV evidence. Operate with three layers only: JOB SURFACE, INTENT LAYER, and CV EVIDENCE when present.",
+        "- Never convert JOB SURFACE into CANDIDATE EXPERIENCE.",
+        "- Job descriptions can become neutral role explanation, intent statements, or conditional approach statements only.",
+        "- Keep a modest first-person candidate voice without claiming prior work, skills, habits, capability, or worker identity.",
+        "- Allowed no_cv stems include \"I am interested in this role because\", \"The role involves\", \"The position appears to focus on\", and \"I would approach this work by\".",
+        "- Use any \"I would be glad to discuss\" sentence only once, in closeLine.",
+        "- Forbidden no_cv stems include \"I coordinate\", \"I manage\", \"I handle\", \"I maintain\", \"I focus on\", \"I bring experience\", \"My background is\", \"I specialize\", and \"I have worked\".",
+        "- opening: one sentence expressing interest or intent tied to the role's work surface.",
         "- proofBlock: one sentence about what the role requires operationally, not what the candidate has done.",
-        "- employerValueBlock: one sentence about the practical consequence for the team.",
-        "- closeLine: one modest first-person sentence such as \"I would be glad to discuss how I can approach this work with care and follow-through.\"",
+        "- employerValueBlock: one sentence about the practical consequence for the team, not another discussion sentence.",
+        "- closeLine: one modest first-person sentence such as \"I would be glad to discuss how I would approach this work with care and follow-through.\"",
         "- Do not begin closeLine with \"Experience includes\", \"Background includes\", or a detached task noun.",
         "- Do not claim achievements, tools used, managed workflows, maintained systems, or completed tasks.",
       ];
@@ -3052,8 +3557,9 @@ function resolvePremiumCoverLetterContextGuidance(args: {
   }
   if (args.contextClass === "no_cv") {
     return [
-      "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
-      "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
+      "For no_cv, there is no supported candidate history. Use job-offer work surfaces and candidate intent only, never prior history.",
+      "For no_cv, job descriptions can become neutral role explanation, intent statements, or conditional approach statements only; never convert job surface into candidate experience.",
+      "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, skills, habits, worker identity, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person intent.",
     ];
   }
   return [];
@@ -3124,6 +3630,16 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
   ];
 }
 
+function resolvePremiumCoverLetterPromptVersionGuidance(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+}): string[] {
+  return isPremiumCoverLetterPromptV2MistralEnabled({
+    writerProvider: args.writerProvider,
+  })
+    ? PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_GUIDANCE
+    : [];
+}
+
 function resolvePremiumCoverLetterProviderAdapter(args: {
   writerProvider?: PremiumCoverLetterWriterProvider;
   writerModel?: string;
@@ -3172,6 +3688,7 @@ type PremiumBodyPartValidationIssue = {
     | "unsupported_license_claim"
     | "unsupported_education_credential"
     | "fabricated_mission_claim"
+    | "meta_prose"
     | "unsupported_numeric_claim"
     | "unsupported_ownership_verb"
     | "candidate_name_mismatch";
@@ -3189,6 +3706,11 @@ export type PremiumCoverLetterFailureTrace = {
   eligibilityReason?: PremiumCoverLetterEligibility["reason"];
   issues?: string[];
 };
+
+export type PremiumCoverLetterModelRepairRequiredDiagnostic = Readonly<{
+  stage: "writer_output_validation" | "body_parts_validation";
+  issues: readonly string[];
+}>;
 
 function summarizeValidationIssueCodes(
   issues: PremiumBodyPartValidationIssue[],
@@ -3237,6 +3759,16 @@ export type PremiumCoverLetterQualityShadowResult = {
   score: number;
   issues: PremiumCoverLetterQualityShadowIssueCode[];
 };
+
+const REPAIRABLE_PREMIUM_COVER_LETTER_QUALITY_SHADOW_ISSUES =
+  new Set<PremiumCoverLetterQualityShadowIssueCode>([
+    "meta_prose",
+    "generic_tone",
+    "factual_inventory",
+    "weak_employer_argument",
+    "low_value_job_echo",
+    "too_verbose",
+  ]);
 
 export function toCoverLetterBodyParts(
   output: PremiumWriterOutputV1,
@@ -3319,14 +3851,516 @@ function parseCoverLetterBodyPartsWriterPayload(rawOutput: unknown): CoverLetter
   );
 }
 
+const PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES = [
+  { source: "lead(?:s|ing)?|led", canonical: "lead" },
+  { source: "manag(?:e|es|ed|ing)", canonical: "manage" },
+  { source: "own(?:s|ed|ing)?", canonical: "own" },
+  { source: "build(?:s|ing)?|built", canonical: "build" },
+  { source: "improv(?:e|es|ed|ing)", canonical: "improve" },
+  { source: "drive|drives|drove|driven|driving", canonical: "drive" },
+  { source: "deliver(?:s|ed|ing)?", canonical: "deliver" },
+  { source: "maintain(?:s|ed|ing)?", canonical: "maintain" },
+  { source: "coordinat(?:e|es|ed|ing)", canonical: "coordinate" },
+  { source: "handl(?:e|es|ed|ing)", canonical: "handle" },
+  { source: "track(?:s|ed|ing)?", canonical: "track" },
+  { source: "answer(?:s|ed|ing)?", canonical: "answer" },
+  { source: "updat(?:e|es|ed|ing)", canonical: "update" },
+  { source: "prepar(?:e|es|ed|ing)", canonical: "prepare" },
+  { source: "document(?:s|ed|ing)?", canonical: "document" },
+  { source: "design(?:s|ed|ing)?", canonical: "design" },
+  { source: "analy[sz](?:e|es|ed|ing)", canonical: "analyze" },
+  { source: "mentor(?:s|ed|ing)?", canonical: "mentor" },
+  { source: "supervis(?:e|es|ed|ing)", canonical: "supervise" },
+  { source: "support(?:s|ed|ing)?", canonical: "support" },
+  { source: "assist(?:s|ed|ing)?", canonical: "assist" },
+  { source: "monitor(?:s|ed|ing)?", canonical: "monitor" },
+  { source: "report(?:s|ed|ing)?", canonical: "report" },
+  { source: "keep|keeps|kept|keeping", canonical: "keep" },
+  { source: "develop(?:s|ed|ing)?", canonical: "develop" },
+  { source: "creat(?:e|es|ed|ing)", canonical: "create" },
+  { source: "review(?:s|ed|ing)?", canonical: "review" },
+  { source: "operat(?:e|es|ed|ing)", canonical: "operate" },
+  { source: "collaborat(?:e|es|ed|ing)", canonical: "collaborate" },
+  { source: "implement(?:s|ed|ing)?", canonical: "implement" },
+  { source: "schedul(?:e|es|ed|ing)", canonical: "schedule" },
+] as const;
+const CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE =
+  PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES.map(
+    ({ source }) => `(?:${source})`,
+  ).join("|");
+const CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE =
+  "(?:i\\s+(?:am|was|have\\s+been)|i['’](?:m|ve\\s+been))";
+const PREMIUM_ENGLISH_CAPABILITY_VERB_PATTERNS =
+  PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES.map(({ source, canonical }) => ({
+    pattern: new RegExp(`^(?:${source})$`, "u"), // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- fixed source table
+    canonical,
+  }));
+const CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE =
+  "dirigé(?:e|s|es)?|géré(?:e|s|es)?|construit(?:e|s|es)?|créé(?:e|s|es)?|amélioré(?:e|s|es)?|livré(?:e|s|es)?|maintenu(?:e|s|es)?|coordonné(?:e|s|es)?|traité(?:e|s|es)?|suivi(?:e|s|es)?|documenté(?:e|s|es)?|piloté(?:e|s|es)?|assuré(?:e|s|es)?|pris(?:e|es)?\\s+en\\s+charge";
+const CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE =
+  "dirige|gère|construis|crée|améliore|livre|maintiens|coordonne|traite|documente|pilote|assure|prends\\s+en\\s+charge";
+const CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE =
+  `(?:j['’]\\s*ai\\s+(?:${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})|(?:je\\s+|j['’]\\s*)(?:${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE}))`;
+const CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE =
+  "(?:responsable|en\\s+charge)\\s+(?:(?:de|du|des)\\s+|d['’]\\s*)";
+const PREMIUM_FRENCH_DEMAND_LEADER_SOURCE =
+  "diriger|gérer|construire|créer|améliorer|livrer|maintenir|coordonner|traiter|suivre|documenter|piloter|assurer|prendre\\s+en\\s+charge|être";
+const PREMIUM_OWNERSHIP_DEMAND_PREFIX_PATTERN =
+  new RegExp(
+    `^(?:(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+|${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE})`,
+    "iu",
+  );
+const PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE =
+  "(?=$|[,.!?;:]|\\s+(?:for|at|across|with|within|during|pour|chez|dans|pendant|lors\\s+(?:de|du|des)|auprès\\s+de)\\b)";
+const PREMIUM_GENERATED_DEMAND_SURFACE_BOUNDARY_SOURCE =
+  "(?=$|[,.!?;:])";
+
+function extractPremiumDemandLeaderVerb(value: string): string | null {
+  const jobOfferLeader = extractJobOfferLeaderVerb(value);
+  if (jobOfferLeader) return jobOfferLeader;
+  const frenchMatch = compactWhitespace(value).match(
+    new RegExp(`^(${PREMIUM_FRENCH_DEMAND_LEADER_SOURCE})\\b`, "iu"),
+  );
+  return frenchMatch?.[1]?.toLowerCase() ?? null;
+}
+
+function resolvePremiumDemandSurface(value: string): {
+  surface: string;
+  leader: string | null;
+  objectSurface: string;
+  ownershipPrefixStripped: boolean;
+} | null {
+  const surface = compactWhitespace(value).replace(/[.!?]$/u, "");
+  if (!surface) return null;
+  const englishLeaderMatch = surface.match(JOB_OFFER_LIST_LEADER_PATTERN);
+  const leader =
+    englishLeaderMatch?.[1]?.toLowerCase() ??
+    extractPremiumDemandLeaderVerb(value);
+  const withoutLeader = englishLeaderMatch?.[0]
+    ? surface.slice(englishLeaderMatch[0].length).trim()
+    : leader
+      ? surface.replace(new RegExp(`^${escapeRegExp(leader)}\\s+`, "iu"), "") // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      : surface;
+  const objectSurface = withoutLeader.replace(
+    PREMIUM_OWNERSHIP_DEMAND_PREFIX_PATTERN,
+    "",
+  );
+  if (!objectSurface) return null;
+  return {
+    surface,
+    leader,
+    objectSurface,
+    ownershipPrefixStripped: objectSurface !== withoutLeader,
+  };
+}
+
+function usesJobDemandAsCandidateExperience(args: {
+  generatedText: string;
+  referencedDemands: JobDemandNodeV1[];
+  referencedFacts: FactNodeV1[];
+}): boolean {
+  const compact = compactWhitespace(args.generatedText);
+  return args.referencedDemands.some((demand) => {
+    if (
+      args.referencedFacts.some((fact) =>
+        premiumCandidateFactSupportsDemand({
+          fact,
+          demand,
+          generatedText: compact,
+        }),
+      )
+    ) {
+      return false;
+    }
+    const resolvedDemand = resolvePremiumDemandSurface(demand.text);
+    if (!resolvedDemand) return false;
+    const escapedDemand = escapeRegExp(resolvedDemand.surface);
+    const escapedDemandObject = escapeRegExp(resolvedDemand.objectSurface);
+    const escapedDemandReference =
+      resolvedDemand.surface !== resolvedDemand.objectSurface
+        ? `(?:${escapedDemand}|${escapedDemandObject})`
+      : escapedDemandObject;
+    const ownershipPatterns = [
+      new RegExp(`\\bi\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`, "i"), // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\bi\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "i",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "i",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\b(?:j['’]\\s*ai|je)\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\b${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `${escapedDemandReference}\\s*,?\\s+(?:which|that)\\s+i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+        "i",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `${escapedDemandReference}\\s*,?\\s+(?:que|ce\\s+que)\\s+${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `${escapedDemandReference}\\s+(?:was|were|is|are)\\s+(?:among\\s+)?(?:the\\s+)?(?:work|something|responsibilit(?:y|ies)|dut(?:y|ies)|tasks?)\\s+(?:that\\s+)?i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+        "i",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `${escapedDemandReference}\\s+(?:était|étaient|est|sont)\\s+(?:parmi\\s+)?(?:le|la|les|un|une|des)?\\s*(?:travail|responsabilit(?:é|és)|tâche(?:s)?)\\s+(?:que\\s+)?${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `${escapedDemandReference}\\s*[-–—,:]\\s*(?:(?:a|the|one\\s+of\\s+the)\\s+)?(?:responsibilit(?:y|ies)|dut(?:y|ies)|tasks?|work)\\s+(?:that\\s+)?i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+        "i",
+      ),
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `${escapedDemandReference}\\s*[-–—,:]\\s*(?:(?:une|des|la|les)\\s+)?(?:responsabilit(?:é|és)|tâche(?:s)?|travail)\\s+(?:que\\s+)?${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+    ];
+    const canonicalLeader = resolvedDemand.leader
+      ? canonicalizePremiumCapabilityVerb(resolvedDemand.leader)
+      : null;
+    const usesGenericCopularDemand =
+      !resolvedDemand.ownershipPrefixStripped &&
+      ((canonicalLeader === "be" &&
+        new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+          `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
+          "i",
+        ).test(compact)) ||
+        (canonicalLeader === "être" &&
+          new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+            `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
+            "iu",
+          ).test(compact)));
+    const usesFrenchSuivreDemand =
+      canonicalLeader === "suivre" &&
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\bje\\s+suis\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ).test(compact);
+    return (
+      usesGenericCopularDemand ||
+      usesFrenchSuivreDemand ||
+      ownershipPatterns.some((pattern) => pattern.test(compact))
+    );
+  });
+}
+
+function premiumCandidateFactSupportsDemand(args: {
+  fact: FactNodeV1;
+  demand: JobDemandNodeV1;
+  generatedText: string;
+}): boolean {
+  if (args.fact.source !== "cv") return false;
+  const normalizedDemand = normalizePremiumProvenanceText(
+    args.demand.text,
+  ).replace(/[.!?]+$/u, "");
+  const normalizedFact = normalizePremiumProvenanceText(args.fact.text);
+  const factSupportsDemand =
+    normalizedDemand.length >= 12 &&
+    normalizedFact.includes(normalizedDemand)
+      ? true
+      : (() => {
+          const demandTokens = args.demand.tokens;
+          if (demandTokens.length < 2) return false;
+          const factTokens = new Set(normalizeTokens(args.fact.text));
+          const overlap = countOverlap(demandTokens, factTokens);
+          const threshold = Math.max(2, Math.ceil(demandTokens.length * 0.75));
+          if (overlap < threshold) return false;
+
+          const demandLeader = extractPremiumDemandLeaderVerb(args.demand.text);
+          if (!demandLeader) return true;
+          const canonicalDemandLeader =
+            canonicalizePremiumCapabilityVerb(demandLeader);
+          if (
+            canonicalDemandLeader === "be" ||
+            canonicalDemandLeader === "être"
+          ) {
+            return true;
+          }
+          return args.fact.allowedVerbs.some(
+            (verb) =>
+              canonicalizePremiumCapabilityVerb(verb) ===
+              canonicalDemandLeader,
+          );
+        })();
+  if (!factSupportsDemand) return false;
+
+  const generatedVerb = extractGeneratedPremiumCapabilityVerbForDemand({
+    generatedText: args.generatedText,
+    demand: args.demand,
+    allowContextualComplements: normalizedFact.includes(
+      normalizePremiumProvenanceText(args.generatedText),
+    ),
+  });
+  if (!generatedVerb) return false;
+  const factVerb = extractCandidateFactCapabilityVerbForDemand({
+    factText: args.fact.text,
+    demand: args.demand,
+  });
+  return factVerb === generatedVerb;
+}
+
+function canonicalizePremiumCapabilityVerb(value: string): string {
+  const normalized = compactWhitespace(value).toLowerCase();
+  const englishFamily = PREMIUM_ENGLISH_CAPABILITY_VERB_PATTERNS.find(
+    ({ pattern }) => pattern.test(normalized),
+  );
+  if (englishFamily) return englishFamily.canonical;
+  if (/^dirig(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "diriger";
+  if (/^gér(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "gérer";
+  if (/^construit(?:e|s|es)?$|^construis$/u.test(normalized)) {
+    return "construire";
+  }
+  if (/^cré(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "créer";
+  if (/^amélior(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "améliorer";
+  if (/^livr(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "livrer";
+  if (/^maintenu(?:e|s|es)?$|^maintiens$/u.test(normalized)) {
+    return "maintenir";
+  }
+  if (/^coordonn(?:é(?:e|s|es)?|e)$/u.test(normalized)) {
+    return "coordonner";
+  }
+  if (/^trait(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "traiter";
+  if (/^suivi(?:e|s|es)?$/u.test(normalized)) return "suivre";
+  if (/^document(?:é(?:e|s|es)?|e)$/u.test(normalized)) {
+    return "documenter";
+  }
+  if (/^pilot(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "piloter";
+  if (/^assur(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "assurer";
+  if (/^pris(?:e|es)? en charge$|^prends en charge$/u.test(normalized)) {
+    return "prendre en charge";
+  }
+  return normalized;
+}
+
+function extractCandidateFactCapabilityVerbForDemand(args: {
+  factText: string;
+  demand: JobDemandNodeV1;
+}): string | null {
+  const resolvedDemand = resolvePremiumDemandSurface(args.demand.text);
+  if (!resolvedDemand) return null;
+  const escapedDemandObject = escapeRegExp(resolvedDemand.objectSurface).replace(
+    /\s+/g,
+    "\\s+",
+  );
+  const directActionPatterns = [
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "i",
+    ),
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ),
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ),
+  ];
+  for (const pattern of directActionPatterns) {
+    const match = pattern.exec(args.factText);
+    if (match?.[1]) return canonicalizePremiumCapabilityVerb(match[1]);
+  }
+  const canonicalLeader = resolvedDemand.leader
+    ? canonicalizePremiumCapabilityVerb(resolvedDemand.leader)
+    : null;
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "be" &&
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `(?:^|[.!?]\\s+)(?:(?:${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}|was|were|is|are)\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "i",
+    ).test(args.factText)
+  ) {
+    return "be";
+  }
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "être" &&
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `(?:^|[.!?]\\s+)(?:(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été)|(?:était|étaient))\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ).test(args.factText)
+  ) {
+    return "être";
+  }
+  if (
+    canonicalLeader === "suivre" &&
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `(?:^|[.!?]\\s+)(?:je\\s+)?suis\\s+${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ).test(args.factText)
+  ) {
+    return "suivre";
+  }
+  if (
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "i",
+    ).test(args.factText) ||
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ).test(args.factText)
+  ) {
+    return "own";
+  }
+  return null;
+}
+
+function extractGeneratedPremiumCapabilityVerbForDemand(args: {
+  generatedText: string;
+  demand: JobDemandNodeV1;
+  allowContextualComplements: boolean;
+}): string | null {
+  const resolvedDemand = resolvePremiumDemandSurface(args.demand.text);
+  if (!resolvedDemand) return null;
+  const escapedDemand = escapeRegExp(resolvedDemand.surface);
+  const escapedDemandObject = escapeRegExp(resolvedDemand.objectSurface);
+  const escapedDemandReference =
+    resolvedDemand.surface !== resolvedDemand.objectSurface
+      ? `(?:${escapedDemand}|${escapedDemandObject})`
+    : escapedDemandObject;
+  const generatedDemandBoundary = args.allowContextualComplements
+    ? PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE
+    : PREMIUM_GENERATED_DEMAND_SURFACE_BOUNDARY_SOURCE;
+  const verbs = new Set<string>();
+  const directActionPatterns = [
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\bi\\s+(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandReference}${generatedDemandBoundary}`,
+      "gi",
+    ),
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\bj['’]\\s*ai\\s+(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}${generatedDemandBoundary}`,
+      "giu",
+    ),
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(?:je\\s+|j['’]\\s*)(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}${generatedDemandBoundary}`,
+      "giu",
+    ),
+  ];
+  for (const pattern of directActionPatterns) {
+    for (const match of args.generatedText.matchAll(pattern)) {
+      if (match[1]) {
+        verbs.add(canonicalizePremiumCapabilityVerb(match[1]));
+      }
+    }
+  }
+
+  const canonicalLeader = resolvedDemand.leader
+    ? canonicalizePremiumCapabilityVerb(resolvedDemand.leader)
+    : null;
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "be" &&
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+${escapedDemandObject}${generatedDemandBoundary}`,
+      "i",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("be");
+  }
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "être" &&
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${escapedDemandObject}${generatedDemandBoundary}`,
+      "iu",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("être");
+  }
+  if (
+    canonicalLeader === "suivre" &&
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\bje\\s+suis\\s+${escapedDemandObject}${generatedDemandBoundary}`,
+      "iu",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("suivre");
+  }
+
+  if (
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandReference}${generatedDemandBoundary}`,
+      "i",
+    ).test(args.generatedText) ||
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandReference}${generatedDemandBoundary}`,
+      "iu",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("own");
+  }
+
+  if (
+    resolvedDemand.leader &&
+    (new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `\\bi\\s+${escapedDemand}${generatedDemandBoundary}`,
+      "i",
+    ).test(
+      args.generatedText,
+    ) ||
+      new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+        `\\b(?:j['’]\\s*ai|je)\\s+${escapedDemand}${generatedDemandBoundary}`,
+        "iu",
+      ).test(args.generatedText))
+  ) {
+    verbs.add(canonicalizePremiumCapabilityVerb(resolvedDemand.leader));
+  }
+
+  const trailingActionPatterns = [
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\bi\\s+(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+      "gi",
+    ),
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\bj['’]\\s*ai\\s+(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\b`,
+      "giu",
+    ),
+    new RegExp( // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp -- escaped input
+      `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\b(?:je\\s+|j['’]\\s*)(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\b`,
+      "giu",
+    ),
+  ];
+  for (const pattern of trailingActionPatterns) {
+    for (const match of args.generatedText.matchAll(pattern)) {
+      if (match[1]) {
+        verbs.add(canonicalizePremiumCapabilityVerb(match[1]));
+      }
+    }
+  }
+  return verbs.size === 1 ? (verbs.values().next().value ?? null) : null;
+}
+
 export function validatePremiumWriterOutputV1(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
   jobDemandGraph: JobDemandGraphV1;
   brief: CoverLetterBrief;
+  numericEvidenceProjection?: PremiumCoverLetterNumericEvidenceProjection;
 }): PremiumWriterOutputValidationIssue[] {
   const issues: PremiumWriterOutputValidationIssue[] = [];
+  const numericEvidenceProjection =
+    args.numericEvidenceProjection ??
+    buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph: args.factGraph,
+      claimPlan: args.claimPlan,
+      jobDemandGraph: args.jobDemandGraph,
+      targetEmployer: args.brief.targetEmployer,
+    });
   const claimById = new Map(args.claimPlan.claims.map((claim) => [claim.id, claim]));
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const demandById = new Map(
@@ -3497,12 +4531,30 @@ export function validatePremiumWriterOutputV1(args: {
     const referencedDemands = part.demandIds
       .map((id) => demandById.get(id))
       .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
-    const referencedFactSurface = referencedFacts.map((fact) => fact.text).join(" ");
+    const assignedDemands = (assignedClaim?.demandIds ?? [])
+      .map((id) => demandById.get(id))
+      .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
+    const candidateHistoryDemands = Array.from(
+      new Map(
+        [...referencedDemands, ...assignedDemands].map((demand) => [
+          demand.id,
+          demand,
+        ]),
+      ).values(),
+    );
+    const referencedFactSurface = referencedFacts
+      .map((fact) => fact.text)
+      .join(" ");
     if (
-      hasUnsupportedNumericClaim({
-        generatedText: compact,
-        sourceSurface: referencedFactSurface,
-      })
+      matchPremiumCoverLetterNumericEvidence({
+        projection: numericEvidenceProjection,
+        visibleText: compact,
+        section,
+        factIds: part.factIds,
+        demandIds: part.demandIds,
+        claimIds: part.claimIds,
+        allowMeasurementTranslation: args.claimPlan.language !== "English",
+      }).unsupported.length > 0
     ) {
       issues.push({
         code: "unsupported_numeric_claim",
@@ -3564,14 +4616,11 @@ export function validatePremiumWriterOutputV1(args: {
       });
     }
     if (
-      referencedDemands.some((demand) =>
-        compact.toLowerCase().includes(
-          demand.text.replace(/[.!?]$/u, "").toLowerCase(),
-        ),
-      ) &&
-      /\b(?:i|my)\s+(?:led|managed|owned|built|improved|delivered|maintained|coordinated|handled|tracked|documented)\b/i.test(
-        compact,
-      )
+      usesJobDemandAsCandidateExperience({
+        generatedText: compact,
+        referencedDemands: candidateHistoryDemands,
+        referencedFacts,
+      })
     ) {
       issues.push({
         code: "job_demand_as_candidate_experience",
@@ -3583,7 +4632,7 @@ export function validatePremiumWriterOutputV1(args: {
     }
     if (
       args.claimPlan.contextClass === "no_cv" &&
-      NO_CV_HISTORY_CLAIM_PATTERN.test(compact)
+      hasNoCvHistoryClaim(compact)
     ) {
       issues.push({
         code: "no_cv_uses_candidate_fact",
@@ -3643,13 +4692,10 @@ const FABRICATED_MISSION_CLAIM_PATTERN =
   /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare|passionate about (?:your|the) mission|drawn to (?:your|the) mission|inspired by (?:your|the) mission|culture fit)\b/i;
 const WRITER_META_PROSE_PATTERN =
   /\b(?:i have described|i described|as described|as mentioned|as noted|the evidence (?:shows|demonstrates|suggests)|this (?:letter|paragraph|section) (?:shows|demonstrates|describes)|the claim (?:is|shows|demonstrates)|my strongest match|my best match|the strongest evidence|my fit for this role|the main reason i am a fit|work surface|concrete bridge)\b/i;
+const EMPLOYER_ARGUMENT_BRIDGE_PATTERN =
+  /(?:^|[^\p{L}\p{N}_])(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?|dans|pour|où|parce\s+que|pertinent(?:e|es|s)?|rôles?|équipes?|environnement|travail|besoins?|exige(?:nt)?|priorités?)(?=$|[^\p{L}\p{N}_])/iu;
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
-const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
-  /\b\d+(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
-const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d+(?:\.\d+)?\b/g;
-const WORD_NUMBER_DURATION_CLAIM_PATTERN =
-  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
 const HIGH_OWNERSHIP_VERB_PATTERNS = [
   { verb: "owned", pattern: /\bown(?:ed|s|ing)\b/i },
   { verb: "managed", pattern: /\bmanag(?:ed|es|ing)\b/i },
@@ -3781,37 +4827,6 @@ function buildCandidateEvidenceSurface(args: { brief: CoverLetterBrief }): strin
     .join(" ");
 }
 
-function normalizeNumericClaim(value: string): string {
-  return compactWhitespace(value)
-    .toLowerCase()
-    .replace(/percentage\s+points?/g, "percent")
-    .replace(/%/g, " percent");
-}
-
-function extractNumericClaims(value: string): string[] {
-  const claims = new Set<string>();
-  for (const match of value.matchAll(PERCENTAGE_NUMERIC_CLAIM_PATTERN)) {
-    claims.add(normalizeNumericClaim(match[0]));
-  }
-  for (const match of value.matchAll(DIGIT_NUMERIC_CLAIM_PATTERN)) {
-    claims.add(normalizeNumericClaim(match[0]));
-  }
-  for (const match of value.matchAll(WORD_NUMBER_DURATION_CLAIM_PATTERN)) {
-    claims.add(normalizeNumericClaim(match[0]));
-  }
-  return Array.from(claims);
-}
-
-function hasUnsupportedNumericClaim(args: {
-  generatedText: string;
-  sourceSurface: string;
-}): boolean {
-  const generatedClaims = extractNumericClaims(args.generatedText);
-  if (generatedClaims.length === 0) return false;
-  const sourceClaims = new Set(extractNumericClaims(args.sourceSurface));
-  return generatedClaims.some((claim) => !sourceClaims.has(claim));
-}
-
 function hasUnsupportedOwnershipVerb(args: {
   generatedText: string;
   candidateEvidenceSurface: string;
@@ -3932,7 +4947,7 @@ function adjacentRoleCompanyContext(values: string[]): string | null {
     .map(parseRoleCompanyFact)
     .filter((item): item is { role: string; company: string } => item !== null);
   if (parsed.length === 0) return null;
-  const firstRole = parsed[0]!.role;
+  const firstRole = parsed[0].role;
   const companies = dedupeStrings(parsed.map((item) => item.company));
   if (parsed.every((item) => item.role === firstRole) && companies.length > 0) {
     return `while working as a ${firstRole} at ${listAsNaturalText(companies)}`;
@@ -3976,6 +4991,22 @@ function listAsNaturalText(items: string[]): string {
   return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
 }
 
+function listAsNaturalTextForLanguage(
+  items: string[],
+  language: string,
+): string {
+  const cleaned = dedupeStrings(items).map((item) =>
+    compactWhitespace(item).replace(/[.!?]$/u, ""),
+  );
+  const conjunction =
+    getDeterministicCopyLanguage(language) === "fr" ? "et" : "and";
+  if (cleaned.length <= 1) return cleaned[0] ?? "";
+  if (cleaned.length === 2) {
+    return `${cleaned[0]} ${conjunction} ${cleaned[1]}`;
+  }
+  return `${cleaned.slice(0, -1).join(", ")} ${conjunction} ${cleaned[cleaned.length - 1]}`;
+}
+
 function selectAdjacentWorkSurfaces(brief: CoverLetterBrief): string[] {
   const normalizedTargetRole = normalizeProposalConstraintText(brief.targetRole);
   return dedupeStrings([
@@ -3995,28 +5026,55 @@ function selectAdjacentWorkSurfaces(brief: CoverLetterBrief): string[] {
     .slice(0, 3);
 }
 
-function adjacentOperatingAnchors(brief: CoverLetterBrief): string[] {
+function adjacentOperatingAnchors(
+  brief: CoverLetterBrief,
+  language = "English",
+  includeFallback = true,
+): string[] {
   const evidence = [
     ...brief.topEvidence,
     ...brief.supportEvidence,
     ...(brief.transferCore ?? []),
   ].join(" ");
+  const french = getDeterministicCopyLanguage(language) === "fr";
+  const labels = french
+    ? {
+        observation: "une observation attentive",
+        records: "des dossiers fiables",
+        handoffs: "des transmissions claires",
+        followThrough: "un suivi régulier",
+        fallback: [
+          "des dossiers clairs",
+          "une communication constante",
+          "un suivi régulier",
+        ],
+      }
+    : {
+        observation: "careful observation",
+        records: "accurate records",
+        handoffs: "clear handoffs",
+        followThrough: "consistent follow-through",
+        fallback: [
+          "clear records",
+          "steady communication",
+          "consistent follow-through",
+        ],
+      };
   const anchors: string[] = [];
   if (/\b(?:monitor|surveillance|scan|patrol|observation|watch)\b/i.test(evidence)) {
-    anchors.push("careful observation");
+    anchors.push(labels.observation);
   }
   if (/\b(?:reports?|records?|documents?|documented|logs?|notes?|recording)\b/i.test(evidence)) {
-    anchors.push("accurate records");
+    anchors.push(labels.records);
   }
   if (/\b(?:witness(?:es)?|interview|communicat|handoffs?|stakeholders?|updates?)\b/i.test(evidence)) {
-    anchors.push("clear handoffs");
+    anchors.push(labels.handoffs);
   }
   if (/\b(?:coordinat|schedul|track|follow)\b/i.test(evidence)) {
-    anchors.push("consistent follow-through");
+    anchors.push(labels.followThrough);
   }
-  return anchors.length > 0
-    ? dedupeStrings(anchors).slice(0, 4)
-    : ["clear records", "steady communication", "consistent follow-through"];
+  if (anchors.length > 0) return dedupeStrings(anchors).slice(0, 4);
+  return includeFallback ? labels.fallback : [];
 }
 
 type PremiumWorkSurfaceId =
@@ -4033,6 +5091,8 @@ type PremiumWorkSurfaceDefinition = {
   jobPattern: RegExp;
   contextPhrase: string;
   anchorPhrase: string;
+  frenchContextPhrase: string;
+  frenchAnchorPhrase: string;
 };
 
 const PREMIUM_WORK_SURFACE_DEFINITIONS = [
@@ -4044,6 +5104,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:customer success|account health|retention|onboarding|qbrs?|quarterly business reviews?|expansion|churn|customer reporting)\b/i,
     contextPhrase: "customer success and retention work",
     anchorPhrase: "clear account signals and consistent follow-through",
+    frenchContextPhrase: "le suivi et la fidélisation des clients",
+    frenchAnchorPhrase: "des signaux client clairs et un suivi régulier",
   },
   {
     id: "revenue_forecasting",
@@ -4053,6 +5115,9 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:revenue operations?|forecast(?:s|ing)?|pipeline|salesforce|crm|dashboard|operating cadence|sales|finance)\b/i,
     contextPhrase: "revenue reporting and forecasting",
     anchorPhrase: "clear reporting cadence and reliable operating visibility",
+    frenchContextPhrase: "le reporting et les prévisions de revenus",
+    frenchAnchorPhrase:
+      "un reporting régulier et une visibilité opérationnelle fiable",
   },
   {
     id: "facilities_maintenance",
@@ -4062,6 +5127,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:facilities|maintenance|work-?order|service records?|repairs?|equipment)\b/i,
     contextPhrase: "facilities and maintenance coordination",
     anchorPhrase: "current service records and timely follow-up",
+    frenchContextPhrase: "la coordination des installations et de la maintenance",
+    frenchAnchorPhrase: "des dossiers d'intervention à jour et un suivi rapide",
   },
   {
     id: "security_observation",
@@ -4071,6 +5138,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:security|guard|patrols?|surveillance|cctv|observation|observe|monitor(?:ed|ing)?|witness(?:es)?|access control|site safety|incident response)\b/i,
     contextPhrase: "security observation and patrol work",
     anchorPhrase: "careful observation and clear records",
+    frenchContextPhrase: "la surveillance et les rondes de sécurité",
+    frenchAnchorPhrase: "une observation attentive et des dossiers clairs",
   },
   {
     id: "reporting_documentation",
@@ -4080,6 +5149,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:reports?|reporting|records?|documentation|documents?|documented|logs?|notes?|observations?|incidents?|status)\b/i,
     contextPhrase: "reporting and documentation",
     anchorPhrase: "accurate records and clear handoffs",
+    frenchContextPhrase: "le reporting et la documentation",
+    frenchAnchorPhrase: "des dossiers fiables et des transmissions claires",
   },
   {
     id: "operations_scheduling",
@@ -4089,6 +5160,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:operations?|scheduling|schedule|coordination|coordinate|handoffs?|follow-up|track(?:ed|ing)?|intake|workflow|process)\b/i,
     contextPhrase: "operations and scheduling",
     anchorPhrase: "organized coordination and steady follow-through",
+    frenchContextPhrase: "les opérations et la planification",
+    frenchAnchorPhrase: "une coordination structurée et un suivi régulier",
   },
 ] as const satisfies readonly PremiumWorkSurfaceDefinition[];
 
@@ -4129,29 +5202,73 @@ function resolvePremiumWorkSurfaces(
   return jobMatches;
 }
 
-function buildWorkSurfaceEmployerValueBridge(brief: CoverLetterBrief): string {
-  const surfaces = resolvePremiumWorkSurfaces(brief);
-  const primarySurface = surfaces[0];
+function buildNoCvWorkSurfaceEmployerValueBridge(
+  brief: CoverLetterBrief,
+  primarySurface: PremiumWorkSurfaceDefinition | undefined,
+): string {
   const anchors = primarySurface
     ? [primarySurface.anchorPhrase]
-    : adjacentOperatingAnchors(brief).slice(0, 3);
+    : adjacentOperatingAnchors(brief, "English").slice(0, 3);
   const anchorText = listAsNaturalText(anchors);
   const contextText = (primarySurface?.contextPhrase ?? "the work").replace(
     /\s+work$/i,
     "",
   );
-  const riskPhrase = primarySurface
-    ? `small misses in ${contextText} can become unclear handoffs or unresolved site issues`
-    : "small misses can become unclear handoffs or unresolved site issues";
+  return `The role points to ${contextText} work that calls for ${anchorText}.`;
+}
 
-  if (brief.contextClass === "no_cv") {
-    return `The role points to ${contextText} work that calls for ${anchorText}.`;
+function resolveLocalizedWorkSurfaceCopy(
+  brief: CoverLetterBrief,
+  primarySurface: PremiumWorkSurfaceDefinition | undefined,
+): { french: boolean; anchorText: string; contextText: string } {
+  const french = getDeterministicCopyLanguage(brief.language) === "fr";
+  if (french) {
+    const anchors = primarySurface
+      ? [primarySurface.frenchAnchorPhrase]
+      : adjacentOperatingAnchors(brief, brief.language).slice(0, 3);
+    return {
+      french,
+      anchorText: listAsNaturalTextForLanguage(anchors, brief.language),
+      contextText: primarySurface?.frenchContextPhrase ?? "ce travail",
+    };
   }
 
+  const anchors = primarySurface
+    ? [primarySurface.anchorPhrase]
+    : adjacentOperatingAnchors(brief, brief.language).slice(0, 3);
+  return {
+    french,
+    anchorText: listAsNaturalTextForLanguage(anchors, brief.language),
+    contextText: (primarySurface?.contextPhrase ?? "the work").replace(
+      /\s+work$/i,
+      "",
+    ),
+  };
+}
+
+function buildWorkSurfaceEmployerValueBridge(brief: CoverLetterBrief): string {
+  const surfaces = resolvePremiumWorkSurfaces(brief);
+  const primarySurface = surfaces[0];
+
+  if (brief.contextClass === "no_cv") {
+    return buildNoCvWorkSurfaceEmployerValueBridge(brief, primarySurface);
+  }
+
+  const { french, anchorText, contextText } = resolveLocalizedWorkSurfaceCopy(
+    brief,
+    primarySurface,
+  );
+
   if (brief.contextClass === "cv_adjacent") {
+    if (french) {
+      return `Cette expérience est pertinente pour ${contextText}, où les priorités incluent ${anchorText}.`;
+    }
     return `In ${contextText} work, that kind of background supports ${anchorText} without turning small issues into unclear handoffs.`;
   }
 
+  if (french) {
+    return `Dans ${contextText}, cette expérience apporte ${anchorText}.`;
+  }
   return `In ${contextText} work, that background supports ${anchorText}.`;
 }
 
@@ -4217,6 +5334,13 @@ function cleanPremiumWriterOutputText(
   };
 }
 
+function containsOnlyUnknownProviderIds(
+  ids: readonly string[],
+  knownIds: ReadonlySet<string>,
+): boolean {
+  return ids.length > 0 && ids.every((id) => !knownIds.has(id));
+}
+
 function normalizeProviderWriterOutputProvenance(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
@@ -4232,7 +5356,6 @@ function normalizeProviderWriterOutputProvenance(args: {
     return args.writerOutput;
   }
 
-  const factIds = new Set(args.factGraph.facts.map((fact) => fact.id));
   const demandIds = new Set(args.jobDemandGraph.demands.map((demand) => demand.id));
   const normalizedParts = { ...args.writerOutput.bodyParts };
 
@@ -4244,19 +5367,15 @@ function normalizeProviderWriterOutputProvenance(args: {
     const claimIdsNeedNormalization =
       part.claimIds.length === 0 ||
       part.claimIds.some((claimId) => claimId !== assignedClaim.id);
-    const factIdsNeedNormalization = part.factIds.some(
-      (factId) =>
-        !factIds.has(factId) || !assignedClaim.factIds.includes(factId),
-    );
-    const demandIdsNeedNormalization = part.demandIds.some(
-      (demandId) =>
-        !demandIds.has(demandId) || !assignedClaim.demandIds.includes(demandId),
+    const demandIdsNeedNormalization = containsOnlyUnknownProviderIds(
+      part.demandIds,
+      demandIds,
     );
 
     normalizedParts[section] = {
       ...part,
       claimIds: claimIdsNeedNormalization ? [assignedClaim.id] : part.claimIds,
-      factIds: factIdsNeedNormalization ? assignedClaim.factIds : part.factIds,
+      factIds: part.factIds,
       demandIds: demandIdsNeedNormalization
         ? assignedClaim.demandIds
         : part.demandIds,
@@ -4267,6 +5386,329 @@ function normalizeProviderWriterOutputProvenance(args: {
     ...args.writerOutput,
     bodyParts: normalizedParts,
   };
+}
+
+function stringArraysEqual(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function writerOutputProvenanceChanged(
+  before: PremiumWriterOutputV1,
+  after: PremiumWriterOutputV1,
+): boolean {
+  return CLAIM_PLAN_SECTIONS.some((section) => {
+    const beforePart = before.bodyParts[section];
+    const afterPart = after.bodyParts[section];
+    return (
+      !stringArraysEqual(beforePart.claimIds, afterPart.claimIds) ||
+      !stringArraysEqual(beforePart.factIds, afterPart.factIds) ||
+      !stringArraysEqual(beforePart.demandIds, afterPart.demandIds)
+    );
+  });
+}
+
+function premiumBodyPartTextChanged(
+  writerOutput: PremiumWriterOutputV1,
+  bodyParts: CoverLetterBodyParts,
+): boolean {
+  return CLAIM_PLAN_SECTIONS.some(
+    (section) =>
+      compactWhitespace(writerOutput.bodyParts[section].text) !==
+      compactWhitespace(bodyParts[section]),
+  );
+}
+
+function replacePremiumWriterOutputBodyParts(args: {
+  writerOutput: PremiumWriterOutputV1;
+  bodyParts: CoverLetterBodyParts;
+}): PremiumWriterOutputV1 {
+  return {
+    ...args.writerOutput,
+    bodyParts: {
+      opening: {
+        ...args.writerOutput.bodyParts.opening,
+        text: args.bodyParts.opening,
+      },
+      proofBlock: {
+        ...args.writerOutput.bodyParts.proofBlock,
+        text: args.bodyParts.proofBlock,
+      },
+      employerValueBlock: {
+        ...args.writerOutput.bodyParts.employerValueBlock,
+        text: args.bodyParts.employerValueBlock,
+      },
+      closeLine: {
+        ...args.writerOutput.bodyParts.closeLine,
+        text: args.bodyParts.closeLine,
+      },
+    },
+  };
+}
+
+function normalizePremiumProvenanceText(value: string): string {
+  return normalizeProposalConstraintText(value);
+}
+
+function premiumTextSupportsCandidateFact(args: {
+  generatedText: string;
+  fact: Pick<
+    PremiumCoverLetterFinalProvenanceFact,
+    "text" | "source" | "metrics" | "entities"
+  >;
+}): boolean {
+  if (args.fact.source !== "cv") return false;
+
+  const generatedText = compactWhitespace(args.generatedText);
+  const factText = compactWhitespace(args.fact.text);
+  if (!generatedText || !factText) return false;
+
+  const normalizedGenerated = normalizePremiumProvenanceText(generatedText);
+  const normalizedFact = normalizePremiumProvenanceText(factText);
+  const factTokens = normalizeCanonicalTokens(factText);
+  const generatedTokens = new Set(normalizeCanonicalTokens(generatedText));
+  if (
+    ((normalizedFact.length >= 12 || factTokens.length >= 2) &&
+      normalizedGenerated.includes(normalizedFact)) ||
+    (factTokens.length === 1 && generatedTokens.has(factTokens[0]))
+  ) {
+    return true;
+  }
+
+  const overlap = countOverlap(factTokens, generatedTokens);
+  const threshold = Math.min(5, Math.max(3, Math.ceil(factTokens.length * 0.35)));
+  if (overlap >= threshold) {
+    return true;
+  }
+
+  const hasMetricOverlap = args.fact.metrics.some((metric) => {
+    const normalizedMetric = normalizePremiumProvenanceText(metric);
+    return (
+      normalizedMetric.length > 0 &&
+      normalizedGenerated.includes(normalizedMetric)
+    );
+  });
+  if (hasMetricOverlap && overlap >= 2) {
+    return true;
+  }
+
+  const hasEntityOverlap = args.fact.entities.some((entity) => {
+    const normalizedEntity = normalizePremiumProvenanceText(entity);
+    return (
+      normalizedEntity.length >= 3 &&
+      normalizedGenerated.includes(normalizedEntity)
+    );
+  });
+  return hasEntityOverlap && overlap >= 2;
+}
+
+function buildPremiumProvenanceSection(args: {
+  section: ClaimPlanSection;
+  part: PremiumWriterBodyPartV1;
+  finalText: string;
+  factById: Map<string, FactNodeV1>;
+}): {
+  section: PremiumCoverLetterFinalProvenanceSection;
+  candidateFacts: PremiumCoverLetterFinalProvenanceFact[];
+} {
+  const candidateFacts: PremiumCoverLetterFinalProvenanceFact[] = [];
+  for (const factId of args.part.factIds) {
+    const fact = args.factById.get(factId);
+    if (!fact || fact.source !== "cv") continue;
+    candidateFacts.push({
+      id: fact.id,
+      section: args.section,
+      text: fact.text,
+      source: "cv",
+      metrics: fact.metrics,
+      entities: fact.entities,
+    });
+  }
+
+  const verifiedCandidateFactIds = candidateFacts
+    .filter((fact) =>
+      premiumTextSupportsCandidateFact({
+        generatedText: args.finalText,
+        fact,
+      }),
+    )
+    .map((fact) => fact.id);
+
+  return {
+    section: {
+      section: args.section,
+      text: args.finalText,
+      claimIds: [...args.part.claimIds],
+      factIds: [...args.part.factIds],
+      demandIds: [...args.part.demandIds],
+      candidateFactIds: candidateFacts.map((fact) => fact.id),
+      verifiedCandidateFactIds,
+    },
+    candidateFacts,
+  };
+}
+
+export function buildPremiumCoverLetterFinalProvenance(args: {
+  writerOutput: PremiumWriterOutputV1;
+  finalBodyParts: CoverLetterBodyParts;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  legacyWrapped: boolean;
+  provenanceIdsNormalized: boolean;
+}): PremiumCoverLetterFinalProvenance {
+  const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
+  const sections = {} as Record<
+    ClaimPlanSection,
+    PremiumCoverLetterFinalProvenanceSection
+  >;
+  const candidateFacts: PremiumCoverLetterFinalProvenanceFact[] = [];
+
+  for (const section of CLAIM_PLAN_SECTIONS) {
+    const built = buildPremiumProvenanceSection({
+      section,
+      part: args.writerOutput.bodyParts[section],
+      finalText: args.finalBodyParts[section],
+      factById,
+    });
+    sections[section] = built.section;
+    candidateFacts.push(...built.candidateFacts);
+  }
+
+  const candidateFactIds = dedupeStrings(candidateFacts.map((fact) => fact.id));
+  const verifiedCandidateFactIds = dedupeStrings(
+    CLAIM_PLAN_SECTIONS.flatMap(
+      (section) => sections[section].verifiedCandidateFactIds,
+    ),
+  );
+  const origin: PremiumCoverLetterFinalProvenanceOrigin = args.legacyWrapped
+    ? "legacy_wrapped"
+    : args.provenanceIdsNormalized
+      ? "provider_normalized"
+      : "provider_reported";
+  const mutatedAfterStructuredOutput = premiumBodyPartTextChanged(
+    args.writerOutput,
+    args.finalBodyParts,
+  );
+  const status: PremiumCoverLetterFinalProvenanceStatus =
+    args.claimPlan.contextClass === "no_cv"
+      ? "untrusted_no_cv"
+      : args.legacyWrapped
+        ? "untrusted_legacy_wrapped"
+        : verifiedCandidateFactIds.length > 0
+          ? mutatedAfterStructuredOutput
+            ? "validated_after_structured_repair"
+            : "validated_final_text"
+          : candidateFactIds.length > 0
+            ? "invalidated_by_late_mutation"
+            : "untrusted_no_candidate_fact";
+
+  return {
+    version: "premium_cover_letter_final_provenance_v1",
+    status,
+    origin,
+    contextClass: args.claimPlan.contextClass,
+    candidateFactIds,
+    verifiedCandidateFactIds,
+    candidateFacts,
+    sections,
+  };
+}
+
+function isTrustedPremiumFinalProvenanceStatus(
+  status: PremiumCoverLetterFinalProvenanceStatus,
+): boolean {
+  return (
+    status === "validated_final_text" ||
+    status === "validated_after_structured_repair"
+  );
+}
+
+export function refreshPremiumCoverLetterFinalProvenanceForContent(args: {
+  provenance: PremiumCoverLetterFinalProvenance;
+  finalText: string;
+}): PremiumCoverLetterFinalProvenance {
+  if (!isTrustedPremiumFinalProvenanceStatus(args.provenance.status)) {
+    return args.provenance;
+  }
+
+  const verifiedCandidateFacts = args.provenance.candidateFacts.filter((fact) =>
+    premiumTextSupportsCandidateFact({
+      generatedText: args.finalText,
+      fact,
+    }),
+  );
+  const verifiedCandidateFactIds = dedupeStrings(
+    verifiedCandidateFacts.map((fact) => fact.id),
+  );
+  if (verifiedCandidateFactIds.length === 0) {
+    return {
+      ...args.provenance,
+      status: "invalidated_by_late_mutation",
+      verifiedCandidateFactIds: [],
+      sections: Object.fromEntries(
+        CLAIM_PLAN_SECTIONS.map((section) => [
+          section,
+          {
+            ...args.provenance.sections[section],
+            verifiedCandidateFactIds: [],
+          },
+        ]),
+      ) as unknown as Record<
+        ClaimPlanSection,
+        PremiumCoverLetterFinalProvenanceSection
+      >,
+    };
+  }
+
+  const originalBodyText = compactWhitespace(
+    CLAIM_PLAN_SECTIONS.map(
+      (section) => args.provenance.sections[section].text,
+    ).join(" "),
+  );
+  const finalTextChanged =
+    normalizePremiumProvenanceText(originalBodyText) !==
+    normalizePremiumProvenanceText(args.finalText);
+
+  return {
+    ...args.provenance,
+    status:
+      args.provenance.status === "validated_after_structured_repair" ||
+      finalTextChanged
+        ? "validated_after_structured_repair"
+        : "validated_final_text",
+    verifiedCandidateFactIds,
+    sections: Object.fromEntries(
+      CLAIM_PLAN_SECTIONS.map((section) => [
+        section,
+        {
+          ...args.provenance.sections[section],
+          verifiedCandidateFactIds: args.provenance.candidateFacts
+            .filter(
+              (fact) =>
+                fact.section === section && verifiedCandidateFactIds.includes(fact.id),
+            )
+            .map((fact) => fact.id),
+        },
+      ]),
+    ) as Record<ClaimPlanSection, PremiumCoverLetterFinalProvenanceSection>,
+  };
+}
+
+export function premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence(args: {
+  provenance: PremiumCoverLetterFinalProvenance | undefined;
+  finalText: string;
+}): boolean {
+  if (!args.provenance) return false;
+  const refreshed = refreshPremiumCoverLetterFinalProvenanceForContent({
+    provenance: args.provenance,
+    finalText: args.finalText,
+  });
+  return (
+    isTrustedPremiumFinalProvenanceStatus(refreshed.status) &&
+    refreshed.verifiedCandidateFactIds.length > 0
+  );
 }
 
 function lowerUnsupportedOwnershipVerbs(args: {
@@ -4447,7 +5889,7 @@ function normalizeAdjacentEvidenceOrder(args: {
     reportingSentence && durationContext
       ? `Across ${conciseDurationEvidenceLead(durationContext)}, ${reportingSentence.replace(/[.!?]$/u, "")}`
       : durationContext
-        ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0]!.replace(/[.!?]$/u, "")}`
+        ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0].replace(/[.!?]$/u, "")}`
         : evidenceSentences[0] ?? args.bodyParts.opening;
   const proofSentences =
     reportingSentence && monitoringSentence
@@ -4531,16 +5973,94 @@ function hasAdjacentRoleMappingLeak(args: {
   );
 }
 
+function buildStandaloneBriefNumericEvidenceContext(
+  brief: CoverLetterBrief,
+): PremiumCoverLetterNumericEvidenceValidationContext {
+  const candidateSources = [
+    ...brief.topEvidence,
+    ...brief.supportEvidence,
+    ...(brief.transferCore ?? []),
+  ].filter(Boolean);
+  const factGraph: FactGraphV1 = {
+    version: "fact_graph_v1",
+    facts: candidateSources.map((text, index) => ({
+      id: `fact_brief_numeric_${String(index + 1).padStart(3, "0")}`,
+      text,
+      source: "cv",
+      sourcePath: `brief.numericEvidence[${index}]`,
+      confidence: "medium",
+      category: "achievement",
+      metrics: premiumCoverLetterFactGraphNumericMetrics(text),
+      entities: [],
+      allowedVerbs: [],
+      forbiddenUpgrades: [],
+      ownershipLevel: "support",
+    })),
+  };
+  const jobSources = [
+    ...(brief.topResponsibilities ?? []),
+    ...(brief.keyRequirements ?? []),
+    ...(brief.preferredQualifications ?? []),
+    ...(brief.lowValueChecklist ?? []),
+    ...(brief.workContext ?? []),
+  ].filter(Boolean);
+  const jobDemandGraph: JobDemandGraphV1 = {
+    version: "job_demand_graph_v1",
+    priorityTokens: [],
+    demands: jobSources.map((text, index) => ({
+      id: `demand_brief_numeric_${String(index + 1).padStart(3, "0")}`,
+      text,
+      bucket: "key_requirement",
+      requiredness: "required",
+      tokens: [],
+      mustNotBecomeCandidateClaim: true,
+    })),
+  };
+  const claimPlan: ClaimPlanV1 = {
+    version: "claim_plan_v1",
+    contextClass: brief.contextClass,
+    language: brief.language as ProposalOutputLanguage,
+    targetRole: brief.targetRole,
+    preset: brief.preset,
+    claims: [],
+    globalForbidden: [],
+  };
+  const factIds = factGraph.facts.map((fact) => fact.id);
+  const demandIds = jobDemandGraph.demands.map((demand) => demand.id);
+  const provenance = { claimIds: [], factIds, demandIds };
+  return {
+    projection: buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph,
+      claimPlan,
+      jobDemandGraph,
+      targetEmployer: brief.targetEmployer,
+    }),
+    allowMeasurementTranslation: brief.language !== "English",
+    provenanceBySection: {
+      opening: provenance,
+      proofBlock: provenance,
+      employerValueBlock: provenance,
+      closeLine: provenance,
+    },
+  };
+}
+
 export function validatePremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
+  numericEvidenceContext?: PremiumCoverLetterNumericEvidenceValidationContext;
 }): PremiumBodyPartValidationIssue[] {
   const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
   const issues: PremiumBodyPartValidationIssue[] = [];
-  const values = Object.values(bodyParts);
+  const values = Object.entries(bodyParts) as Array<
+    [ClaimPlanSection, string]
+  >;
   const sourceSurface = buildValidationSourceSurface(args);
   const candidateEvidenceSurface = buildCandidateEvidenceSurface(args);
-  for (const value of values) {
+  const numericEvidenceContext =
+    args.numericEvidenceContext ??
+    buildStandaloneBriefNumericEvidenceContext(args.brief);
+  for (const [section, value] of values) {
     const compact = compactWhitespace(value);
     if (!compact) {
       issues.push({ code: "missing_field", repairable: true });
@@ -4575,7 +6095,7 @@ export function validatePremiumCoverLetterBodyParts(args: {
     }
     if (
       args.brief.contextClass === "no_cv" &&
-      NO_CV_HISTORY_CLAIM_PATTERN.test(compact)
+      hasNoCvHistoryClaim(compact)
     ) {
       issues.push({ code: "no_cv_history_claim", repairable: false });
     }
@@ -4620,7 +6140,19 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (WRITER_META_PROSE_PATTERN.test(compact)) {
       issues.push({ code: "meta_prose", repairable: false });
     }
-    if (hasUnsupportedNumericClaim({ generatedText: compact, sourceSurface })) {
+    const numericProvenance = numericEvidenceContext.provenanceBySection[section];
+    if (
+      numericProvenance &&
+      matchPremiumCoverLetterNumericEvidence({
+        projection: numericEvidenceContext.projection,
+        visibleText: compact,
+        section,
+        factIds: numericProvenance.factIds,
+        demandIds: numericProvenance.demandIds,
+        claimIds: numericProvenance.claimIds,
+        allowMeasurementTranslation: args.brief.language !== "English",
+      }).unsupported.length > 0
+    ) {
       issues.push({ code: "unsupported_numeric_claim", repairable: false });
     }
     if (
@@ -4652,6 +6184,7 @@ export function validatePremiumCoverLetterBodyParts(args: {
 export function evaluatePremiumCoverLetterQualityShadow(args: {
   bodyParts: CoverLetterBodyParts;
   content: string;
+  contextClass?: PremiumCoverLetterContextClass;
 }): PremiumCoverLetterQualityShadowResult {
   const issues: PremiumCoverLetterQualityShadowIssueCode[] = [];
   const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
@@ -4673,29 +6206,27 @@ export function evaluatePremiumCoverLetterQualityShadow(args: {
     issues.push("generic_tone");
   }
   if (
+    args.contextClass !== "no_cv" &&
     /\b(?:that is useful in\b|that matters where|day-to-day depends on|those habits matter|would welcome the chance to (?:discuss|speak)|discuss the position further|discuss the role further)\b/i.test(
       bodyText,
     )
   ) {
     issues.push("generic_tone");
   }
-  if (isGenericPremiumClosingLine(bodyParts.closeLine)) {
+  if (
+    args.contextClass !== "no_cv" &&
+    isGenericPremiumClosingLine(bodyParts.closeLine)
+  ) {
     issues.push("generic_tone");
   }
   if (
     /^(?:i|at)\b/i.test(opening) &&
     /^(?:i|at)\b/i.test(proof) &&
-    !/\b(?:that|this|for|where|because|matters|relevant|role|team|environment|work)\b/i.test(
-      employerValue,
-    )
+    !EMPLOYER_ARGUMENT_BRIDGE_PATTERN.test(employerValue)
   ) {
     issues.push("factual_inventory");
   }
-  if (
-    !/\b(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?)\b/i.test(
-      employerValue,
-    )
-  ) {
+  if (!EMPLOYER_ARGUMENT_BRIDGE_PATTERN.test(employerValue)) {
     issues.push("weak_employer_argument");
   }
   if (LOW_VALUE_JOB_ECHO_PATTERN.test(employerValue)) {
@@ -4718,9 +6249,30 @@ export function evaluatePremiumCoverLetterQualityShadow(args: {
   };
 }
 
+function getRepairablePremiumCoverLetterQualityShadowIssues(
+  qualityShadow: PremiumCoverLetterQualityShadowResult,
+): PremiumCoverLetterQualityShadowIssueCode[] {
+  if (qualityShadow.passed) return [];
+  return qualityShadow.issues.filter((issue) =>
+    REPAIRABLE_PREMIUM_COVER_LETTER_QUALITY_SHADOW_ISSUES.has(issue),
+  );
+}
+
+function premiumCoverLetterQualityShadowImproved(args: {
+  before: PremiumCoverLetterQualityShadowResult;
+  after: PremiumCoverLetterQualityShadowResult;
+}): boolean {
+  if (args.after.passed) return true;
+  return (
+    args.after.score > args.before.score &&
+    args.after.issues.length < args.before.issues.length
+  );
+}
+
 export function repairPremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
+  forceGenericCloseRepair?: boolean;
 }): CoverLetterBodyParts {
   const cleanBodyPart = (value: string) =>
     dedupeSentenceSequence(
@@ -4750,10 +6302,39 @@ export function repairPremiumCoverLetterBodyParts(args: {
     cleaned.employerValueBlock = buildWorkSurfaceEmployerValueBridge(args.brief);
   }
 
+  const originalCloseSentences = splitSentences(cleaned.closeLine).map(
+    (sentence) => normalizeProposalConstraintText(sentence),
+  );
+  cleaned.employerValueBlock = joinSentences(
+    splitSentences(cleaned.employerValueBlock).filter(
+      (sentence) =>
+        !originalCloseSentences.includes(
+          normalizeProposalConstraintText(sentence),
+        ),
+    ),
+  );
+  if (
+    !compactWhitespace(cleaned.employerValueBlock) &&
+    getDeterministicCopyLanguage(args.brief.language)
+  ) {
+    cleaned.employerValueBlock = ensureSentenceEnding(
+      buildWorkSurfaceEmployerValueBridge(args.brief),
+    );
+  }
+
   if (!compactWhitespace(cleaned.closeLine)) {
     cleaned.closeLine =
       buildEvidenceGroundedCloseLine(args.brief) ||
       resolveCloseFallback(args.brief.language);
+  } else if (
+    args.brief.contextClass !== "no_cv" &&
+    (args.forceGenericCloseRepair || !isCoverLetterQualityRepairV1Enabled()) &&
+    isGenericPremiumClosingLine(cleaned.closeLine)
+  ) {
+    cleaned.closeLine = repairGenericPremiumClosingLine({
+      closeLine: cleaned.closeLine,
+      brief: args.brief,
+    });
   }
 
   const closeSentences = splitSentences(cleaned.closeLine).map((sentence) =>
@@ -4973,77 +6554,57 @@ function hasExpectedCandidateSignature(args: {
   return lines[lines.length - 1] === expectedName;
 }
 
+type ExactPremiumCoverLetterOpenAIArgs = {
+  apiKey: string;
+  prompt: string;
+  writerModel: string;
+  schema?: Record<string, unknown>;
+  signal?: AbortSignal;
+  maxRetries?: number;
+  maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
+  onResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
+};
+
+export async function generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(
+  args: ExactPremiumCoverLetterOpenAIArgs,
+): Promise<unknown> {
+  const responseFormat = resolvePremiumCoverLetterOpenAIResponseFormat({
+    schema: args.schema,
+  });
+  return generateOpenAIResponsesStructured({
+    apiKey: args.apiKey,
+    prompt: args.prompt,
+    writerModel: args.writerModel,
+    responseFormat,
+    signal: args.signal,
+    maxRetries: args.maxRetries,
+    maxOutputTokens: args.maxOutputTokens,
+    reasoningEffort:
+      args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
+    onResponseMetadata: args.onResponseMetadata,
+  });
+}
+
 export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   apiKey: string;
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
+  schema?: Record<string, unknown>;
   signal?: AbortSignal;
+  maxRetries?: number;
+  maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
+  onResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
 }): Promise<unknown> {
-  const resolvedModel = resolvePremiumCoverLetterWriterModel(args.writerModel);
-  const requestBody = buildPremiumCoverLetterOpenAIRequest({
-    prompt: args.prompt,
-    writerModel: resolvedModel,
+  return generatePremiumCoverLetterBodyPartsWithExactOpenAIModel({
+    ...args,
+    writerModel: resolvePremiumCoverLetterWriterModel(args.writerModel),
   });
-
-  const openaiModule: any = await import("openai").catch(() => null);
-  const OpenAI = openaiModule?.default ?? openaiModule?.OpenAI ?? null;
-  if (OpenAI) {
-    const client = new OpenAI({ apiKey: args.apiKey });
-    const zodHelperModule: any = await import("openai/helpers/zod").catch(
-      () => null,
-    );
-    const zodTextFormat = zodHelperModule?.zodTextFormat ?? null;
-
-    if (typeof client.responses?.parse === "function" && zodTextFormat) {
-      const response = await client.responses.parse(
-        {
-          model: resolvedModel,
-          input: args.prompt,
-          reasoning: {
-            effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
-          },
-          text: {
-            verbosity: "medium",
-            format: zodTextFormat(
-              PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
-              "premium_writer_output_v1",
-            ),
-          },
-        } as any,
-        args.signal ? ({ signal: args.signal } as any) : undefined,
-      );
-
-      return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
-        response?.output_parsed ?? extractOpenAIJsonPayload(response),
-      );
-    }
-
-    const response = await client.responses.create(
-      requestBody as any,
-      args.signal ? ({ signal: args.signal } as any) : undefined,
-    );
-    return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
-      extractOpenAIJsonPayload(response),
-    );
-  }
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
-    },
-    signal: args.signal,
-    body: JSON.stringify(requestBody),
-  });
-  if (!response.ok) {
-    throw new Error(
-      `OpenAI premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
-    );
-  }
-  return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
-    extractOpenAIJsonPayload(await response.json()),
-  );
 }
 
 function extractPremiumMistralText(content: unknown): string {
@@ -5116,7 +6677,7 @@ function parsePremiumMistralWriterJson(content: string): unknown {
 
   const embedded = findPremiumEmbeddedJsonObjectCandidates(trimmed);
   if (embedded.length === 1) {
-    return tryParse(embedded[0]!);
+    return tryParse(embedded[0]);
   }
 
   throw new Error(
@@ -5124,26 +6685,39 @@ function parsePremiumMistralWriterJson(content: string): unknown {
   );
 }
 
+export const PREMIUM_COVER_LETTER_MISTRAL_SYSTEM_PROMPT =
+  "Return only a valid JSON object matching the requested schema. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.";
+
 export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   apiKey: string;
   prompt: string;
   writerModel: string;
   signal?: AbortSignal;
+  maxRetries?: number;
+  maxOutputTokens?: number;
+  onResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
 }): Promise<unknown> {
   const model = new ChatMistralAI({
     apiKey: args.apiKey,
     modelName: args.writerModel,
     temperature: 0.2,
+    ...(args.maxRetries !== undefined
+      ? { maxRetries: args.maxRetries }
+      : {}),
+    ...(args.maxOutputTokens !== undefined
+      ? { maxTokens: args.maxOutputTokens }
+      : {}),
   });
   const response = await model.invoke(
     [
-      new SystemMessage(
-        "Return only a valid JSON object matching the requested schema. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.",
-      ),
+      new SystemMessage(PREMIUM_COVER_LETTER_MISTRAL_SYSTEM_PROMPT),
       new HumanMessage(args.prompt),
     ],
     args.signal ? ({ signal: args.signal } as any) : undefined,
   );
+  args.onResponseMetadata?.(extractPremiumProviderResponseMetadata(response));
   const content = extractPremiumMistralText(response.content);
   return parsePremiumMistralWriterJson(content);
 }
@@ -5151,27 +6725,85 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
 export function buildPremiumCoverLetterOpenAIRequest(args: {
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
+  schema?: Record<string, unknown>;
+  schemaName?: string;
+  maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }) {
+  return buildPremiumCoverLetterOpenAIRequestForExactModel({
+    ...args,
+    writerModel: resolvePremiumCoverLetterWriterModel(args.writerModel),
+  });
+}
+
+export function buildPremiumCoverLetterOpenAIRequestForExactModel(args: {
+  prompt: string;
+  writerModel: string;
+  schema?: Record<string, unknown>;
+  schemaName?: string;
+  maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
+}) {
+  const schema = args.schema ?? PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA;
+  const schemaName = args.schemaName ?? "premium_writer_output_v1";
+  return buildOpenAIResponsesRequest({
+    prompt: args.prompt,
+    writerModel: args.writerModel,
+    schema,
+    schemaName,
+    maxOutputTokens: args.maxOutputTokens,
+    reasoningEffort:
+      args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
+  });
+}
+
+function extractPremiumProviderResponseMetadata(
+  response: any,
+): PremiumCoverLetterProviderResponseMetadata {
+  const usage = response?.usage ?? response?.usage_metadata ?? null;
+  const inputTokens = usage?.input_tokens ?? usage?.promptTokens;
+  const outputTokens = usage?.output_tokens ?? usage?.completionTokens;
+  const totalTokens = usage?.total_tokens ?? usage?.totalTokens;
+  const tokenUsage = [inputTokens, outputTokens, totalTokens].every(
+    (value) => Number.isInteger(value) && value >= 0,
+  )
+    ? { inputTokens, outputTokens, totalTokens }
+    : null;
   return {
-    model: resolvePremiumCoverLetterWriterModel(args.writerModel),
-    input: args.prompt,
-    reasoning: {
-      effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
-    },
-    text: {
-      verbosity: "medium",
-      format: {
-        type: "json_schema",
-        name: "premium_writer_output_v1",
-        schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
-        strict: true,
-        json_schema: {
-          name: "premium_writer_output_v1",
-          schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
-          strict: true,
-        },
-      },
-    },
+    returnedModel: typeof response?.model === "string" ? response.model : null,
+    tokenUsage,
+  };
+}
+
+function resolvePremiumCoverLetterOpenAIResponseFormat(args: {
+  schema?: Record<string, unknown>;
+}): {
+  name: string;
+  jsonSchema: Record<string, unknown>;
+  zodSchema: z.ZodTypeAny;
+} {
+  if (args.schema === PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA) {
+    return {
+      name: "premium_cover_letter_body_parts",
+      jsonSchema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+      zodSchema: PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+    };
+  }
+  return {
+    name: "premium_writer_output_v1",
+    jsonSchema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+    zodSchema: PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
+  };
+}
+
+function buildPremiumCoverLetterPromptBriefProjection(
+  brief: CoverLetterBrief,
+): Omit<CoverLetterBrief, "targetEmployer"> &
+  Partial<Pick<CoverLetterBrief, "targetEmployer">> {
+  const { targetEmployer, ...briefWithoutTargetEmployer } = brief;
+  return {
+    ...briefWithoutTargetEmployer,
+    ...(targetEmployer.status === "RESOLVED" ? { targetEmployer } : {}),
   };
 }
 
@@ -5182,6 +6814,7 @@ function buildPremiumCoverLetterRepairPrompt(args: {
 }): string {
   return [
     "Rewrite the cover-letter body parts to satisfy validation.",
+    targetEmployerPromptGuidance(args.brief.targetEmployer),
     "",
     "The previous output failed because it used adjacent role-mapping, future-impact language, meta-commentary, unsupported ownership verbs, or unsupported outcome claims.",
     "",
@@ -5232,7 +6865,43 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "",
     `Validation issues: ${JSON.stringify(args.issues)}`,
     `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
-    `Structured brief: ${JSON.stringify(args.brief)}`,
+    `Structured brief: ${JSON.stringify(buildPremiumCoverLetterPromptBriefProjection(args.brief))}`,
+  ].join("\n");
+}
+
+function buildPremiumCoverLetterQualityRepairPrompt(args: {
+  brief: CoverLetterBrief;
+  previousBodyParts: CoverLetterBodyParts;
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+  issues: PremiumCoverLetterQualityShadowIssueCode[];
+}): string {
+  return [
+    "Repair cover-letter body parts for quality only.",
+    targetEmployerPromptGuidance(args.brief.targetEmployer),
+    "",
+    "This is a bounded quality pass after the output already passed safety validation.",
+    "Make at most small wording changes that address the listed quality issues.",
+    "If a listed issue cannot be fixed using only the structured brief, return the previous body parts unchanged.",
+    "",
+    "Allowed repairs:",
+    "- remove meta-writing and generic cover-letter phrases",
+    "- make the employerValueBlock use the job context as an angle instead of listing the job offer",
+    "- replace low-value job echo with candidate-backed overlap already present in the brief",
+    "- reduce verbosity by shortening or deduplicating sentences",
+    "- keep every candidate claim grounded in existing candidate facts from the brief",
+    "",
+    "Not allowed:",
+    "- add new candidate experience, credentials, metrics, names, employers, tools, certifications, or outcomes",
+    "- turn job demands into candidate history",
+    "- change claim strategy or invent proof",
+    "- add greeting, signoff, candidate name, markdown, explanation, audit, or labels",
+    "- use this repair to satisfy provenance; final validation still decides",
+    "",
+    "Return only the same JSON body parts.",
+    `Quality issues: ${JSON.stringify(args.issues)}`,
+    `Quality shadow: ${JSON.stringify(args.qualityShadow)}`,
+    `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
+    `Structured brief: ${JSON.stringify(buildPremiumCoverLetterPromptBriefProjection(args.brief))}`,
   ].join("\n");
 }
 
@@ -5243,6 +6912,7 @@ function buildPremiumWriterOutputRepairPrompt(args: {
 }): string {
   return [
     "Repair PremiumWriterOutputV1 without changing claim strategy.",
+    targetEmployerPromptGuidance(args.brief.targetEmployer),
     "The ClaimPlan owns strategy. Do not choose claims.",
     "Fix only invalid body parts.",
     "Allowed repairs: strip greeting/signoff, dedupe repeated sentences, add punctuation, remove duplicate closeLine from employerValueBlock, or fill empty closeLine with deterministic safe wording only if no unsupported claim is involved.",
@@ -5252,73 +6922,430 @@ function buildPremiumWriterOutputRepairPrompt(args: {
     `Validation issue codes: ${JSON.stringify(args.issues)}`,
     `ClaimPlan: ${JSON.stringify(args.brief.claimPlan)}`,
     `Previous PremiumWriterOutputV1: ${JSON.stringify(args.previousWriterOutput)}`,
-    `Structured brief: ${JSON.stringify(args.brief)}`,
+    `Structured brief: ${JSON.stringify(buildPremiumCoverLetterPromptBriefProjection(args.brief))}`,
   ].join("\n");
 }
 
-export function extractOpenAIJsonPayload(response: any): unknown {
-  if (response?.output_parsed && typeof response.output_parsed === "object") {
-    return response.output_parsed;
-  }
+function isAbortLikeError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  if (!(error instanceof Error)) return false;
+  const name = error.name.toLowerCase();
+  const message = error.message.toLowerCase();
+  const code = typeof (error as any).code === "string" ? (error as any).code : "";
+  return (
+    name === "aborterror" ||
+    name === "cancelederror" ||
+    name === "cancellederror" ||
+    name === "proposalgenerationcancelederror" ||
+    code === "ERR_CANCELED" ||
+    message === "proposal generation canceled." ||
+    message.includes("aborted")
+  );
+}
 
-  const contentArrays = [
-    ...(Array.isArray(response?.output) ? response.output : []),
-    ...(Array.isArray(response?.outputs) ? response.outputs : []),
-  ]
-    .flatMap((entry: any) =>
-      Array.isArray(entry?.content) ? entry.content : entry ? [entry] : [],
+function buildPremiumCoverLetterQualityRepairTrace(args: {
+  enabled: boolean;
+  eligible: boolean;
+  attempted: boolean;
+  outcome: PremiumCoverLetterQualityRepairOutcome;
+  qualityBefore: PremiumCoverLetterQualityShadowResult;
+  qualityAfter?: PremiumCoverLetterQualityShadowResult;
+}): PremiumCoverLetterQualityRepairTrace {
+  const rejected =
+    args.outcome !== "disabled" &&
+    args.outcome !== "not_needed" &&
+    args.outcome !== "attempted_accepted" &&
+    args.outcome !== "canceled";
+  const trace: PremiumCoverLetterQualityRepairTrace = {
+    enabled: args.enabled,
+    eligible: args.eligible,
+    attempted: args.attempted,
+    outcome: args.outcome,
+    qualityBefore: args.qualityBefore,
+    ...(args.qualityAfter ? { qualityAfter: args.qualityAfter } : {}),
+  };
+  if (rejected) {
+    trace.rejectionCategory = args.outcome as NonNullable<
+      PremiumCoverLetterQualityRepairTrace["rejectionCategory"]
+    >;
+  }
+  return trace;
+}
+
+function getChangedPremiumCoverLetterSections(args: {
+  before: CoverLetterBodyParts;
+  after: CoverLetterBodyParts;
+}): ClaimPlanSection[] {
+  return CLAIM_PLAN_SECTIONS.filter(
+    (section) =>
+      compactWhitespace(args.before[section]) !==
+      compactWhitespace(args.after[section]),
+  );
+}
+
+function repairTextHasCandidateUnsupportedClaim(args: {
+  text: string;
+  candidateEvidenceSurface: string;
+  section: ClaimPlanSection;
+  numericEvidenceContext: PremiumCoverLetterNumericEvidenceValidationContext;
+}): boolean {
+  const compact = compactWhitespace(args.text);
+  const numericProvenance =
+    args.numericEvidenceContext.provenanceBySection[args.section];
+  if (
+    matchPremiumCoverLetterNumericEvidence({
+      projection: args.numericEvidenceContext.projection,
+      visibleText: compact,
+      section: args.section,
+      factIds: numericProvenance.factIds,
+      demandIds: numericProvenance.demandIds,
+      claimIds: numericProvenance.claimIds,
+      allowMeasurementTranslation:
+        args.numericEvidenceContext.allowMeasurementTranslation,
+    }).unsupported.length > 0
+  ) {
+    return true;
+  }
+  if (
+    (UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(compact) &&
+      !UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(args.candidateEvidenceSurface)) ||
+    (UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(compact) &&
+      !UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(
+        args.candidateEvidenceSurface,
+      ))
+  ) {
+    return true;
+  }
+  if (
+    COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) => pattern.test(compact)) &&
+    !COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) =>
+      pattern.test(args.candidateEvidenceSurface),
     )
-    .filter(Boolean);
+  ) {
+    return true;
+  }
+  return hasUnsupportedOwnershipVerb({
+    generatedText: compact,
+    candidateEvidenceSurface: args.candidateEvidenceSurface,
+  });
+}
 
-  for (const item of contentArrays) {
-    if (item?.json && typeof item.json === "object") {
-      return item.json;
-    }
-    if (item?.parsed && typeof item.parsed === "object") {
-      return item.parsed;
-    }
-    if (typeof item?.text === "string") {
-      try {
-        return JSON.parse(item.text);
-      } catch {
-        // Keep scanning: some envelopes include plain text alongside parseable content.
-      }
-    }
-    if (typeof item?.output_text === "string") {
-      try {
-        return JSON.parse(item.output_text);
-      } catch {
-        // Keep scanning: some envelopes include plain text alongside parseable content.
-      }
-    }
+function repairAddsNumericClaimToSection(args: {
+  before: string;
+  after: string;
+}): boolean {
+  const previousClaims = new Set(numericEvidenceNormalizedValues(args.before));
+  return numericEvidenceNormalizedValues(args.after).some(
+    (claim) => !previousClaims.has(claim),
+  );
+}
+
+function repairSectionUsesUncitedCandidateFact(args: {
+  text: string;
+  citedFactIds: Set<string>;
+  factGraph: FactGraphV1;
+}): boolean {
+  const candidateFacts = args.factGraph.facts.filter(
+    (fact): fact is FactNodeV1 & { source: "cv" } => fact.source === "cv",
+  );
+  const evidenceFragments = splitSentences(args.text).flatMap((sentence) =>
+    sentence
+      .split(/\s*(?:[;:,]|\b(?:and|while|plus|along with)\b)\s*/iu)
+      .map((fragment) => compactWhitespace(fragment))
+      .filter(Boolean),
+  );
+  return evidenceFragments.some((fragment) => {
+    const matchedFacts = candidateFacts.filter((fact) =>
+      premiumTextSupportsCandidateFact({
+        generatedText: fragment,
+        fact,
+      }),
+    );
+    const citedFacts = matchedFacts.filter((fact) =>
+      args.citedFactIds.has(fact.id),
+    );
+    const uncitedFacts = matchedFacts.filter(
+      (fact) => !args.citedFactIds.has(fact.id),
+    );
+    if (uncitedFacts.length === 0) return false;
+    if (citedFacts.length === 0) return true;
+
+    const fragmentTokens = new Set(normalizeCanonicalTokens(fragment));
+    const citedVisibleTokens = new Set(
+      citedFacts.flatMap((fact) =>
+        normalizeCanonicalTokens([fact.text, ...fact.entities].join(" ")).filter(
+          (token) => fragmentTokens.has(token),
+        ),
+      ),
+    );
+    return uncitedFacts.some((fact) =>
+      normalizeCanonicalTokens([fact.text, ...fact.entities].join(" ")).some(
+        (token) =>
+          fragmentTokens.has(token) && !citedVisibleTokens.has(token),
+      ),
+    );
+  });
+}
+
+function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
+  before: CoverLetterBodyParts;
+  after: CoverLetterBodyParts;
+  brief: CoverLetterBrief;
+  repairedProvenance: PremiumCoverLetterFinalProvenance;
+  writerOutput: PremiumWriterOutputV1;
+  factGraph: FactGraphV1;
+  numericEvidenceContext: PremiumCoverLetterNumericEvidenceValidationContext;
+}): boolean {
+  const changedSections = getChangedPremiumCoverLetterSections({
+    before: args.before,
+    after: args.after,
+  });
+  if (changedSections.length === 0) return true;
+
+  const candidateEvidenceSurface = buildCandidateEvidenceSurface({
+    brief: args.brief,
+  });
+  return changedSections.every((section) => {
+    const repairedSection = args.repairedProvenance.sections[section];
+    const citedFactIds = new Set(
+      args.writerOutput.bodyParts[section].factIds,
+    );
+    const usesUncitedCandidateFact = repairSectionUsesUncitedCandidateFact({
+      text: args.after[section],
+      citedFactIds,
+      factGraph: args.factGraph,
+    });
+    return (
+      repairedSection.verifiedCandidateFactIds.length > 0 &&
+      !usesUncitedCandidateFact &&
+      !repairAddsNumericClaimToSection({
+        before: args.before[section],
+        after: args.after[section],
+      }) &&
+      !repairTextHasCandidateUnsupportedClaim({
+        text: args.after[section],
+        candidateEvidenceSurface,
+        section,
+        numericEvidenceContext: args.numericEvidenceContext,
+      })
+    );
+  });
+}
+
+async function tryRepairPremiumCoverLetterQualityShadow(args: {
+  bodyParts: CoverLetterBodyParts;
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+  brief: CoverLetterBrief;
+  writer: PremiumCoverLetterWriter;
+  signal?: AbortSignal;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  legacyWrapped: boolean;
+  provenanceIdsNormalized: boolean;
+  numericEvidenceContext: PremiumCoverLetterNumericEvidenceValidationContext;
+}): Promise<{
+  bodyParts?: CoverLetterBodyParts;
+  rendered?: { content: string; sections: Array<{ type: "text"; content: string }> };
+  qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  trace: PremiumCoverLetterQualityRepairTrace;
+}> {
+  const repairEnabled = isCoverLetterQualityRepairV1Enabled();
+  if (!repairEnabled) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: false,
+        eligible: false,
+        attempted: false,
+        outcome: "disabled",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
   }
 
-  if (typeof response?.output_text === "string") {
-    try {
-      return JSON.parse(response.output_text);
-    } catch {
-      // Fall through to other extraction attempts.
-    }
+  if (args.legacyWrapped || args.brief.contextClass === "no_cv") {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: false,
+        attempted: false,
+        outcome: "not_needed",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
   }
 
-  const chatContent =
-    response?.choices?.[0]?.message?.content ??
-    response?.full_response?.choices?.[0]?.message?.content ??
-    null;
-  if (typeof chatContent === "string") {
-    try {
-      return JSON.parse(chatContent);
-    } catch {
-      // Fall through to the fenced JSON scan below.
-    }
+  const repairableIssues = getRepairablePremiumCoverLetterQualityShadowIssues(
+    args.qualityShadow,
+  );
+  if (repairableIssues.length === 0) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: false,
+        attempted: false,
+        outcome: "not_needed",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
   }
 
-  const serialized = JSON.stringify(response);
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(serialized);
-  if (fenced?.[1]) {
-    return JSON.parse(fenced[1]);
+  let repairedBodyParts: CoverLetterBodyParts;
+  try {
+    repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
+      await args.writer({
+        prompt: buildPremiumCoverLetterQualityRepairPrompt({
+          brief: args.brief,
+          previousBodyParts: args.bodyParts,
+          qualityShadow: args.qualityShadow,
+          issues: repairableIssues,
+        }),
+        schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+        signal: args.signal,
+      }),
+    );
+  } catch (error) {
+    if (isAbortLikeError(error, args.signal)) {
+      throw error;
+    }
+    const outcome =
+      error instanceof z.ZodError || error instanceof SyntaxError
+        ? "rejected_invalid_output"
+        : "provider_error";
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome,
+        qualityBefore: args.qualityShadow,
+      }),
+    };
   }
-  throw new Error("Premium cover-letter response did not contain parsed JSON");
+
+  const repairedIssues = validatePremiumCoverLetterBodyParts({
+    bodyParts: repairedBodyParts,
+    brief: args.brief,
+    numericEvidenceContext: args.numericEvidenceContext,
+  });
+  if (repairedIssues.length > 0) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_validation",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedProvenance = buildPremiumCoverLetterFinalProvenance({
+    writerOutput: args.writerOutput,
+    finalBodyParts: repairedBodyParts,
+    claimPlan: args.claimPlan,
+    factGraph: args.factGraph,
+    legacyWrapped: args.legacyWrapped,
+    provenanceIdsNormalized: args.provenanceIdsNormalized,
+  });
+  if (!isTrustedPremiumFinalProvenanceStatus(repairedProvenance.status)) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_provenance",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+  if (
+    !premiumCoverLetterQualityRepairPreservesCandidateGrounding({
+      before: args.bodyParts,
+      after: repairedBodyParts,
+      brief: args.brief,
+      repairedProvenance,
+    writerOutput: args.writerOutput,
+    factGraph: args.factGraph,
+    numericEvidenceContext: args.numericEvidenceContext,
+    })
+  ) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_provenance",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedRendered = renderPremiumCoverLetter({
+    bodyParts: repairedBodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  if (
+    !hasExpectedCandidateSignature({
+      content: repairedRendered.content,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    })
+  ) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_validation",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedQualityShadow = evaluatePremiumCoverLetterQualityShadow({
+    bodyParts: repairedBodyParts,
+    content: repairedRendered.content,
+    contextClass: args.brief.contextClass,
+  });
+  if (
+    !premiumCoverLetterQualityShadowImproved({
+      before: args.qualityShadow,
+      after: repairedQualityShadow,
+    })
+  ) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_not_improved",
+        qualityBefore: args.qualityShadow,
+        qualityAfter: repairedQualityShadow,
+      }),
+    };
+  }
+
+  return {
+    bodyParts: repairedBodyParts,
+    rendered: repairedRendered,
+    qualityShadow: repairedQualityShadow,
+    trace: buildPremiumCoverLetterQualityRepairTrace({
+      enabled: true,
+      eligible: true,
+      attempted: true,
+      outcome: "attempted_accepted",
+      qualityBefore: args.qualityShadow,
+      qualityAfter: repairedQualityShadow,
+    }),
+  };
+}
+
+export function extractOpenAIJsonPayload(response: any): unknown {
+  return extractOpenAIJsonPayloadFromTransport(response);
 }
 
 export async function attemptPremiumCoverLetterGeneration(args: {
@@ -5327,6 +7354,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   outputLanguage: ProposalOutputLanguage;
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName?: string | null;
   candidateName?: string;
   generationControlsBlock?: string;
   companyValuesPack?: CompanyValuesPack;
@@ -5336,6 +7364,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   systemInferenceHints?: string[];
   writer: PremiumCoverLetterWriter;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
+  onModelRepairRequired?: (
+    diagnostic: PremiumCoverLetterModelRepairRequiredDiagnostic,
+  ) => void;
 }): Promise<PremiumCoverLetterAttemptResult | null> {
   const eligibility = evaluatePremiumCoverLetterEligibility({
     personalizationContext: args.personalizationContext,
@@ -5361,6 +7392,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   }
   const contextClass = eligibility.contextClass;
   const voicePreset = args.voicePreset;
+  const targetEmployer = resolveTargetEmployerAuthorities([
+    args.targetEmployerName,
+  ]);
 
   const factGraph = buildPremiumFactGraphV1({
     personalizationContext: args.personalizationContext,
@@ -5408,6 +7442,13 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     });
     return null;
   }
+  const numericEvidenceProjection =
+    buildPremiumCoverLetterNumericEvidenceProjection({
+      factGraph,
+      claimPlan,
+      jobDemandGraph,
+      targetEmployer,
+    });
 
   const brief = buildPremiumCoverLetterBrief({
     preset: voicePreset,
@@ -5421,6 +7462,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     claimPlan,
     factGraph,
     jobDemandGraph,
+    targetEmployer,
   });
   const prompt = buildPremiumCoverLetterPrompt({
     brief,
@@ -5428,7 +7470,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
-  let parsedWriterOutput = parsePremiumWriterOutputV1({
+  const parsedWriterOutput = parsePremiumWriterOutputV1({
     rawOutput: await args.writer({
       prompt,
       schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
@@ -5436,10 +7478,12 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }),
     claimPlan,
   });
+  let legacyWrapped = parsedWriterOutput.legacyWrapped;
+  let provenanceIdsNormalized = false;
   let writerOutput = cleanPremiumWriterOutputText(
     parsedWriterOutput.writerOutput,
   );
-  writerOutput = normalizeProviderWriterOutputProvenance({
+  const normalizedWriterOutput = normalizeProviderWriterOutputProvenance({
     writerOutput,
     claimPlan,
     factGraph,
@@ -5447,12 +7491,18 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
+  provenanceIdsNormalized = writerOutputProvenanceChanged(
+    writerOutput,
+    normalizedWriterOutput,
+  );
+  writerOutput = normalizedWriterOutput;
   let writerOutputIssues = validatePremiumWriterOutputV1({
     writerOutput,
     claimPlan,
     factGraph,
     jobDemandGraph,
     brief,
+    numericEvidenceProjection,
   });
   const blockingWriterOutputIssues = writerOutputIssues.filter(
     isBlockingPremiumWriterOutputIssue,
@@ -5470,6 +7520,10 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     ? []
     : writerOutputIssues.filter((issue) => issue.repairable);
   if (repairableWriterOutputIssues.length > 0) {
+    args.onModelRepairRequired?.({
+      stage: "writer_output_validation",
+      issues: repairableWriterOutputIssues.map((issue) => issue.code),
+    });
     const repairedParsedWriterOutput = parsePremiumWriterOutputV1({
       rawOutput: await args.writer({
         prompt: buildPremiumWriterOutputRepairPrompt({
@@ -5493,12 +7547,18 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       writerProvider: args.writerProvider,
       writerModel: args.writerModel,
     });
+    legacyWrapped = repairedParsedWriterOutput.legacyWrapped;
+    provenanceIdsNormalized = writerOutputProvenanceChanged(
+      repairedWriterOutput,
+      normalizedRepairedWriterOutput,
+    );
     writerOutputIssues = validatePremiumWriterOutputV1({
       writerOutput: normalizedRepairedWriterOutput,
       claimPlan,
       factGraph,
       jobDemandGraph,
       brief,
+      numericEvidenceProjection,
     });
     const repairedBlockingWriterOutputIssues = writerOutputIssues.filter(
       isBlockingPremiumWriterOutputIssue,
@@ -5524,11 +7584,23 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerOutput = normalizedRepairedWriterOutput;
   }
 
+  const numericEvidenceContext = numericEvidenceValidationContext({
+    projection: numericEvidenceProjection,
+    writerOutput,
+    allowMeasurementTranslation: brief.language !== "English",
+  });
+  const validateBodyParts = (candidateBodyParts: CoverLetterBodyParts) =>
+    validatePremiumCoverLetterBodyParts({
+      bodyParts: candidateBodyParts,
+      brief,
+      numericEvidenceContext,
+    });
+
   let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
     toCoverLetterBodyParts(writerOutput),
   );
 
-  let issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
+  let issues = validateBodyParts(bodyParts);
   const issueCodes = summarizeValidationIssueCodes(issues);
   const shouldTryAdjacentEvidenceNormalization =
     brief.contextClass === "cv_adjacent" &&
@@ -5551,10 +7623,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   if (issues.some((issue) => !issue.repairable)) {
     if (shouldTryAdjacentEvidenceNormalization) {
       const normalizedBodyParts = normalizeAdjacentEvidenceOrder({ bodyParts, brief });
-      const normalizedIssues = validatePremiumCoverLetterBodyParts({
-        bodyParts: normalizedBodyParts,
-        brief,
-      });
+      const normalizedIssues = validateBodyParts(normalizedBodyParts);
       if (normalizedIssues.length === 0) {
         bodyParts = normalizedBodyParts;
         issues = [];
@@ -5575,10 +7644,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         bodyParts,
         brief,
       });
-      const ownershipRepairedIssues = validatePremiumCoverLetterBodyParts({
-        bodyParts: ownershipRepairedBodyParts,
-        brief,
-      });
+      const ownershipRepairedIssues = validateBodyParts(
+        ownershipRepairedBodyParts,
+      );
       if (ownershipRepairedIssues.length === 0) {
         bodyParts = ownershipRepairedBodyParts;
         issues = [];
@@ -5612,6 +7680,10 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       return null;
     }
 
+    args.onModelRepairRequired?.({
+      stage: "body_parts_validation",
+      issues: remainingIssueCodes,
+    });
     const repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
       await args.writer({
         prompt: buildPremiumCoverLetterRepairPrompt({
@@ -5623,10 +7695,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         signal: args.signal,
       }),
     );
-    const repairedIssues = validatePremiumCoverLetterBodyParts({
-      bodyParts: repairedBodyParts,
-      brief,
-    });
+    const repairedIssues = validateBodyParts(repairedBodyParts);
     if (repairedIssues.some((issue) => !issue.repairable) || repairedIssues.length > 0) {
       args.onFailure?.({
         stage: "validation",
@@ -5639,7 +7708,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     bodyParts = repairedBodyParts;
   } else if (issues.length > 0) {
     bodyParts = repairPremiumCoverLetterBodyParts({ bodyParts, brief });
-    issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
+    issues = validateBodyParts(bodyParts);
     if (issues.some((issue) => !issue.repairable) || issues.length > 0) {
       args.onFailure?.({
         stage: "validation",
@@ -5655,10 +7724,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     bodyParts,
     brief,
   });
-  const qualityCleanedIssues = validatePremiumCoverLetterBodyParts({
-    bodyParts: qualityCleanedBodyParts,
-    brief,
-  });
+  const qualityCleanedIssues = validateBodyParts(qualityCleanedBodyParts);
   if (qualityCleanedIssues.length === 0) {
     bodyParts = qualityCleanedBodyParts;
   }
@@ -5673,23 +7739,156 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       bodyParts: compactMistralPremiumBodyParts(bodyParts),
       brief,
     });
-    const compactIssues = validatePremiumCoverLetterBodyParts({
-      bodyParts: compactBodyParts,
-      brief,
-    });
+    const compactIssues = validateBodyParts(compactBodyParts);
     if (compactIssues.length === 0) {
       bodyParts = compactBodyParts;
     }
   }
 
-  const rendered = renderPremiumCoverLetter({
+  let rendered = renderPremiumCoverLetter({
     bodyParts,
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
   });
-  const qualityShadow = evaluatePremiumCoverLetterQualityShadow({
+  let qualityShadow = evaluatePremiumCoverLetterQualityShadow({
     bodyParts,
     content: rendered.content,
+    contextClass: brief.contextClass,
+  });
+  const preQualityRepairState = { bodyParts, rendered, qualityShadow };
+  let qualityRepairTrace: PremiumCoverLetterQualityRepairTrace | undefined;
+  let qualityRepairApplied = false;
+
+  const qualityRepair = await tryRepairPremiumCoverLetterQualityShadow({
+    bodyParts,
+    qualityShadow,
+    brief,
+    writer: args.writer,
+    signal: args.signal,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    writerOutput,
+    claimPlan,
+    factGraph,
+    legacyWrapped,
+    provenanceIdsNormalized,
+    numericEvidenceContext,
+  });
+  qualityRepairTrace = qualityRepair.trace;
+  if (qualityRepair.bodyParts && qualityRepair.rendered && qualityRepair.qualityShadow) {
+    qualityRepairApplied = true;
+    bodyParts = qualityRepair.bodyParts;
+    rendered = qualityRepair.rendered;
+    qualityShadow = qualityRepair.qualityShadow;
+  } else if (
+    brief.contextClass !== "no_cv" &&
+    isGenericPremiumClosingLine(bodyParts.closeLine)
+  ) {
+    const deterministicFallbackBodyParts = repairPremiumCoverLetterBodyParts({
+      bodyParts,
+      brief,
+      forceGenericCloseRepair: true,
+    });
+    const deterministicFallbackIssues = validateBodyParts(
+      deterministicFallbackBodyParts,
+    );
+    if (deterministicFallbackIssues.length === 0) {
+      bodyParts = deterministicFallbackBodyParts;
+      rendered = renderPremiumCoverLetter({
+        bodyParts,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+      });
+      qualityShadow = evaluatePremiumCoverLetterQualityShadow({
+        bodyParts,
+        content: rendered.content,
+        contextClass: brief.contextClass,
+      });
+    }
+  }
+
+  let finalWriterOutput = replacePremiumWriterOutputBodyParts({
+    writerOutput,
+    bodyParts,
+  });
+  let englishCvBackedQualityGateIssues = validateEnglishCvBackedQualityGate({
+    writerOutput: finalWriterOutput,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+    targetEmployer,
+    numericEvidenceProjection,
+  });
+  let blockingEnglishCvBackedQualityGateIssues =
+    englishCvBackedQualityGateIssues.filter((issue) =>
+      (
+        legacyWrapped &&
+        !isQwenWriterIdentity({
+          writerProvider: args.writerProvider,
+          writerModel: args.writerModel,
+        })
+          ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
+          : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
+      ).has(issue.code),
+    );
+  if (
+    qualityRepairApplied &&
+    blockingEnglishCvBackedQualityGateIssues.length > 0
+  ) {
+    bodyParts = preQualityRepairState.bodyParts;
+    rendered = preQualityRepairState.rendered;
+    qualityShadow = preQualityRepairState.qualityShadow;
+    qualityRepairTrace = {
+      ...qualityRepair.trace,
+      outcome: "rejected_validation",
+      rejectionCategory: "rejected_validation",
+    };
+    finalWriterOutput = replacePremiumWriterOutputBodyParts({
+      writerOutput,
+      bodyParts,
+    });
+    englishCvBackedQualityGateIssues = validateEnglishCvBackedQualityGate({
+      writerOutput: finalWriterOutput,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+      targetEmployer,
+      numericEvidenceProjection,
+    });
+    blockingEnglishCvBackedQualityGateIssues =
+      englishCvBackedQualityGateIssues.filter((issue) =>
+      (
+        legacyWrapped &&
+        !isQwenWriterIdentity({
+          writerProvider: args.writerProvider,
+          writerModel: args.writerModel,
+        })
+          ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
+          : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
+      ).has(issue.code),
+    );
+  }
+  if (blockingEnglishCvBackedQualityGateIssues.length > 0) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: Array.from(
+        new Set(
+          blockingEnglishCvBackedQualityGateIssues.map((issue) => issue.code),
+        ),
+      ),
+    });
+    return null;
+  }
+
+  const finalProvenance = buildPremiumCoverLetterFinalProvenance({
+    writerOutput,
+    finalBodyParts: bodyParts,
+    claimPlan,
+    factGraph,
+    legacyWrapped,
+    provenanceIdsNormalized,
   });
   if (
     !hasExpectedCandidateSignature({
@@ -5706,6 +7905,14 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     });
     return null;
   }
+  qualityRepairTrace = qualityRepairTrace
+    ? {
+        ...qualityRepairTrace,
+        finalProvenanceStatus: finalProvenance.status,
+        verifiedCandidateFactCount:
+          finalProvenance.verifiedCandidateFactIds.length,
+      }
+    : undefined;
 
   return {
     content: rendered.content,
@@ -5715,6 +7922,8 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     contextClass,
     bodyParts,
     qualityShadow,
+    qualityRepair: qualityRepairTrace,
+    finalProvenance,
     mode:
       contextClass === "cv_direct"
         ? "direct"

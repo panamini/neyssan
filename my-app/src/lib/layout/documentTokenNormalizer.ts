@@ -103,6 +103,17 @@ const EXPORT_BASE_FONT_TOKENS = {
   metaLine: 1.34,
 };
 
+const CANONICAL_COVER_LETTER_BODY_SIZE_PT = 11;
+
+function isCanonicalCoverLetterTemplate(
+  templateId: ProposalTemplateId | null | undefined,
+): boolean {
+  return (
+    templateId === "workshop_proposal_margin" ||
+    templateId === "modernist_signal"
+  );
+}
+
 const PREVIEW_RESUME_FONT_TOKENS = {
   displaySizePt: mmToPt(10.6),
   displayLine: 0.96,
@@ -697,6 +708,13 @@ export function normalizeProposalExportTokens(args: {
     volkGrid: proposalVolkGridTokens(pageSize),
   };
   tokens.flow = baseExportFlowTokens();
+  if (isCanonicalCoverLetterTemplate(resolvedTemplateId)) {
+    tokens.flow.type.body = {
+      ...tokens.flow.type.body,
+      sizePt: CANONICAL_COVER_LETTER_BODY_SIZE_PT,
+      lineHeight: EXPORT_BASE_FONT_TOKENS.bodyLine,
+    };
+  }
   tokens.flow.type.title = {
     sizePt: mmToPt(BASE_PROPOSAL_TITLE_SCALE_MM),
     lineHeight:
@@ -797,9 +815,23 @@ export function normalizeProposalPreviewTokens(
     sizePt: mmToPt(BASE_PROPOSAL_TITLE_SCALE_MM),
     lineHeight: resolvedTemplateId === "editorial_wide" ? 1.02 : 1.06,
   };
+  const requestedBodySizePt = proposalBodySizePtFromTypography(
+    args.documentTypography.fontSize,
+  );
   tokens.flow.type.body = {
-    sizePt: proposalBodySizePtFromTypography(args.documentTypography.fontSize),
-    lineHeight: args.documentTypography.lineHeight,
+    sizePt: isCanonicalCoverLetterTemplate(resolvedTemplateId)
+      ? Math.max(
+          requestedBodySizePt,
+          CANONICAL_COVER_LETTER_BODY_SIZE_PT,
+        )
+      : requestedBodySizePt,
+    lineHeight:
+      isCanonicalCoverLetterTemplate(resolvedTemplateId)
+        ? Math.min(
+            args.documentTypography.lineHeight,
+            EXPORT_BASE_FONT_TOKENS.bodyLine,
+          )
+        : args.documentTypography.lineHeight,
     resolvedTrackingEm: parseEm(args.documentTypography.letterSpacing),
   };
   tokens.flow.measure.proposalReadingWidthCh = definition.readingMeasureCh;

@@ -91,6 +91,7 @@ def create_document_export_response(
     expected_kind: str,
     expected_format: str,
     fallback_filename_base: str,
+    frontend_origin: str | None = None,
 ) -> Response:
     _validate_export_payload(
         payload,
@@ -113,6 +114,8 @@ def create_document_export_response(
         input_path.write_text(json.dumps(payload), encoding="utf-8")
 
         env = os.environ.copy()
+        if frontend_origin:
+            env["DOCUMENT_EXPORT_FRONTEND_URL"] = frontend_origin
         proc = subprocess.run(
             [
                 node_binary,

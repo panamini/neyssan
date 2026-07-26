@@ -607,6 +607,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         applicantHeader={{
           name: "Jane Doe",
           role: "Human Resources Administrator",
+          company: "Jane Doe Studio",
           email: "jane@example.com",
           phone: "+33 6 00 00 00 00",
           linkedin: null,
@@ -634,6 +635,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
 
     expect(header?.textContent).toContain("Jane Doe");
     expect(header?.textContent).toContain("Human Resources Administrator");
+    expect(header?.textContent).toContain("Jane Doe Studio");
     expect(header?.textContent).toContain("+33 6 00 00 00 00");
     expect(header?.textContent).toContain("jane@example.com");
     expect(header?.textContent).toContain("janedoe.dev");
@@ -658,8 +660,28 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         templateId="swiss_margin"
         railTitle="Jane Doe"
         railMeta="Operations Specialist"
+        applicantHeader={{
+          name: "Jane Doe",
+          role: "Operations Specialist",
+          company: "Jane Doe Studio",
+          email: "jane@example.com",
+          phone: "+1 555 0100",
+          linkedin: null,
+          website: null,
+          location: "Brooklyn, NY",
+          tag: null,
+        }}
         letterDate="April 6, 2026"
-        recipientDetails={"Avery Stone\nHiring Manager\nNorthwind"}
+        recipientDetails={
+          "Avery Stone\nHiring Manager\nNorthwind\navery@northwind.example\n12 Main Street\nBoston, MA"
+        }
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
         documentTitle="Application for Operations Specialist"
         documentTypography={{
           fontFamily: "Georgia, serif",
@@ -681,17 +703,66 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(senderHeader?.textContent).toContain("From:");
     expect(senderHeader?.textContent).toContain("Jane Doe");
     expect(senderHeader?.textContent).toContain("Operations Specialist");
+    expect(senderHeader?.textContent).toContain("Jane Doe Studio");
     expect(structuredHeader?.textContent).toContain("Date");
     expect(structuredHeader?.textContent).toContain("April 6, 2026");
     expect(structuredHeader?.textContent).toContain("To");
     expect(structuredHeader?.textContent).toContain("Avery Stone");
     expect(structuredHeader?.textContent).toContain("Hiring Manager");
     expect(structuredHeader?.textContent).toContain("Northwind");
+    expect(structuredHeader?.textContent).toContain("avery@northwind.example");
+    expect(structuredHeader?.textContent).toContain("12 Main Street");
+    expect(structuredHeader?.textContent).toContain("Boston, MA");
     expect(structuredHeader?.textContent).toContain("Subject");
     expect(structuredHeader?.textContent).toContain(
       "Application for Operations Specialist",
     );
+    expect(
+      structuredHeader?.querySelector(
+        ".dasti-proposal-document__structured-header-item--date",
+      ),
+    ).not.toBeNull();
+    expect(
+      structuredHeader?.querySelector(
+        ".dasti-proposal-document__structured-header-item--recipient",
+      ),
+    ).not.toBeNull();
     expect(container.textContent).not.toContain("35 mm register");
+  });
+
+  it("localizes the canonical correspondence labels for French documents", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Madame, Monsieur,\n\nJe vous adresse ma candidature."
+        proposalType="cover_letter"
+        templateId="modernist_signal"
+        documentLanguage="fr"
+        railTitle="Jane Doe"
+        letterDate="6 avril 2026"
+        recipientDetails="Équipe recrutement"
+        documentTitle="Candidature au poste"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    expect(
+      container.querySelector(".dasti-proposal-document__sender-header")
+        ?.textContent,
+    ).toContain("Expéditeur :");
+    expect(
+      container.querySelector(".dasti-proposal-document__structured-header")
+        ?.textContent,
+    ).toContain("Destinataire");
+    expect(
+      container.querySelector(".dasti-proposal-document__structured-header")
+        ?.textContent,
+    ).toContain("Objet");
   });
 
   it("can render a header-only draft preview without injecting body text", () => {
@@ -788,6 +859,52 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(closing?.textContent).toContain("Sincerely,");
     expect(signature?.textContent).toBe("jane doe");
     expect(signature?.getAttribute("style")).toContain("FD Garamond");
+  });
+
+  it("drops redundant empty paragraphs immediately before a structured closing", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="workshop_proposal_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "body-1",
+              type: "paragraph",
+              text: "I would welcome the opportunity to discuss the role.",
+            },
+            { id: "empty-1", type: "paragraph", text: "" },
+            { id: "empty-2", type: "paragraph", text: "  " },
+            {
+              id: "closing-1",
+              type: "closing",
+              signOff: "Sincerely,",
+              signatureName: "Jane Doe",
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const emptyParagraphs = Array.from(
+      container.querySelectorAll(".dasti-proposal-document__paragraph"),
+    ).filter((paragraph) => !paragraph.textContent?.trim());
+
+    expect(emptyParagraphs).toHaveLength(0);
+    expect(
+      container.querySelector(".dasti-proposal-document__closing")?.textContent,
+    ).toContain("Sincerely,");
   });
 
   it("keeps the sign-off when the structured signature is disabled", () => {

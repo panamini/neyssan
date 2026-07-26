@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  buildProposalTemplateApplyRoute,
   clearStoredProposalWorkspaceState,
+  createProposalTemplateGalleryState,
   PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+  readProposalTemplateReturnTo,
   readStoredProposalComposeDraft,
   startFreshProposalWorkspace,
   writeStoredProposalComposeDraft,
@@ -123,5 +126,56 @@ describe("proposal workspace state", () => {
         voicePreset: null,
       }),
     );
+  });
+
+  it("round-trips a saved proposal through the template gallery", () => {
+    const galleryState = createProposalTemplateGalleryState(
+      "/proposal",
+      "?view=saved&id=proposal_beta&templateId=swiss_margin",
+    );
+
+    expect(galleryState).toEqual({
+      proposalReturnTo: "/proposal?view=saved&id=proposal_beta",
+    });
+    expect(
+      buildProposalTemplateApplyRoute(galleryState, "modernist_signal"),
+    ).toBe(
+      "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+    );
+  });
+
+  it("drops stale one-shot template intents before applying another template", () => {
+    const galleryState = createProposalTemplateGalleryState(
+      "/proposal",
+      "?draftId=proposal_draft&templateId=workshop_proposal_margin&pageSize=letter&styleSlot=minimal&templateStart=1",
+    );
+
+    expect(galleryState).toEqual({
+      proposalReturnTo: "/proposal?draftId=proposal_draft",
+    });
+    expect(
+      buildProposalTemplateApplyRoute(
+        galleryState,
+        "modernist_signal",
+        "direct",
+      ),
+    ).toBe(
+      "/proposal?draftId=proposal_draft&templateId=modernist_signal&styleSlot=direct",
+    );
+  });
+
+  it("rejects unsafe template return routes and falls back to a fresh proposal", () => {
+    const externalState = {
+      proposalReturnTo: "https://example.com/proposal?view=saved&id=proposal_beta",
+    };
+    const unrelatedState = {
+      proposalReturnTo: "/templates?view=saved&id=proposal_beta",
+    };
+
+    expect(readProposalTemplateReturnTo(externalState)).toBeNull();
+    expect(readProposalTemplateReturnTo(unrelatedState)).toBeNull();
+    expect(
+      buildProposalTemplateApplyRoute(externalState, "modernist_signal"),
+    ).toBe("/proposal?templateId=modernist_signal");
   });
 });

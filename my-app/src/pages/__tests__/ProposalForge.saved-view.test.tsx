@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -7,18 +8,42 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, useLocation } from "react-router-dom";
-import { ProposalForge } from "../ProposalForge";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import { ProposalForge as ProposalForgePage } from "../ProposalForge";
 import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
+import { writeStoredDocumentPageSizePreference } from "../../lib/document-page-size";
 import {
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
   readStoredProposalComposeDraft,
 } from "../../lib/proposal-workspace-state";
 
 const ATTACHED_CV_STORAGE_KEY = "dasti:proposal-attached-cv-id:v1";
+
+const mockProposalTopbarState = vi.hoisted(() => ({
+  registration: null as null | {
+    onDuplicateProposal: () => void;
+    onDeleteProposal: () => void;
+    onPageSizePreferenceChange: (preference: "auto" | "a4" | "letter") => void;
+  },
+}));
+const mockUpdateProposal = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
+const mockCreateProposal = vi.hoisted(() =>
+  vi.fn().mockResolvedValue("proposal_duplicate"),
+);
+let mockProposalSettingsPresets: any = null;
+
+vi.mock("../../contexts/ProposalForgeTopbarContext", () => ({
+  useRegisterProposalForgeTopbar: (
+    registration: typeof mockProposalTopbarState.registration,
+  ) => {
+    mockProposalTopbarState.registration = registration;
+  },
+}));
 
 let mockAttachedCvId: string | null = null;
 const mockSourceCv = {
@@ -50,6 +75,17 @@ const SAVED_PROPOSALS = [
       sourceCvId: "cv_alpha",
       styleLinkMode: "inherit_cv",
       templateId: "swiss_margin",
+      templateBundleId: "swiss_serif",
+      verbatiStyleSlotId: 1,
+      verbatiStyleSlotSource: "factory",
+      verbatiStyleSlotNameSnapshot: "Style 1",
+      verbatiStyleBaseSnapshot: {
+        typography: "signature",
+        palette: "bordeaux",
+      },
+      documentStyleVersion: 1,
+      pageSize: "letter",
+      resolvedLanguage: "fr",
       verbatiStyle: {
         layout: "swiss",
         typography: "signature",
@@ -57,8 +93,70 @@ const SAVED_PROPOSALS = [
       },
       sourceUrl: "https://www.linkedin.com/jobs/view/123456",
       platform: "linkedin",
+      sourceJobTitle: "Operations Lead",
       sourceJobDescription:
         "Lead recurring operations and keep cross-team communication on track.",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "salutation-1",
+            type: "salutation",
+            text: "Dear team,",
+          },
+          {
+            id: "paragraph-1",
+            type: "paragraph",
+            text: "Saved proposal content.",
+          },
+          {
+            id: "closing-1",
+            type: "closing",
+            signOff: "Best,",
+            signatureName: "",
+          },
+        ],
+      },
+    },
+  },
+  {
+    _id: "proposal_custom_salutation",
+    _creationTime: 1710000000250,
+    title: "Saved custom salutation",
+    content: "o\n\nSaved proposal content.\n\nBest,",
+    status: "saved",
+    updatedAt: 1710000000250,
+    createdAt: 1710000000250,
+    sections: [{ type: "text", content: "Saved proposal content." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "salutation-custom",
+            type: "salutation",
+            text: "o",
+          },
+          {
+            id: "paragraph-custom",
+            type: "paragraph",
+            text: "Saved proposal content.",
+          },
+          {
+            id: "closing-custom",
+            type: "closing",
+            signOff: "Best,",
+            signatureName: "",
+          },
+        ],
+      },
     },
   },
   {
@@ -120,6 +218,7 @@ const SAVED_PROPOSALS = [
       voicePreset: "expert",
       requestedVoicePreset: null,
       resolvedVoicePreset: "expert",
+      resolvedLanguage: "fr",
       sourceUrl: "https://example.com/jobs/operations-auto",
       platform: "company_website",
       sourceJobDescription:
@@ -141,6 +240,24 @@ const SAVED_PROPOSALS = [
       requestedVoicePreset: "signature",
       templateId: "swiss_margin",
       styleLinkMode: "proposal_local",
+      pageSize: "letter",
+    },
+  },
+  {
+    _id: "proposal_draft_auto",
+    _creationTime: 1710000004000,
+    title: "Draft auto title",
+    content: "Dear team,\n\nDraft without explicit page size.\n\nBest,",
+    status: "draft",
+    updatedAt: 1710000004000,
+    createdAt: 1710000004000,
+    sections: [{ type: "text", content: "Draft without explicit page size." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+      templateId: "editorial_wide",
+      styleLinkMode: "proposal_local",
     },
   },
 ] as const;
@@ -154,9 +271,17 @@ vi.mock("convex/react", () => ({
     if (query === "proposalsPublic.default") {
       return SAVED_PROPOSALS;
     }
+    if (query === "proposalSettings.getPresets") {
+      return mockProposalSettingsPresets;
+    }
     return null;
   },
-  useMutation: () => vi.fn().mockResolvedValue(undefined),
+  useMutation: (query: string) =>
+    query === "updateProposalPublic.default"
+      ? mockUpdateProposal
+      : query === "createProposalPublic.default"
+        ? mockCreateProposal
+        : vi.fn().mockResolvedValue(undefined),
   useAction: () => vi.fn().mockResolvedValue(null),
 }));
 
@@ -166,7 +291,10 @@ vi.mock("../../../convex/_generated/api", () => ({
       generateProposal: "functions.generateProposal",
     },
     proposalHandoffs: { get: "proposalHandoffs.get" },
-    proposalSettings: { getCurrent: "proposalSettings.getCurrent" },
+    proposalSettings: {
+      getCurrent: "proposalSettings.getCurrent",
+      getPresets: "proposalSettings.getPresets",
+    },
     proposalsPublic: { default: "proposalsPublic.default" },
     updateProposalPublic: { default: "updateProposalPublic.default" },
     deleteProposalPublic: { default: "deleteProposalPublic.default" },
@@ -310,25 +438,73 @@ vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
     proposalDocument,
+    salutationValue,
     documentTitle,
     mode,
     stylePreset,
+    templateId,
+    documentLanguage,
+    pageSize,
+    onContentChange,
+    onContentCommit,
   }: {
     proposalContent: string | null;
     proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
+    salutationValue?: string | null;
     documentTitle?: string | null;
     mode?: "preview" | "edit";
     stylePreset?: {
       layout?: string | null;
       palette?: string | null;
     } | null;
+    templateId?: string | null;
+    documentLanguage?: string | null;
+    pageSize?: { id?: string | null } | null;
+    onContentChange?: (value: string) => void;
+    onContentCommit?: (snapshot?: {
+      proposalContent?: string | null;
+      proposalDocument?: null;
+    }) => void;
   }) => (
-    <div data-testid="proposal-display-state">
-      {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
-      {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
-      {stylePreset?.palette ?? "none"}|
-      {proposalDocument?.blocks?.map((block) => block.text).join(" ") ?? "no-document"}
-    </div>
+    <>
+      <div data-testid="proposal-display-state">
+        {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
+        {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
+        {stylePreset?.palette ?? "none"}|{templateId ?? "no-template"}|
+        {proposalDocument?.blocks?.map((block) => block.text).join(" ") ??
+          "no-document"}
+      </div>
+      <div data-testid="proposal-salutation-state">
+        {salutationValue ?? "empty"}
+      </div>
+      <div data-testid="proposal-document-language">
+        {documentLanguage ?? "no-language"}
+      </div>
+      <div data-testid="proposal-page-size">{pageSize?.id ?? "no-size"}</div>
+      {onContentChange ? (
+        <button
+          type="button"
+          onClick={() =>
+            onContentChange("Edited compose content after saved view.")
+          }
+        >
+          Edit proposal content
+        </button>
+      ) : null}
+      {onContentCommit ? (
+        <button
+          type="button"
+          onClick={() =>
+            onContentCommit({
+              proposalContent: "Edited saved proposal content.",
+              proposalDocument: null,
+            })
+          }
+        >
+          Commit saved content edit
+        </button>
+      ) : null}
+    </>
   ),
   fallbackCopyText: () => "",
   getDisplayedProposalText: (value: string) => value,
@@ -358,35 +534,406 @@ function LocationProbe(): JSX.Element {
   );
 }
 
+function ProposalTopbarActionsProbe({
+  includeReviewControls = false,
+}: {
+  includeReviewControls?: boolean;
+}): JSX.Element {
+  const navigate = useNavigate();
+  return (
+    <div role="group" aria-label="Saved proposal actions">
+      <button
+        type="button"
+        onClick={() =>
+          mockProposalTopbarState.registration?.onDuplicateProposal()
+        }
+      >
+        Duplicate to draft
+      </button>
+      <button
+        type="button"
+        onClick={() => mockProposalTopbarState.registration?.onDeleteProposal()}
+      >
+        Delete proposal
+      </button>
+      {includeReviewControls ? (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              mockProposalTopbarState.registration?.onPageSizePreferenceChange(
+                "a4",
+              )
+            }
+          >
+            Use A4
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              mockProposalTopbarState.registration?.onPageSizePreferenceChange(
+                "auto",
+              )
+            }
+          >
+            Use Auto
+          </button>
+          <button type="button" onClick={() => navigate("/proposal")}>
+            Return to compose
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct",
+              )
+            }
+          >
+            Apply template to loaded draft
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/proposal?draftId=proposal_draft_auto")}
+          >
+            Open draft without page size
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ProposalForge({
+  includeReviewControls = false,
+}: {
+  includeReviewControls?: boolean;
+}): JSX.Element {
+  return (
+    <>
+      <ProposalForgePage />
+      <ProposalTopbarActionsProbe
+        includeReviewControls={includeReviewControls}
+      />
+    </>
+  );
+}
+
+function seedComposeDraftBeforeSavedView(): void {
+  window.localStorage.setItem(
+    PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+    JSON.stringify({
+      jobTitle: "Existing draft title",
+      jobDescription: "Existing draft brief.",
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+    }),
+  );
+  writeStoredProposalOutputDraft({
+    proposalContent: "Existing draft output.",
+    proposalType: "cover_letter",
+    proposalVoicePreset: "signature",
+    proposalTemplateId: null,
+    proposalVerbatiStyle: null,
+    proposalStyleLinkMode: "inherit_cv",
+    proposalStyleChoice: "auto",
+    proposalApplicantName: "Alex Martin",
+    proposalApplicantRole: "Operations Associate",
+    proposalDocumentTitle: "Existing draft output",
+    proposalDocumentMeta: "Compose output",
+    generatedProposalId: "proposal_current_draft",
+    proposalOutputMode: "preview",
+    paletteOverride: null,
+    customAccentHex: null,
+    templateBundleId: null,
+    typographyOverride: null,
+    layoutOverride: null,
+    proposalDocumentTitleManual: false,
+    characterLimitMode: null,
+    characterLimitValue: null,
+  });
+}
+
 describe("ProposalForge saved view", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAttachedCvId = null;
+    mockProposalTopbarState.registration = null;
+    mockUpdateProposal.mockClear();
+    mockCreateProposal.mockClear();
+    mockCreateProposal.mockResolvedValue("proposal_duplicate");
+    mockProposalSettingsPresets = null;
   });
 
-  it("opens a saved proposal without mutating the current draft", async () => {
-    window.localStorage.setItem(
-      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        jobTitle: "Existing draft title",
-        jobDescription: "Existing draft brief.",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
+  it("restores the structured document stored on an opened saved proposal", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?view=saved&id=proposal_custom_salutation"]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("proposal-display-state"),
+      ).not.toHaveTextContent("no-document");
+    });
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "o Saved proposal content.",
+    );
+    expect(screen.getByTestId("proposal-salutation-state")).toHaveTextContent(
+      "o",
+    );
+  });
+
+  it("keeps the selected saved letter loaded when applying a gallery template intent", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal&styleSlot=direct&pageSize=letter&templateStart=1",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Saved proposal content.");
+      expect(state).toHaveTextContent("modernist_signal");
+    });
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "proposal_beta" }),
+      );
+    });
+    const persistedMetadata = mockUpdateProposal.mock.calls.find(
+      ([input]) => input.id === "proposal_beta",
+    )?.[0]?.metadata;
+    expect(persistedMetadata).toEqual(
+      expect.objectContaining({
+        templateId: "modernist_signal",
+        verbatiStyle: expect.objectContaining({
+          typography: "quiet-editorial",
+          palette: "ink",
+        }),
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "factory",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        documentStyleVersion: 1,
       }),
     );
+    expect(persistedMetadata).not.toHaveProperty("templateBundleId");
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal\?view=saved&id=proposal_beta$/,
+      );
+    });
+  });
+
+  it("waits for Settings presets before applying a saved style-slot intent", async () => {
+    mockProposalSettingsPresets = undefined;
+    const route =
+      "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal&styleSlot=direct";
+    const buildView = () => (
+      <MemoryRouter initialEntries={[route]}>
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>
+    );
+    const { rerender } = render(buildView());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+    });
+    expect(mockUpdateProposal).not.toHaveBeenCalled();
+
+    mockProposalSettingsPresets = {
+      preset1: null,
+      preset2: {
+        fontPairId: "ledger-sans",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        verbatiStyle: {
+          layout: "workshop",
+          typography: "ledger-sans",
+          palette: "cobalt",
+        },
+      },
+      preset3: null,
+      activeSlot: 2,
+    };
+    rerender(buildView());
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          metadata: expect.objectContaining({
+            templateId: "modernist_signal",
+            verbatiStyle: expect.objectContaining({
+              typography: "ledger-sans",
+              palette: "cobalt",
+            }),
+            verbatiStyleSlotId: 2,
+            verbatiStyleSlotSource: "settings",
+          }),
+        }),
+      );
+    });
+  });
+
+  it("keeps a failed saved gallery template intent in the URL for retry", async () => {
+    mockUpdateProposal.mockRejectedValueOnce(new Error("offline"));
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "proposal_beta" }),
+      );
+    });
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+    );
+  });
+
+  it("restores a saved proposal's persisted page size", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("proposal-page-size")).toHaveTextContent(
+      "letter",
+    );
+  });
+
+  it("preserves the saved page size when committing a content edit", async () => {
+    writeStoredDocumentPageSizePreference("a4");
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Commit saved content edit" }),
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          content: "Edited saved proposal content.",
+          metadata: expect.objectContaining({ pageSize: "letter" }),
+        }),
+      );
+    });
+  });
+
+  it("consumes a stale page-size query after the user changes the saved format", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&pageSize=letter",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Use A4" }));
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          metadata: expect.objectContaining({ pageSize: "a4" }),
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal\?view=saved&id=proposal_beta$/,
+      );
+    });
+  });
+
+  it("keeps Auto page size on a saved proposal without a compose autosave overwrite", async () => {
+    writeStoredDocumentPageSizePreference("letter");
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Use Auto" }));
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          clearMetadata: { pageSize: true },
+          metadata: expect.not.objectContaining({
+            pageSize: expect.anything(),
+          }),
+        }),
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+
+    expect(mockUpdateProposal).toHaveBeenCalledTimes(1);
+    expect(mockUpdateProposal.mock.calls[0]?.[0]?.metadata).not.toHaveProperty(
+      "pageSize",
+    );
+  });
+
+  it("resolves saved Auto page size from the saved proposal locale instead of the browser preference", async () => {
+    writeStoredDocumentPageSizePreference("letter");
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_auto"]}>
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent("a4");
+    });
+  });
+
+  it("keeps a saved layout change out of the active compose draft", async () => {
     writeStoredProposalOutputDraft({
-      proposalContent: "Existing draft output.",
+      proposalContent: "Independent compose draft.",
       proposalType: "cover_letter",
       proposalVoicePreset: "signature",
-      proposalTemplateId: null,
+      proposalTemplateId: "editorial_wide",
       proposalVerbatiStyle: null,
-      proposalStyleLinkMode: "inherit_cv",
-      proposalStyleChoice: "auto",
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "balanced",
       proposalApplicantName: "Alex Martin",
       proposalApplicantRole: "Operations Associate",
-      proposalDocumentTitle: "Existing draft output",
+      proposalDocumentTitle: "Independent compose draft",
       proposalDocumentMeta: "Compose output",
-      generatedProposalId: "proposal_current_draft",
+      generatedProposalId: "proposal_compose",
       proposalOutputMode: "preview",
       paletteOverride: null,
       customAccentHex: null,
@@ -399,6 +946,89 @@ describe("ProposalForge saved view", () => {
     });
 
     render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "proposal_beta" }),
+      );
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Return to compose" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal$/,
+      );
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Independent compose draft.");
+      expect(state).toHaveTextContent("editorial_wide");
+      expect(state).not.toHaveTextContent("Saved proposal content.");
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commit saved content edit" }),
+    );
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    const savedUpdates = mockUpdateProposal.mock.calls.filter(
+      ([payload]) => payload.id === "proposal_beta",
+    );
+    const composeUpdates = mockUpdateProposal.mock.calls.filter(
+      ([payload]) => payload.id === "proposal_compose",
+    );
+    expect(savedUpdates.length).toBeGreaterThan(0);
+    expect(savedUpdates).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              templateId: "modernist_signal",
+            }),
+          }),
+        ],
+      ]),
+    );
+    expect(composeUpdates.length).toBeGreaterThan(0);
+    expect(composeUpdates).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            content: "Edited saved proposal content.",
+            metadata: expect.objectContaining({
+              templateId: "editorial_wide",
+            }),
+          }),
+        ],
+      ]),
+    );
+  });
+
+  it("renders a saved letter with its document locale instead of the UI locale", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("proposal-document-language"),
+      ).toHaveTextContent("fr");
+    });
+  });
+
+  it("opens a saved proposal without mutating the current draft", async () => {
+    seedComposeDraftBeforeSavedView();
+
+    render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
         <LocationProbe />
         <ProposalForge />
@@ -406,8 +1036,8 @@ describe("ProposalForge saved view", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
-        "proposal_beta",
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
       );
     });
 
@@ -422,6 +1052,54 @@ describe("ProposalForge saved view", () => {
       proposalContent: "Existing draft output.",
       generatedProposalId: "proposal_current_draft",
     });
+  });
+
+  it("resumes compose autosave after returning from a saved proposal", async () => {
+    seedComposeDraftBeforeSavedView();
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to compose" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        "/proposal",
+      );
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Existing draft output.",
+      );
+    });
+
+    mockUpdateProposal.mockClear();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit proposal content" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Edited compose content after saved view.",
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    expect(mockUpdateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_current_draft",
+        content: "Edited compose content after saved view.",
+        status: "draft",
+      }),
+    );
   });
 
   it("clears stale structured output when restoring a draftId proposal", async () => {
@@ -462,7 +1140,9 @@ describe("ProposalForge saved view", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/proposal?draftId=proposal_draft_restore"]}>
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
         <ProposalForge />
       </MemoryRouter>,
     );
@@ -476,8 +1156,168 @@ describe("ProposalForge saved view", () => {
     });
   });
 
-  it("renders explicit saved proposal actions beside the saved stack", () => {
-    const { container } = render(
+  it("restores a draftId proposal with its persisted page size", async () => {
+    writeStoredDocumentPageSizePreference("a4");
+
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Restored draft proposal content.",
+      );
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent(
+        "letter",
+      );
+    });
+  });
+
+  it("resets page size from a previous draft when the next draft has no page-size metadata", async () => {
+    writeStoredDocumentPageSizePreference("a4");
+
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent(
+        "letter",
+      );
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open draft without page size" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Draft without explicit page size.",
+      );
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent("a4");
+    });
+  });
+
+  it("applies a gallery template intent after restoring a draftId proposal", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Restored draft proposal content.");
+      expect(state).toHaveTextContent("modernist_signal");
+      expect(state).not.toHaveTextContent("swiss_margin");
+    });
+
+    await waitFor(
+      () => {
+        expect(mockUpdateProposal).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "proposal_draft_restore",
+            metadata: expect.objectContaining({
+              pageSize: "a4",
+              templateId: "modernist_signal",
+            }),
+          }),
+        );
+      },
+      { timeout: 2_500 },
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal\?draftId=proposal_draft_restore$/,
+      );
+    });
+  });
+
+  it("keeps a failed draftId gallery template intent in the URL for retry", async () => {
+    mockUpdateProposal.mockRejectedValueOnce(new Error("offline"));
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_draft_restore",
+          metadata: expect.objectContaining({
+            pageSize: "a4",
+            templateId: "modernist_signal",
+          }),
+        }),
+      );
+    });
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
+    );
+  });
+
+  it("applies a template intent after the draftId proposal is already loaded", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "swiss_margin",
+      );
+    });
+    mockUpdateProposal.mockClear();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply template to loaded draft" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "modernist_signal",
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    expect(mockUpdateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_draft_restore",
+        metadata: expect.objectContaining({
+          templateId: "modernist_signal",
+        }),
+        clearMetadata: expect.objectContaining({ templateBundle: true }),
+      }),
+    );
+  });
+
+  it("exposes saved proposal actions through the document topbar", () => {
+    render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
         <ProposalForge />
       </MemoryRouter>,
@@ -489,34 +1329,16 @@ describe("ProposalForge saved view", () => {
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
-      "proposal_beta",
-    );
-    const toolbar = container.querySelector(
-      ".dasti-proposal-saved-view-toolbar",
-    ) as HTMLElement | null;
-    const pageShell = container.querySelector(
-      ".dasti-page-shell",
-    ) as HTMLElement | null;
-    expect(toolbar).toBeTruthy();
-    expect(toolbar).toHaveClass("dasti-toolbar--surface-tooltips");
-    expect(
-      toolbar?.closest('[data-testid="saved-proposals-list"]'),
-    ).toBeTruthy();
-    expect(pageShell).toHaveClass("dasti-page-shell--proposal-saved");
-    expect(pageShell?.style.getPropertyValue("--page-shell-max-width")).toBe(
-      "100%",
-    );
-    const actionButtons = within(toolbar as HTMLElement)
+    const toolbar = screen.getByRole("group", {
+      name: "Saved proposal actions",
+    });
+    const actionButtons = within(toolbar)
       .getAllByRole("button")
-      .map((button) => button.getAttribute("aria-label"));
-    expect(actionButtons).toEqual([
-      "Duplicate to draft",
-      "Delete proposal",
-    ]);
+      .map((button) => button.textContent);
+    expect(actionButtons).toEqual(["Duplicate to draft", "Delete proposal"]);
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(
-      within(toolbar as HTMLElement).queryByRole("group", {
+      within(toolbar).queryByRole("group", {
         name: "Saved proposal status",
       }),
     ).not.toBeInTheDocument();
@@ -535,32 +1357,40 @@ describe("ProposalForge saved view", () => {
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
-      "proposal_beta",
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Saved proposal content.",
     );
   });
 
-  it("copies saved proposal content and source brief back into the live draft explicitly", () => {
+  it("copies saved proposal content and source brief back into the live draft explicitly", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Saved proposal beta",
-    );
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Saved proposal content.",
-    );
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "|preview",
-    );
-    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Saved proposal beta",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal beta",
+      );
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "|preview",
+      );
+      expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+        "Operations Lead",
+      );
+    });
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "Lead recurring operations and keep cross-team communication on track.",
     );
@@ -581,6 +1411,31 @@ describe("ProposalForge saved view", () => {
     expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    expect(mockCreateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          proposalDocument: expect.objectContaining({ kind: "letter" }),
+        }),
+      }),
+    );
+    expect(mockUpdateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_duplicate",
+        status: "draft",
+        metadata: expect.objectContaining({
+          proposalDocument: expect.objectContaining({ kind: "letter" }),
+        }),
+      }),
+    );
+    const duplicateUpdates = mockUpdateProposal.mock.calls.filter(
+      ([payload]) => payload.id === "proposal_duplicate",
+    );
+    for (const [payload] of duplicateUpdates) {
+      expect(payload.clearMetadata?.proposalDocument).not.toBe(true);
+    }
   });
 
   it("keeps saved proposal cv provenance visible on reopen even when the saved artifact is stable", () => {
@@ -697,12 +1552,14 @@ describe("ProposalForge saved view", () => {
     });
   });
 
-  it("keeps the existing compose brief when the saved proposal lacks source brief metadata", () => {
+  it("clears stale compose brief when the saved proposal lacks source brief metadata", async () => {
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
         jobTitle: "Marketing Specialist",
         jobDescription: "Existing compose brief should survive saved reopen.",
+        sourceUrl: "https://example.com/jobs/stale",
+        platform: "linkedin",
         proposalType: "cover_letter",
         voicePreset: "signature",
       }),
@@ -714,14 +1571,28 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal without brief metadata.",
+      );
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
-    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Saved proposal gamma",
-    );
-    expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
-      "Existing compose brief should survive saved reopen.",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+        "Saved proposal gamma",
+      );
+    });
+    expect(screen.getByTestId("compose-job-description").textContent).toBe("");
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      sourceUrl: null,
+      platform: null,
+    });
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Saved proposal gamma",
     );
@@ -734,26 +1605,41 @@ describe("ProposalForge saved view", () => {
   });
 
   it("preserves Auto when a saved proposal is duplicated back into the live draft", async () => {
+    writeStoredDocumentPageSizePreference("letter");
+
     render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_auto"]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Auto tone saved proposal.",
+      );
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
-      ),
-    ).toMatchObject({
-      jobTitle: "Saved proposal auto",
-      jobDescription:
-        "Coordinate operations, keep processes clean, and support team communication.",
-      proposalType: "cover_letter",
-      voicePreset: null,
-      sourceUrl: "https://example.com/jobs/operations-auto",
-      platform: "company_website",
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent("a4");
+    });
+
+    await waitFor(() => {
+      expect(
+        JSON.parse(
+          window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ??
+            "{}",
+        ),
+      ).toMatchObject({
+        jobTitle: "Saved proposal auto",
+        jobDescription:
+          "Coordinate operations, keep processes clean, and support team communication.",
+        proposalType: "cover_letter",
+        voicePreset: null,
+        sourceUrl: "https://example.com/jobs/operations-auto",
+        platform: "company_website",
+      });
     });
 
     await waitFor(() => {

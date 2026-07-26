@@ -13,6 +13,8 @@ export type DocumentPageSize = {
 };
 
 export const MM_TO_PX = 96 / 25.4;
+const DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY =
+  "twoweeks:document-page-size-preference";
 
 function formatPageSizeNumber(value: number): string {
   return Number.isInteger(value) ? `${value}` : `${Number(value.toFixed(3))}`;
@@ -64,6 +66,37 @@ export function resolveDocumentPageSizePreference(
   value: unknown,
 ): DocumentPageSizePreference {
   return value === "auto" || isDocumentPageSizeId(value) ? value : "auto";
+}
+
+export function readStoredDocumentPageSizePreference(): DocumentPageSizePreference {
+  if (typeof window === "undefined") {
+    return "auto";
+  }
+
+  try {
+    return resolveDocumentPageSizePreference(
+      window.localStorage.getItem(DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY),
+    );
+  } catch {
+    return "auto";
+  }
+}
+
+export function writeStoredDocumentPageSizePreference(
+  preference: DocumentPageSizePreference,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY,
+      resolveDocumentPageSizePreference(preference),
+    );
+  } catch {
+    // Storage can be disabled by browser privacy settings.
+  }
 }
 
 export function documentPageSizeToPx(

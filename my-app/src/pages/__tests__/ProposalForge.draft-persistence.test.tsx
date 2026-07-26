@@ -14,6 +14,7 @@ import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
+import type { ProposalDocument } from "../../lib/proposal-document";
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
 import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
 
@@ -152,15 +153,30 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
+    proposalDocument,
     mode,
   }: {
     proposalContent: string | null;
+    proposalDocument?: ProposalDocument | null;
     mode?: "preview" | "edit";
-  }) => (
-    <div data-testid="proposal-display-state">
-      {proposalContent ?? "empty"}|{mode ?? "preview"}
-    </div>
-  ),
+  }) => {
+    const structuredContent = proposalDocument
+      ? proposalDocument.blocks
+          .map((block) => ("text" in block ? block.text : ""))
+          .filter(Boolean)
+          .join(" ")
+      : null;
+    return (
+      <div>
+        <div data-testid="proposal-display-state">
+          {structuredContent ?? proposalContent ?? "empty"}|{mode ?? "preview"}
+        </div>
+        <div data-testid="proposal-document-state">
+          {proposalDocument ? "structured" : "no-document"}
+        </div>
+      </div>
+    );
+  },
   fallbackCopyText: () => "",
   getDisplayedProposalText: (value: string) => value,
 }));
@@ -175,9 +191,13 @@ function MockResumePage(): JSX.Element {
   );
 }
 
-function seedStoredProposalDraft(content: string): void {
+function seedStoredProposalDraft(
+  content: string,
+  proposalDocument?: ProposalDocument,
+): void {
   writeStoredProposalOutputDraft({
     proposalContent: content,
+    proposalDocument,
     proposalType: "cover_letter",
     proposalVoicePreset: "signature",
     proposalTemplateId: "swiss_margin",
@@ -571,6 +591,85 @@ describe("ProposalForge draft persistence", () => {
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
         "Original proposal body.|preview",
+      );
+    });
+  });
+
+  it("replaces a structured Rail Ask draft and restores it on undo", async () => {
+    const originalDocument: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        {
+          id: "paragraph-1",
+          type: "paragraph",
+          text: "Original structured proposal body.",
+        },
+      ],
+    };
+    seedStoredProposalDraft(
+      "Original structured proposal body.",
+      originalDocument,
+    );
+    transformEditorSelectionMock.mockResolvedValue({
+      kind: "text",
+      text: "Reviewed proposal body.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("proposal-document-state")).toHaveTextContent(
+      "structured",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.change(screen.getByPlaceholderText("Ask for a change"), {
+      target: { value: "Make it more direct" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Apply to draft" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Reviewed proposal body.|preview",
+      );
+    });
+    expect(screen.getByTestId("proposal-document-state")).toHaveTextContent(
+      "no-document",
+    );
+    await waitFor(() => {
+      const savedDocument = readStoredProposalOutputDraft()?.proposalDocument;
+      expect(JSON.stringify(savedDocument)).toContain(
+        "Reviewed proposal body.",
+      );
+      expect(JSON.stringify(savedDocument)).not.toContain(
+        "Original structured proposal body.",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Original structured proposal body.|preview",
+      );
+    });
+    expect(screen.getByTestId("proposal-document-state")).toHaveTextContent(
+      "structured",
+    );
+    await waitFor(() => {
+      const savedDocument = readStoredProposalOutputDraft()?.proposalDocument;
+      expect(JSON.stringify(savedDocument)).toContain(
+        "Original structured proposal body.",
+      );
+      expect(JSON.stringify(savedDocument)).not.toContain(
+        "Reviewed proposal body.",
       );
     });
   });

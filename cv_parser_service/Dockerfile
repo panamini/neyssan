@@ -136,7 +136,8 @@ ENV PYTHONUNBUFFERED=1 \
     FLAGS_allocator_strategy=naive_best_fit \
     FLAGS_use_mkldnn=false \
     FLAGS_use_cuda=false \
-    CUDA_VISIBLE_DEVICES=""
+    CUDA_VISIBLE_DEVICES="" \
+    PORT=8000
 
 # OS libs
 RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian|http://cdn-aws.deb.debian.org/debian|g' /etc/apt/sources.list; fi && \
@@ -208,4 +209,5 @@ finally:
 PY
 
 EXPOSE 8000
-CMD ["python", "-c", "import platform, paddle; print('Ready on', platform.machine(), 'Paddle', paddle.__version__)"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" || exit 1
+CMD ["/bin/sh", "-c", "exec /opt/venv/bin/python -m uvicorn --app-dir /app cv_parser_service.main:app --host 0.0.0.0 --port \"${PORT}\""]

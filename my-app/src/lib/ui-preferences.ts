@@ -5,6 +5,7 @@ import {
   LOCALE_REGISTRY,
   resolveUiLocale,
   syncDocumentLocale,
+  type ProductionUiLocale,
   type UiLocalePreference,
 } from "./locale-registry";
 
@@ -184,10 +185,10 @@ export function applyStoredUiAccent(preference = readStoredAccent()): void {
 
 export function useUiLanguagePreference(): {
   language: UiLanguageId;
-  resolvedLanguage: Exclude<UiLanguageId, "auto">;
+  resolvedLanguage: ProductionUiLocale;
   setLanguage: (language: UiLanguageId) => void;
 } {
-  const language = React.useSyncExternalStore(
+  const language = React.useSyncExternalStore<UiLanguageId>(
     subscribeUiLanguagePreference,
     readStoredUiLanguagePreference,
     () => "auto",

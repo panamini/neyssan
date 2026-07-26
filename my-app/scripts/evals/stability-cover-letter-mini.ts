@@ -10,6 +10,7 @@ import type {
 } from "./benchmark-cover-letter-writers";
 import {
   benchmarkCoverLetterCase,
+  createCoverLetterEvalLiveBudget,
   resolveRequestedCoverLetterBenchmarkCases,
 } from "./benchmark-cover-letter-writers";
 import { resolveCoverLetterEvalModel } from "./evaluate-cover-letter";
@@ -20,6 +21,11 @@ type CliOptions = {
   runs: number;
   writerModel: PremiumCoverLetterWriterModel;
   evaluatorModel: string;
+  live: boolean;
+  maxCalls: number | null;
+  maxRepairs: number | null;
+  maxUsd: number | null;
+  declaredMaxUsdPerCall: number | null;
 };
 
 type StabilityRunRecord = {
@@ -58,12 +64,10 @@ function printHelp(): void {
       "Premium cover-letter mini stability runner",
       "",
       "Usage:",
-      "  npx tsx scripts/evals/stability-cover-letter-mini.ts [--cases=id1,id2] [--runs=5] [--writer=gpt-5-mini] [--evaluator=gpt-5-mini]",
+      "  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/stability-cover-letter-mini.ts --live --max-calls=N --max-repairs=N --max-usd=N --max-usd-per-call=N [--cases=id1,id2] [--runs=5] [--writer=gpt-5-mini] [--evaluator=gpt-5-mini]",
       "",
       "Examples:",
-      "  npx tsx scripts/evals/stability-cover-letter-mini.ts",
-      "  npx tsx scripts/evals/stability-cover-letter-mini.ts --runs=3",
-      "  npx tsx scripts/evals/stability-cover-letter-mini.ts --cases=ops-admin,weak-direct-checklist-risk --runs=5",
+      "  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/stability-cover-letter-mini.ts --live --max-calls=6 --max-repairs=0 --max-usd=0.6 --max-usd-per-call=0.1 --cases=ops-admin --runs=3",
     ].join("\n"),
   );
 }
@@ -75,12 +79,28 @@ function parseCsvList(rawValue: string): string[] {
     .filter(Boolean);
 }
 
-function parseArgs(argv: string[]): CliOptions {
+function parseNumericOption(name: string, rawValue: string): number {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${name} must be a finite number.`);
+  }
+  return value;
+}
+
+export function parseStabilityCoverLetterCliOptions(
+  argv: string[],
+  liveEnvValue: string | undefined = process.env.COVER_LETTER_EVAL_LIVE,
+): CliOptions {
   const options: CliOptions = {
     caseIds: [...DEFAULT_CASE_IDS],
     runs: DEFAULT_RUNS,
     writerModel: DEFAULT_WRITER_MODEL,
     evaluatorModel: resolveCoverLetterEvalModel(DEFAULT_WRITER_MODEL),
+    live: liveEnvValue?.trim() === "1",
+    maxCalls: null,
+    maxRepairs: null,
+    maxUsd: null,
+    declaredMaxUsdPerCall: null,
   };
 
   for (const arg of argv) {
@@ -102,6 +122,28 @@ function parseArgs(argv: string[]): CliOptions {
       options.evaluatorModel =
         arg.slice("--evaluator=".length).trim() ||
         resolveCoverLetterEvalModel();
+    } else if (arg.startsWith("--max-calls=")) {
+      options.maxCalls = parseNumericOption(
+        "--max-calls",
+        arg.slice("--max-calls=".length),
+      );
+    } else if (arg.startsWith("--max-repairs=")) {
+      options.maxRepairs = parseNumericOption(
+        "--max-repairs",
+        arg.slice("--max-repairs=".length),
+      );
+    } else if (arg.startsWith("--max-usd=")) {
+      options.maxUsd = parseNumericOption(
+        "--max-usd",
+        arg.slice("--max-usd=".length),
+      );
+    } else if (arg.startsWith("--max-usd-per-call=")) {
+      options.declaredMaxUsdPerCall = parseNumericOption(
+        "--max-usd-per-call",
+        arg.slice("--max-usd-per-call=".length),
+      );
+    } else if (arg === "--live") {
+      options.live = true;
     } else if (arg === "--help") {
       printHelp();
       process.exit(0);
@@ -200,7 +242,9 @@ export function summarizeCaseStability(
           record.status === "ok",
       );
 
-    const globalScores = successes.map((record) => record.evaluation.globalScore);
+    const globalScores = successes.map(
+      (record) => record.evaluation.globalScore,
+    );
     const persuasionScores = successes.map(
       (record) => record.evaluation.score.persuasion,
     );
@@ -209,7 +253,9 @@ export function summarizeCaseStability(
     );
 
     const themeCounts = new Map<string, number>();
-    const mainWeaknesses = successes.map((record) => record.evaluation.mainWeakness);
+    const mainWeaknesses = successes.map(
+      (record) => record.evaluation.mainWeakness,
+    );
     for (const weakness of mainWeaknesses) {
       const theme = classifyWeaknessTheme(weakness);
       themeCounts.set(theme, (themeCounts.get(theme) ?? 0) + 1);
@@ -286,13 +332,45 @@ function printSummary(summaries: CaseStabilitySummary[]): void {
 
 async function main(): Promise<void> {
   loadEnv(process.cwd());
-  const options = parseArgs(process.argv.slice(2));
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured in the current environment.");
+  const options = parseStabilityCoverLetterCliOptions(process.argv.slice(2));
+  const budget = createCoverLetterEvalLiveBudget({
+    caseIds: options.caseIds,
+    writerModels: [options.writerModel],
+    evaluatorModel: options.evaluatorModel,
+    live: options.live,
+    maxCalls: options.maxCalls,
+    maxRepairs: options.maxRepairs,
+    maxUsd: options.maxUsd,
+    declaredMaxUsdPerCall: options.declaredMaxUsdPerCall,
+  });
+  const benchmarkCases = resolveRequestedCoverLetterBenchmarkCases(
+    options.caseIds,
+  );
+  const minimumProviderCalls = options.runs * benchmarkCases.length * 2;
+  const budgetSnapshot = budget.snapshot();
+  if (budgetSnapshot.limits.maxCalls < minimumProviderCalls) {
+    throw new Error(
+      `Live stability budget maxCalls=${budgetSnapshot.limits.maxCalls} cannot cover the no-repair plan of ${minimumProviderCalls} provider calls.`,
+    );
+  }
+  const minimumReservedUsd = Number(
+    (
+      minimumProviderCalls * budgetSnapshot.limits.declaredMaxUsdPerCall
+    ).toFixed(12),
+  );
+  if (budgetSnapshot.limits.maxUsd < minimumReservedUsd) {
+    throw new Error(
+      `Live stability budget maxUsd=${budgetSnapshot.limits.maxUsd} cannot cover the no-repair reservation of ${minimumReservedUsd} USD.`,
+    );
   }
 
-  const benchmarkCases = resolveRequestedCoverLetterBenchmarkCases(options.caseIds);
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY is not configured in the current environment.",
+    );
+  }
+
   const effectiveEvaluatorModel = resolveCoverLetterEvalModel(
     options.evaluatorModel,
   );
@@ -313,6 +391,7 @@ async function main(): Promise<void> {
         writerModel: options.writerModel,
         evaluatorModel: effectiveEvaluatorModel,
         apiKey,
+        budget,
       });
       runRecords.push({
         caseId: benchmarkCase.id,

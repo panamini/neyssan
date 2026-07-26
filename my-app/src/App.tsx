@@ -22,10 +22,12 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignOutPage } from "./pages/SignOutPage";
+import { McpOAuthContinuationPage } from "./pages/McpOAuthContinuationPage";
 import { ResumePrintPage } from "./pages/ResumePrintPage";
 import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
 import { PdfRasterHarnessPage } from "./pages/PdfRasterHarnessPage";
+import { McpSafeSummaryProofOperatorPage } from "./pages/McpSafeSummaryProofOperatorPage";
 import { Sidebar } from "./components/Sidebar";
 import { ForgeTemplatePanel } from "./components/ForgeTemplatePanel";
 import { CommandPalette } from "./components/CommandPalette";
@@ -217,6 +219,7 @@ function AppShellFrame(): JSX.Element {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/sign-in/*" element={<SignInPage />} />
               <Route path="/sign-out" element={<SignOutPage />} />
+              <Route path="/oauth/continue" element={<McpOAuthContinuationPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
@@ -236,7 +239,9 @@ function AppShellFrame(): JSX.Element {
         open={onboardingReplayOpen}
         initialStepId={onboardingReplayInitialStepId}
         onClose={() => setOnboardingReplayOpen(false)}
-        onNavigate={(to, options) => navigate(to, options)}
+        onNavigate={(to, options) => {
+          void navigate(to, options);
+        }}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       />
     </div>
@@ -276,6 +281,10 @@ function AppRouter(): JSX.Element {
 
   if (location.pathname === "/debug/pdf-raster") {
     return <PdfRasterHarnessPage />;
+  }
+
+  if (location.pathname === "/debug/mcp-safe-summary-proof-operator") {
+    return <McpSafeSummaryProofOperatorPage />;
   }
 
   return <AppShell />;

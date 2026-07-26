@@ -1,7 +1,24 @@
 import { defineSchema, defineTable } from "convex/server";
+import {
+  applicationHarnessArtifactFields,
+  applicationHarnessContextFields,
+  applicationHarnessRunFields,
+} from "./lib/applicationHarness";
 import { v } from "convex/values";
 import { userProfileMetadataValidator } from "./lib/userProfileMetadata";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
+import {
+  candidateFactFields,
+  candidateImportBatchFields,
+  candidateSourceDocumentFields,
+} from "./lib/candidateEvidence";
+import { applicationPackageFields } from "./lib/applicationPackages";
+import { liveExternalActionExecutionFields } from "./lib/liveExternalActionSafety";
+import {
+  manualApplicationHandoffEventFields,
+  manualApplicationHandoffFields,
+  manualApplicationHandoffRateLimitFields,
+} from "./lib/manualApplicationHandoff";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -274,6 +291,7 @@ const proposalPresetSlotChoice = v.object({
   name: v.optional(v.string()),
 });
 
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -332,6 +350,7 @@ export default defineSchema({
       tags: v.optional(v.array(v.string())),
       sourceJobTitle: v.optional(v.string()),
       sourceJobDescription: v.optional(v.string()),
+      targetEmployerName: v.optional(v.string()),
       sourceUrl: v.optional(v.string()),
       sourceCvId: v.optional(v.string()),
       planned_path: v.optional(v.string()),
@@ -389,6 +408,7 @@ export default defineSchema({
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
       requestedLanguage: v.optional(v.union(v.string(), v.null())),
       resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+      pageSize: v.optional(v.union(v.literal("a4"), v.literal("letter"))),
       languageSource: v.optional(v.union(v.string(), v.null())),
       jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
       closing: v.optional(proposalClosingChoice),
@@ -756,6 +776,164 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
+  mcpAccountLinks: defineTable({
+    kind: v.literal("local_mcp_account_link_record"),
+    version: v.literal(1),
+    provider: v.literal("stytch"),
+    providerSubject: v.string(),
+    twoweeksClerkId: v.string(),
+    clientId: v.string(),
+    grantedReadScopes: v.array(
+      v.union(
+        v.literal("twoweeks.mcp.read"),
+        v.literal("twoweeks.application_package.read"),
+        v.literal("twoweeks.evidence_graph.read"),
+        v.literal("twoweeks.resume_variant_plan.read"),
+        v.literal("twoweeks.review_cockpit.read"),
+      ),
+    ),
+    grantRef: v.string(),
+    consentRef: v.string(),
+    state: v.union(v.literal("active"), v.literal("revoked"), v.literal("stale")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastVerifiedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    staleAt: v.optional(v.number()),
+    auditReasonCode: v.string(),
+    issuer: v.optional(v.string()),
+    providerEnvironment: v.optional(v.string()),
+    canonicalGrantedScopes: v.optional(v.array(v.string())),
+    expiresAtEpochSeconds: v.optional(v.number()),
+    canonicalAccountLinkVersion: v.optional(v.literal(1)),
+  })
+    .index("by_provider_subject_client", ["provider", "providerSubject", "clientId"])
+    .index("by_provider_subject_client_state", [
+      "provider",
+      "providerSubject",
+      "clientId",
+      "state",
+    ])
+    .index("by_provider_issuer_subject_environment", [
+      "provider",
+      "issuer",
+      "providerSubject",
+      "providerEnvironment",
+    ])
+    .index("by_twoweeks_clerk_id", ["twoweeksClerkId"]),
+
+  mcpOAuthAuthorizationIntents: defineTable({
+    kind: v.literal("mcp_oauth_authorization_intent_record"),
+    version: v.literal(1),
+    intentHandleHash: v.string(),
+    twoweeksClerkId: v.string(),
+    authorizationPageOrigin: v.string(),
+    authorizationPagePath: v.string(),
+    responseType: v.literal("code"),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    state: v.string(),
+    codeChallenge: v.string(),
+    codeChallengeMethod: v.literal("S256"),
+    approvedOptionalParameters: v.optional(
+      v.object({
+        nonce: v.optional(v.string()),
+        prompt: v.optional(v.string()),
+        // Compatibility for historical provider-forward authorization intents.
+        ui_locales: v.optional(v.string()),
+      }),
+    ),
+    providerValidationStatus: v.literal("pending"),
+    status: v.union(v.literal("pending"), v.literal("consumed"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    storageVersion: v.literal(1),
+  })
+    .index("by_intent_handle_hash", ["intentHandleHash"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  mcpOAuthAuthorizationCodes: defineTable({
+    kind: v.literal("mcp_oauth_authorization_code_record"),
+    version: v.literal(1),
+    authorizationCodeDigest: v.string(),
+    twoweeksClerkId: v.string(),
+    ownerIssuer: v.string(),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    state: v.string(),
+    codeChallenge: v.string(),
+    codeChallengeMethod: v.literal("S256"),
+    productionEnvironment: v.literal("mcp_oauth_production_v1"),
+    status: v.union(v.literal("pending"), v.literal("consumed"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    storageVersion: v.literal(1),
+  })
+    .index("by_authorization_code_digest", ["authorizationCodeDigest"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  mcpOAuthAccessTokens: defineTable({
+    kind: v.literal("mcp_oauth_access_token_record"),
+    version: v.literal(1),
+    accessTokenDigest: v.string(),
+    authorizationCodeDigest: v.string(),
+    twoweeksClerkId: v.string(),
+    ownerIssuer: v.string(),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    productionEnvironment: v.literal("mcp_oauth_production_v1"),
+    status: v.union(v.literal("active"), v.literal("expired"), v.literal("revoked")),
+    issuedAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    storageVersion: v.literal(1),
+  })
+    .index("by_access_token_digest", ["accessTokenDigest"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  mcpOAuthPreAuthIntents: defineTable({
+    kind: v.literal("mcp_oauth_pre_auth_intent_record"),
+    version: v.literal(1),
+    preAuthHandleHash: v.string(),
+    authorizationPageOrigin: v.string(),
+    authorizationPagePath: v.string(),
+    responseType: v.literal("code"),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    state: v.string(),
+    codeChallenge: v.string(),
+    codeChallengeMethod: v.literal("S256"),
+    approvedOptionalParameters: v.optional(
+      v.object({
+        nonce: v.optional(v.string()),
+        prompt: v.optional(v.string()),
+        // Compatibility for historical provider-forward pre-auth intents.
+        ui_locales: v.optional(v.string()),
+      }),
+    ),
+    providerValidationStatus: v.literal("pending"),
+    status: v.union(v.literal("pre_auth_pending"), v.literal("claimed"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    claimedAt: v.optional(v.number()),
+    storageVersion: v.literal(1),
+  })
+    .index("by_pre_auth_handle_hash", ["preAuthHandleHash"])
+    .index("by_expires_at", ["expiresAt"]),
+
   // New: LLM jobs queue table
   llmJobs: defineTable({
     profileId: v.id("userProfiles"),
@@ -801,4 +979,110 @@ export default defineSchema({
     .index("by_placeholder", ["placeholderId"])
     .index("by_job", ["jobId"])
     .index("by_created", ["createdAt"]),
+
+
+  candidateSourceDocuments: defineTable(candidateSourceDocumentFields)
+    .index("by_user_id", ["userId"])
+    .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_source_hash", ["userId", "sourceHash"])
+    .index("by_user_id_text_hash", ["userId", "textHash"])
+    .index("by_user_id_review_state", ["userId", "reviewState"])
+    .index("by_user_id_visibility", ["userId", "visibility"]),
+
+  candidateFacts: defineTable(candidateFactFields)
+    .index("by_user_id", ["userId"])
+    .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_source_document_id", ["userId", "sourceDocumentId"])
+    .index("by_user_id_source_document_id_source_path", [
+      "userId",
+      "sourceDocumentId",
+      "sourcePath",
+    ])
+    .index("by_user_id_fact_type", ["userId", "factType"])
+    .index("by_user_id_review_state", ["userId", "reviewState"])
+    .index("by_user_id_visibility", ["userId", "visibility"]),
+
+  candidateImportBatches: defineTable(candidateImportBatchFields)
+    .index("by_user_id", ["userId"])
+    .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_status", ["userId", "status"]),
+
+  applicationContexts: defineTable(applicationHarnessContextFields)
+    .index("by_context_id", ["id"])
+    .index("by_user", ["userId"])
+    .index("by_user_id", ["userId", "id"])
+    .index("by_context_hash", ["contextHash"])
+    .index("by_user_context_hash", ["userId", "contextHash"])
+    .index("by_job", ["job.jobId"])
+    .index("by_user_job", ["userId", "job.jobId"])
+    .index("by_updated", ["updatedAt"]),
+
+  applicationRuns: defineTable(applicationHarnessRunFields)
+    .index("by_run_id", ["id"])
+    .index("by_user", ["userId"])
+    .index("by_user_id", ["userId", "id"])
+    .index("by_context", ["contextId"])
+    .index("by_user_context", ["userId", "contextId"])
+    .index("by_idempotency_key", ["idempotencyKey"])
+    .index("by_user_idempotency_key", ["userId", "idempotencyKey"])
+    .index("by_status", ["status"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_user_operation", ["userId", "operation"])
+    .index("by_updated", ["updatedAt"]),
+
+  liveExternalActionExecutions: defineTable(liveExternalActionExecutionFields)
+    .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
+    .index("by_integration_action", ["integrationId", "actionCategory"])
+    .index("by_state", ["state"])
+    .index("by_updated", ["updatedAt"]),
+
+  manualApplicationHandoffs: defineTable(manualApplicationHandoffFields)
+    .index("by_handoff_id", ["handoffId"])
+    .index("by_owner_profile_id", ["ownerProfileId"])
+    .index("by_owner_job_updated", ["ownerProfileId", "jobId", "updatedAt"])
+    .index("by_application_package_id", ["applicationPackageId"])
+    .index("by_state", ["state"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  manualApplicationHandoffEvents: defineTable(
+    manualApplicationHandoffEventFields,
+  )
+    .index("by_handoff_id", ["handoffId"])
+    .index("by_owner_profile_id", ["ownerProfileId"])
+    .index("by_owner_job", ["ownerProfileId", "jobId"])
+    .index("by_event_kind", ["eventKind"])
+    .index("by_occurred_at", ["occurredAt"]),
+
+  manualApplicationHandoffRateLimits: defineTable(
+    manualApplicationHandoffRateLimitFields,
+  )
+    .index("by_rate_limit_id", ["rateLimitId"])
+    .index("by_owner_capability", ["ownerProfileId", "capability"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  applicationArtifacts: defineTable(applicationHarnessArtifactFields)
+    .index("by_artifact_id", ["id"])
+    .index("by_user", ["userId"])
+    .index("by_user_id", ["userId", "id"])
+    .index("by_context", ["contextId"])
+    .index("by_user_context", ["userId", "contextId"])
+    .index("by_run", ["runId"])
+    .index("by_user_run", ["userId", "runId"])
+    .index("by_status", ["status"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_type", ["type"])
+    .index("by_user_type", ["userId", "type"])
+    .index("by_context_status", ["contextId", "status"])
+    .index("by_updated", ["updatedAt"]),
+
+  // PR14: internal shadow persistence for already-built ApplicationPackageV1 records.
+  applicationPackages: defineTable(applicationPackageFields)
+    .index("by_application_package_id", ["applicationPackageId"])
+    .index("by_user_id", ["userId"])
+    .index("by_application_context_id", ["applicationContextId"])
+    .index("by_application_context_created_at", ["applicationContextId", "createdAt"])
+    .index("by_user_and_application_context", ["userId", "applicationContextId"])
+    .index("by_status", ["status"])
+    .index("by_resume_variant_artifact_id", ["resumeVariantArtifactId"])
+    .index("by_cover_letter_artifact_id", ["coverLetterArtifactId"]),
 });

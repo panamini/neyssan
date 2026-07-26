@@ -101,6 +101,7 @@ type ProposalDocumentRendererProps = {
   contactLine?: string | null;
   letterDate?: string | null;
   recipientDetails?: string | null;
+  documentLanguage?: string | null;
   documentTitle?: string | null;
   documentMeta?: string | null;
   applicantHeader?: ProposalApplicantHeaderData | null;
@@ -1623,6 +1624,51 @@ function buildEditableBodyDocument(
     source: "structured",
     blocks: nextBlocks,
   };
+}
+
+function getEditableBodyDocumentStructureToken(
+  document: ProposalDocument,
+): string {
+  return document.blocks
+    .map((block) => {
+      if (block.type === "list") {
+        return `list:${block.id}:${block.items.map((item) => item.id).join(",")}`;
+      }
+      return `${block.type}:${block.id}`;
+    })
+    .join("|");
+}
+
+function didEditableBodyClearText(
+  previousDocument: ProposalDocument,
+  nextDocument: ProposalDocument,
+): boolean {
+  const nextBlocksById = new Map(
+    nextDocument.blocks.map((block) => [block.id, block] as const),
+  );
+
+  return previousDocument.blocks.some((block) => {
+    const nextBlock = nextBlocksById.get(block.id);
+    if (
+      (block.type === "salutation" || block.type === "paragraph") &&
+      nextBlock &&
+      (nextBlock.type === "salutation" || nextBlock.type === "paragraph")
+    ) {
+      return Boolean(block.text) && !nextBlock.text;
+    }
+
+    if (block.type !== "list" || nextBlock?.type !== "list") {
+      return false;
+    }
+
+    const nextItemsById = new Map(
+      nextBlock.items.map((item) => [item.id, item] as const),
+    );
+    return block.items.some((item) => {
+      const nextItem = nextItemsById.get(item.id);
+      return Boolean(item.text) && Boolean(nextItem) && !nextItem?.text;
+    });
+  });
 }
 
 function getEditableValueLineProps(
@@ -3730,6 +3776,30 @@ function buildProposalDocumentBlocksFromStructuredDocument(
     }
   }
 
+  const closingIndex = blocks.findIndex((block) => block.type === "closing");
+  if (closingIndex > 0) {
+    let firstRedundantParagraphIndex = closingIndex;
+    while (
+      firstRedundantParagraphIndex > 0 &&
+      blocks[firstRedundantParagraphIndex - 1]?.type === "paragraph" &&
+      !(
+        blocks[firstRedundantParagraphIndex - 1] as Extract<
+          ProposalDocumentBlock,
+          { type: "paragraph" }
+        >
+      ).text.trim()
+    ) {
+      firstRedundantParagraphIndex -= 1;
+    }
+
+    if (firstRedundantParagraphIndex < closingIndex) {
+      blocks.splice(
+        firstRedundantParagraphIndex,
+        closingIndex - firstRedundantParagraphIndex,
+      );
+    }
+  }
+
   return blocks;
 }
 
@@ -4087,6 +4157,7 @@ export function ProposalDocumentRenderer({
   contactLine,
   letterDate,
   recipientDetails,
+  documentLanguage = null,
   documentTitle,
   documentMeta,
   applicantHeader,
@@ -4116,6 +4187,23 @@ export function ProposalDocumentRenderer({
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
+  const classicHeaderLabels = React.useMemo(
+    () =>
+      documentLanguage?.toLowerCase().startsWith("fr")
+        ? {
+            sender: "Expéditeur :",
+            date: "Date",
+            recipient: "Destinataire",
+            subject: "Objet",
+          }
+        : {
+            sender: "From:",
+            date: "Date",
+            recipient: "To",
+            subject: "Subject",
+          },
+    [documentLanguage],
+  );
   const resolvedDocumentDecoration = React.useMemo(
     () => resolveTemplateDocumentDecoration(documentDecoration, resolvedTemplateId),
     [documentDecoration, resolvedTemplateId],
@@ -4368,6 +4456,7 @@ export function ProposalDocumentRenderer({
   const measurementPageRef = React.useRef<HTMLDivElement>(null);
   const measurementBodyRef = React.useRef<HTMLDivElement>(null);
   const pendingEditableFocusRef = React.useRef<PendingEditableFocus | null>(null);
+  const [bodyEditorRevision, setBodyEditorRevision] = React.useState(0);
   const [pageGroups, setPageGroups] = React.useState<number[][]>(() =>
     documentBlocks.length > 0
       ? [documentBlocks.map((_, index) => index)]
@@ -4594,9 +4683,19 @@ export function ProposalDocumentRenderer({
     (editor: HTMLElement) => {
       if (!onProposalDocumentChange) return;
 
-      onProposalDocumentChange(
-        buildEditableBodyDocument(editor, structuredDocument),
-      );
+      const nextDocument = buildEditableBodyDocument(editor, structuredDocument);
+      const didStructureChange =
+        getEditableBodyDocumentStructureToken(nextDocument) !==
+        getEditableBodyDocumentStructureToken(structuredDocument);
+
+      if (
+        didStructureChange ||
+        didEditableBodyClearText(structuredDocument, nextDocument)
+      ) {
+        setBodyEditorRevision((revision) => revision + 1);
+      }
+
+      onProposalDocumentChange(nextDocument);
     },
     [onProposalDocumentChange, structuredDocument],
   );
@@ -5187,7 +5286,7 @@ export function ProposalDocumentRenderer({
 
       return (
         <div
-          key="proposal-body-editor"
+          key={`proposal-body-editor:${bodyEditorRevision}`}
           ref={bodyEditorRef}
           className="dasti-proposal-document__body-editor"
           contentEditable
@@ -5432,6 +5531,7 @@ export function ProposalDocumentRenderer({
       listMarkerIcon,
       listMarkerStyle,
       listMarkerType,
+      bodyEditorRevision,
       onProposalDocumentChange,
       renderListMarkerContent,
       renderDocumentBlock,
@@ -5579,7 +5679,7 @@ export function ProposalDocumentRenderer({
         {resolvedRailTitle ? (
           <p className="dasti-proposal-document__sender-label">
             <span className="dasti-proposal-document__sender-label-key">
-              From:
+              {classicHeaderLabels.sender}
             </span>{" "}
             <span
               className="dasti-proposal-document__sender-label-value"
@@ -5605,6 +5705,11 @@ export function ProposalDocumentRenderer({
             {resolvedRailMeta}
           </p>
         ) : null}
+        {applicantHeader?.company?.trim() ? (
+          <p className="dasti-proposal-document__sender-company">
+            {applicantHeader.company.trim()}
+          </p>
+        ) : null}
         {resolvedSenderLine ? (
           <p
             className="dasti-proposal-document__sender-contact"
@@ -5624,6 +5729,8 @@ export function ProposalDocumentRenderer({
       onContactLineChange,
       onRailMetaChange,
       onRailTitleChange,
+      applicantHeader?.company,
+      classicHeaderLabels.sender,
       resolvedRailMeta,
       resolvedRailTitle,
       resolvedSenderLine,
@@ -5637,9 +5744,9 @@ export function ProposalDocumentRenderer({
     return (
       <div className="dasti-proposal-document__structured-header">
         {structuredHeaderValues.date ? (
-          <div className="dasti-proposal-document__structured-header-item">
+          <div className="dasti-proposal-document__structured-header-item dasti-proposal-document__structured-header-item--date">
             <p className="dasti-proposal-document__structured-header-label">
-              Date
+              {classicHeaderLabels.date}
             </p>
             <p
               className="dasti-proposal-document__structured-header-value"
@@ -5654,9 +5761,9 @@ export function ProposalDocumentRenderer({
           </div>
         ) : null}
         {structuredHeaderValues.toLines.length > 0 ? (
-          <div className="dasti-proposal-document__structured-header-item">
+          <div className="dasti-proposal-document__structured-header-item dasti-proposal-document__structured-header-item--recipient">
             <p className="dasti-proposal-document__structured-header-label">
-              To
+              {classicHeaderLabels.recipient}
             </p>
             {editable && onRecipientDetailsChange ? (
               <div
@@ -5694,7 +5801,7 @@ export function ProposalDocumentRenderer({
         {structuredHeaderValues.subject ? (
           <div className="dasti-proposal-document__structured-header-item dasti-proposal-document__structured-header-item--subject">
             <p className="dasti-proposal-document__structured-header-label">
-              Subject
+              {classicHeaderLabels.subject}
             </p>
             <p
               className="dasti-proposal-document__structured-header-value"
@@ -5711,6 +5818,9 @@ export function ProposalDocumentRenderer({
       </div>
     );
   }, [
+    classicHeaderLabels.date,
+    classicHeaderLabels.recipient,
+    classicHeaderLabels.subject,
     getEditableTextProps,
     onDocumentTitleChange,
     onLetterDateChange,
@@ -5793,6 +5903,11 @@ export function ProposalDocumentRenderer({
             <p className="dasti-proposal-document__volk-subtitle">
               {resolvedRailMeta ?? "job role"}
             </p>
+            {applicantHeader?.company?.trim() ? (
+              <p className="dasti-proposal-document__volk-company">
+                {applicantHeader.company.trim()}
+              </p>
+            ) : null}
             <p className="dasti-proposal-document__volk-sender">
               {resolvedSenderLine || "phone · email · website"}
             </p>
@@ -5858,6 +5973,7 @@ export function ProposalDocumentRenderer({
     ),
     [
       documentMeta,
+      applicantHeader?.company,
       renderVolkBodyContent,
       structuredHeaderValues,
       volkMetaLefts,

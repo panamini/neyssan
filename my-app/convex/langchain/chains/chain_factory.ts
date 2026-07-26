@@ -4,6 +4,8 @@ import { TechnicalProposalChain } from "./technical_chain";
 import { CreativeProposalChain } from "./creative_chain"; // Import CreativeProposalChain
 import { ModelAdapter } from "../models/model_adapter"; // Import ModelAdapter
 
+export type { ChainConfig } from "./base_chain";
+
 export type ChainType = "technical" | "creative";
 
 /**

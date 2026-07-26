@@ -22,6 +22,7 @@ type JobDetailProps = {
   isResumePickerOpen: boolean;
   resumePickerRef: React.RefObject<HTMLDivElement>;
   resumePickerOptions: ResumePickerOption[];
+  handoffPanel?: React.ReactNode;
   debugPanels?: React.ReactNode;
   onBackToJobs: () => void;
   onSetJobFavorite: (jobId: string, nextFavorite: boolean) => void;
@@ -124,6 +125,7 @@ export function JobDetail({
   isResumePickerOpen,
   resumePickerRef,
   resumePickerOptions,
+  handoffPanel,
   debugPanels,
   onBackToJobs,
   onSetJobFavorite,
@@ -377,6 +379,7 @@ export function JobDetail({
             onRefreshMatch={onRefreshSelectedJobMatch}
           />
         ) : null}
+        {handoffPanel}
         <div className="dasti-jobs-detail__content">
           <ProposalBriefCard
             sourceJobTitle={selectedJobTitle}

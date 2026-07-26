@@ -133,6 +133,7 @@ interface ProposalDisplayProps {
   contactLine?: string | null;
   letterDate?: string | null;
   recipientDetails?: string | null;
+  documentLanguage?: string | null;
   salutationValue?: string | null;
   documentTitle?: string | null;
   documentMeta?: string | null;
@@ -1286,6 +1287,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   contactLine = null,
   letterDate = null,
   recipientDetails = null,
+  documentLanguage = null,
   salutationValue = null,
   documentTitle = null,
   documentMeta = null,
@@ -3879,6 +3881,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   contactLine={contactLine}
                   letterDate={letterDate}
                   recipientDetails={recipientDetails}
+                  documentLanguage={documentLanguage}
                   documentTitle={documentTitle}
                   documentMeta={documentMeta}
                   applicantHeader={applicantHeader}

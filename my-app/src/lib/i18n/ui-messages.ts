@@ -288,6 +288,11 @@ export const EN_UI_MESSAGES = {
   "settings.account.checkingAccount": "Checking account",
   "settings.account.cvDefault": "CV default:",
   "settings.account.empty": "empty",
+  "settings.contact.email": "Email",
+  "settings.contact.phone": "Phone",
+  "settings.contact.location": "Location",
+  "settings.contact.linkedin": "LinkedIn",
+  "settings.contact.website": "Website",
   "settings.account.connectedAccounts": "Connected accounts",
   "settings.account.google": "Google",
   "settings.account.usedToSignIn": "Used to sign in.",
@@ -439,6 +444,10 @@ export const EN_UI_MESSAGES = {
     "Structured European layout.",
   "templates.description.editorialSidebarResume":
     "Asymmetric side rail with a denser reading column.",
+  "templates.description.minimalUsLetter":
+    "Canonical US business-letter layout, ATS-first. Previewed on US Letter; respects your saved format.",
+  "templates.description.frenchA4Letter":
+    "Canonical European correspondence layout, ATS-first. Previewed on A4; respects your saved format.",
   "templates.description.minimalLetter": "Quiet spacing, clear hierarchy.",
   "templates.description.boldLetter": "Sharper opening, direct tone.",
   "templates.description.letterpressLetter": "Warmer, more personal.",
@@ -808,6 +817,11 @@ const FR_UI_MESSAGES = {
   "settings.account.checkingAccount": "Vérification du compte",
   "settings.account.cvDefault": "CV par défaut :",
   "settings.account.empty": "vide",
+  "settings.contact.email": "E-mail",
+  "settings.contact.phone": "Téléphone",
+  "settings.contact.location": "Lieu",
+  "settings.contact.linkedin": "LinkedIn",
+  "settings.contact.website": "Site web",
   "settings.account.connectedAccounts": "Comptes connectés",
   "settings.account.google": "Google",
   "settings.account.usedToSignIn": "Utilisé pour se connecter.",
@@ -966,6 +980,10 @@ const FR_UI_MESSAGES = {
     "Mise en page européenne structurée.",
   "templates.description.editorialSidebarResume":
     "Rail asymétrique avec une colonne de lecture plus dense.",
+  "templates.description.minimalUsLetter":
+    "Mise en page canonique américaine, optimisée ATS. Aperçu en US Letter ; respecte votre format enregistré.",
+  "templates.description.frenchA4Letter":
+    "Mise en page épistolaire européenne canonique, optimisée ATS. Aperçu en A4 ; respecte votre format enregistré.",
   "templates.description.minimalLetter":
     "Espacement calme, hiérarchie nette.",
   "templates.description.boldLetter": "Ouverture directe, ton net.",
@@ -1335,6 +1353,11 @@ const ES_UI_MESSAGES = {
   "settings.account.checkingAccount": "Comprobando cuenta",
   "settings.account.cvDefault": "CV predeterminado:",
   "settings.account.empty": "vacío",
+  "settings.contact.email": "Correo",
+  "settings.contact.phone": "Teléfono",
+  "settings.contact.location": "Ubicación",
+  "settings.contact.linkedin": "LinkedIn",
+  "settings.contact.website": "Sitio web",
   "settings.account.connectedAccounts": "Cuentas conectadas",
   "settings.account.google": "Google",
   "settings.account.usedToSignIn": "Se usa para iniciar sesión.",
@@ -1491,6 +1514,10 @@ const ES_UI_MESSAGES = {
   "templates.description.workshopTwoColumnResume": "Diseño europeo estructurado.",
   "templates.description.editorialSidebarResume":
     "Barra lateral asimétrica con una columna de lectura más densa.",
+  "templates.description.minimalUsLetter":
+    "Diseño canónico de carta comercial estadounidense, optimizado para ATS. Vista previa en US Letter; respeta el formato guardado.",
+  "templates.description.frenchA4Letter":
+    "Diseño canónico de correspondencia europea, optimizado para ATS. Vista previa en A4; respeta el formato guardado.",
   "templates.description.minimalLetter":
     "Espaciado sobrio, jerarquía clara.",
   "templates.description.boldLetter": "Apertura directa, tono claro.",

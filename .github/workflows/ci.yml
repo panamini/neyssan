@@ -5,12 +5,53 @@ on:
   pull_request:
 
 jobs:
+  run-sh-doctor-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Run run.sh doctor regression suite
+        run: node --test tests/run-sh-doctor.test.mjs
+
+      - name: Run run.sh ownership lifecycle contract
+        run: node --test tests/run-sh-lifecycle.test.mjs
+
+      - name: Run portable parser server contract
+        run: node --test tests/cv-parser-server-contract.test.mjs
+
+      - name: Run PDF.js sandbox contract
+        run: node --test tests/pdfjs-sandbox-contract.test.mjs
+
+  mcp-private-beta-smoke:
+    name: MCP private-beta offline smoke contract
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Checkout public source without credentials
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "${EXPECTED_SHA}"
+          git -c advice.detachedHead=false checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Run offline MCP private-beta smoke contract
+        run: node --test tests/mcp-private-beta-smoke.test.mjs
+
   js-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -19,6 +60,50 @@ jobs:
       - name: Install dependencies
         working-directory: my-app
         run: npm ci
+
+      - name: Run authenticated production tools/list projection contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+        run: |
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+            --reporter=dot \
+            --testNamePattern='returns authenticated production tools/list metadata for negotiated protocol'
+
+      - name: Run MCP output minimization regression contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+        run: |
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpProductionReadonlySummaryStatusNormalizer.test.ts \
+            src/modules/local-mcp/__tests__/mcpProductionReadonlySummaryProjectorV2.test.ts \
+            --reporter=dot
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+            --reporter=dot \
+            --testNamePattern='returns authenticated production tools/list metadata|executes a safe V2 production tools/call summary|drops adversarial read-only summary executor sentinels'
+
+      - name: Run MCP public catalog URL readiness contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+        run: |
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpProductionLaunchReadiness.test.ts \
+            src/modules/local-mcp/__tests__/mcpOperationalStatus.test.ts \
+            --reporter=dot
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+            --reporter=dot \
+            --testNamePattern='wires complete production launch readiness evidence env through the default Vite /mcp config|wires production public launch readiness env through the default Vite /mcp config'
 
       - name: Generate Convex client bindings
         working-directory: my-app
@@ -40,3 +125,41 @@ jobs:
             convex/lib/jobs/__tests__/structuredMatchReview.test.ts \
             convex/lib/jobs/__tests__/structuredMatchRead.test.ts \
             convex/lib/jobs/__tests__/structuredMatchReadEvaluation.test.ts
+
+      - name: Run cover-letter evaluation truth contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+          PROPOSAL_GENERATION_QUALITY_MODE: baseline
+          COVER_LETTER_PREMIUM_PROMPT_V2: ""
+          ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2: ""
+          ENABLE_COVER_LETTER_QUALITY_REPAIR_V1: ""
+        run: |
+          ./node_modules/.bin/vitest --run \
+            convex/lib/proposals/__tests__/coverLetterPolicyCandidate.test.ts \
+            convex/lib/proposals/__tests__/premiumCoverLetterEnglishProse.test.ts \
+            convex/lib/proposals/__tests__/premiumCoverLetterEnglishQualityGate.test.ts \
+            convex/lib/proposals/__tests__/premiumCoverLetterNumericEvidence.test.ts \
+            convex/lib/proposals/__tests__/proposalWriterPrompt.test.ts \
+            scripts/evals/__tests__/benchmark-cover-letter-writers.test.ts \
+            scripts/evals/__tests__/cover-letter-policy-shadow.test.ts \
+            scripts/evals/__tests__/cover-letter-eval-artifact.test.ts \
+            scripts/evals/__tests__/cover-letter-eval-budget.test.ts \
+            scripts/evals/__tests__/cover-letter-eval3c-adaptive.test.ts \
+            scripts/evals/__tests__/cover-letter-eval3c-v2.test.ts \
+            scripts/evals/__tests__/cover-letter-final-artifact-attribution-shadow.test.ts \
+            scripts/evals/__tests__/cover-letter-final-sendability-shadow.test.ts \
+            scripts/evals/__tests__/cover-letter-structure-aware-finalizer-canary.test.ts \
+            scripts/evals/__tests__/stability-cover-letter-mini.test.ts
+          ./node_modules/.bin/tsx scripts/evals/benchmark-cover-letter-writers.ts
+          ./node_modules/.bin/tsx scripts/evals/cover-letter-policy-shadow.ts
+          if ./node_modules/.bin/tsx scripts/evals/stability-cover-letter-mini.ts; then
+            echo "::error::The stability runner must refuse unflagged, unbudgeted live execution."
+            exit 1
+          fi
+
+      - name: Run premium cover-letter adapter contract
+        working-directory: my-app
+        run: ./node_modules/.bin/vitest --run convex/lib/proposals/__tests__/premiumCoverLetter.test.ts

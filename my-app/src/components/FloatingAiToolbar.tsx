@@ -112,7 +112,7 @@ type FloatingSelectionToolbarShellProps = {
     minWidth: number;
     minHeight: number;
   };
-  panelRef: React.RefObject<HTMLDivElement | null>;
+  panelRef: React.RefObject<HTMLDivElement>;
   contentReady?: boolean;
   onClose: () => void;
   onSurfacePlacementChange?: (
@@ -457,7 +457,7 @@ export function FloatingAiToolbar({
     React.useState<FloatingSelectionToolbarAction[]>([]);
   const isCollapsedDensity = useCollapsedSelectionToolbarDensity(open);
 
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
   const actionShellRef = React.useRef<HTMLDivElement | null>(null);
   const compactFormatShellRef = React.useRef<HTMLDivElement | null>(null);
   const wideFormatShellRef = React.useRef<HTMLDivElement | null>(null);

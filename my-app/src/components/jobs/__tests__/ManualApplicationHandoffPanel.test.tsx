@@ -1,0 +1,468 @@
+import React from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  ManualApplicationHandoffPanel,
+  type ManualApplicationHandoffPanelState,
+} from "../ManualApplicationHandoffPanel";
+
+const APPLICATION_URL = "https://jobs.example.com/apply/123?private=value";
+const MANIFEST_DIGEST = "a".repeat(64);
+const REQUIRED_COPY = `I confirm this Twoweeks handoff package ${MANIFEST_DIGEST}.`;
+const ARTIFACT_DIGEST = "c".repeat(64);
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+function preparedState(
+  overrides: Partial<ManualApplicationHandoffPanelState> = {},
+): ManualApplicationHandoffPanelState {
+  return {
+    status: "handoff_prepared",
+    enabled: true,
+    canPrepare: false,
+    canConfirm: true,
+    canUseConfirmedPackage: false,
+    handoffId: "manual-application-handoff:one",
+    applicationPackageId: "application-package:hash-a",
+    manifestDigest: MANIFEST_DIGEST,
+    requiredConfirmationCopy: REQUIRED_COPY,
+    destinationHostname: "jobs.example.com",
+    destinationOrigin: "https://jobs.example.com",
+    providerVerified: false,
+    approvedAnswers: [],
+    downloadableArtifacts: [],
+    answerCopyBlockedReason:
+      "Approved answer copy is blocked until approved answers are server-derived.",
+    downloadBlockedReason:
+      "Approved artifact downloads are blocked until an approved export representation is available.",
+    ...overrides,
+  };
+}
+
+function handlers() {
+  return {
+    onLoadDeliveryContent: vi.fn(async () => null),
+    onPrepare: vi.fn(async () => undefined),
+    onConfirm: vi.fn(async () => undefined),
+    onRecordFileDownloadRequested: vi.fn(async () => undefined),
+    onRecordDestinationOpenRequested: vi.fn(async () => undefined),
+    onReportOutcome: vi.fn(async () => undefined),
+  };
+}
+
+describe("ManualApplicationHandoffPanel", () => {
+  it("shows a safe disabled state when the PR80B flag is off", () => {
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={{
+          status: "disabled",
+          enabled: false,
+          canPrepare: false,
+          canConfirm: false,
+          canUseConfirmedPackage: false,
+          providerVerified: false,
+          approvedAnswers: [],
+          downloadableArtifacts: [],
+        }}
+        {...handlers()}
+      />,
+    );
+
+    expect(screen.getByText("Manual application handoff")).toBeInTheDocument();
+    expect(screen.getByText("Manual handoff is disabled.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Twoweeks will not submit, fill forms, or contact the provider."),
+    ).toBeInTheDocument();
+  });
+
+  it("requires exact confirmation copy before the package can be used", async () => {
+    const props = handlers();
+    const deliveryContent = {
+      handoffId: "manual-application-handoff:one",
+      manifestDigest: MANIFEST_DIGEST,
+      approvedAnswers: [],
+      downloadableArtifacts: [
+        {
+          artifactRef: "cover-letter-artifact:hash-a",
+          label: "Cover letter export",
+          filename: "cover-letter-export.md",
+          mimeType: "text/markdown",
+          text: "Dear Example co,\n\nI am excited to apply.",
+          artifactDigest: ARTIFACT_DIGEST,
+        },
+      ],
+      answerCopyBlockedReason:
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      downloadBlockedReason: null,
+      providerVerified: false,
+    } as const;
+    props.onLoadDeliveryContent.mockResolvedValueOnce(deliveryContent);
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState()}
+        {...props}
+      />,
+    );
+
+    const confirmButton = screen.getByRole("button", {
+      name: "Confirm package",
+    });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Confirmation copy"), {
+      target: { value: REQUIRED_COPY },
+    });
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
+    await waitFor(() =>
+      expect(props.onConfirm).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+        confirmationCopy: REQUIRED_COPY,
+      }),
+    );
+  });
+
+  it("marks answer copy and artifact downloads blocked when no approved representation exists", () => {
+    const props = handlers();
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+        })}
+        {...props}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Approved artifact downloads are blocked until an approved export representation is available.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
+    expect(props.onRecordFileDownloadRequested).not.toHaveBeenCalled();
+  });
+
+  it("shows safe quota refusal copy without raw server payloads", async () => {
+    const props = handlers();
+    props.onLoadDeliveryContent.mockRejectedValueOnce(
+      Object.assign(
+        new Error("raw server payload ownerProfileId profile_owner retryAfterSeconds"),
+        {
+          data: {
+            code: "manual_application_handoff_rate_limited",
+            category: "budget_exhausted",
+            retryAfterSeconds: 42,
+            ownerProfileId: "profile_owner",
+          },
+        },
+      ),
+    );
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+        })}
+        {...props}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load approved files" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(
+      "Manual handoff budget reached. Try again later.",
+    );
+    expect(status).not.toHaveTextContent("retryAfterSeconds");
+    expect(status).not.toHaveTextContent("ownerProfileId");
+    expect(status).not.toHaveTextContent("profile_owner");
+  });
+
+  it("disables manual handoff actions while a quota-protected mutation is pending", async () => {
+    const props = handlers();
+    props.onLoadDeliveryContent.mockImplementationOnce(
+      () => new Promise(() => {}),
+    );
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+        })}
+        {...props}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load approved files" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Load approved files" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Open application form" }),
+      ).toBeDisabled();
+      expect(screen.getByRole("button", { name: "I submitted it" })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "I did not submit it" }),
+      ).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Mark abandoned" })).toBeDisabled();
+    });
+  });
+
+  it("does not render placeholder markdown download controls even if stale artifact props arrive", () => {
+    const props = handlers();
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+          downloadableArtifacts: [
+            {
+              artifactRef: "resume-variant-artifact:hash-a",
+              label: "Resume variant",
+              filename: "resume-variant.md",
+              mimeType: "text/markdown",
+              text: "# Resume variant",
+              artifactDigest: "c".repeat(64),
+            },
+          ],
+        })}
+        {...props}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Download Resume variant" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Approved artifact downloads are blocked until an approved export representation is available.",
+      ),
+    ).toBeInTheDocument();
+    expect(props.onRecordFileDownloadRequested).not.toHaveBeenCalled();
+  });
+
+  it("downloads only artifacts delivered by the owner-scoped delivery content mutation", async () => {
+    const props = handlers();
+    const deliveryContent = {
+      handoffId: "manual-application-handoff:one",
+      manifestDigest: MANIFEST_DIGEST,
+      approvedAnswers: [],
+      downloadableArtifacts: [
+        {
+          artifactRef: "cover-letter-artifact:hash-a",
+          label: "Cover letter export",
+          filename: "cover-letter-export.md",
+          mimeType: "text/markdown",
+          text: "Dear Example co,\n\nI am excited to apply.",
+          artifactDigest: ARTIFACT_DIGEST,
+        },
+      ],
+      answerCopyBlockedReason:
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      downloadBlockedReason: null,
+      providerVerified: false,
+    } as const;
+    props.onLoadDeliveryContent.mockResolvedValueOnce(deliveryContent);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const createObjectUrl = vi.fn(() => "download-url");
+    const revokeObjectUrl = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectUrl,
+    });
+    const originalCreateElement = document.createElement.bind(document);
+    const click = vi.fn();
+    vi.spyOn(document, "createElement").mockImplementation((tagName) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        Object.defineProperty(element, "click", {
+          configurable: true,
+          value: click,
+        });
+      }
+      return element;
+    });
+
+    function HandoffPanelHarness(): JSX.Element {
+      const [content, setContent] =
+        React.useState<typeof deliveryContent | null>(null);
+      return (
+        <ManualApplicationHandoffPanel
+          jobId="job_1"
+          applicationUrl={APPLICATION_URL}
+          handoff={preparedState({
+            status: "handoff_confirmed",
+            canConfirm: false,
+            canUseConfirmedPackage: true,
+          })}
+          deliveryContent={content}
+          {...props}
+          onLoadDeliveryContent={async (args) => {
+            const nextContent = await props.onLoadDeliveryContent(args);
+            setContent(nextContent as typeof deliveryContent);
+            return nextContent;
+          }}
+        />
+      );
+    }
+
+    render(<HandoffPanelHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load approved files" }));
+    await waitFor(() =>
+      expect(props.onLoadDeliveryContent).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Download Cover letter export" }),
+    );
+
+    await waitFor(() =>
+      expect(props.onRecordFileDownloadRequested).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+        artifactRef: "cover-letter-artifact:hash-a",
+        artifactDigest: ARTIFACT_DIGEST,
+      }),
+    );
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+    expect(click).toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(revokeObjectUrl).toHaveBeenCalledWith("download-url"),
+    );
+  });
+
+  it("does not render answer copy controls when only test-only answer props arrive", () => {
+    const props = handlers();
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+          approvedAnswers: [
+            {
+              answerRef: "application-answer:one",
+              label: "Why are you interested?",
+              text: "I am interested because the role matches my operations work.",
+              answerDigest: "b".repeat(64),
+            },
+          ],
+        })}
+        {...props}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Copy Why are you interested?" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("records destination open requested before opening the owned job application URL", async () => {
+    const props = handlers();
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+        })}
+        {...props}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open application form" }));
+    await waitFor(() =>
+      expect(props.onRecordDestinationOpenRequested).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+      }),
+    );
+    expect(open).toHaveBeenCalledWith(
+      APPLICATION_URL,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
+  it("labels user-reported outcomes as unverified provider truth", async () => {
+    const props = handlers();
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "destination_open_requested",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+        })}
+        {...props}
+      />,
+    );
+
+    expect(
+      screen.getByText("Reported by you, not verified by the provider."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "I submitted it" }));
+    await waitFor(() =>
+      expect(props.onReportOutcome).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+        outcome: "user_reported_submitted",
+      }),
+    );
+  });
+});

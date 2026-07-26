@@ -109,6 +109,7 @@ export function PdfRasterHarnessPage(): JSX.Element {
       setPdfRasterStatus("rendering", true);
       const loadingTask = pdfjsLib.getDocument({
         data: decodeBase64Pdf(payload.pdfBase64),
+        isEvalSupported: false,
       });
       const pdf = await loadingTask.promise;
       const page = await pdf.getPage(1);

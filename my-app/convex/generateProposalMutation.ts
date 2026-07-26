@@ -1,8 +1,9 @@
 // convex/generateProposalMutation.ts
-import { action } from "./_generated/server";
+import { actionGeneric, anyApi } from "convex/server";
+import type * as GeneratedServer from "./_generated/server";
+import type * as GeneratedApi from "./_generated/api";
 import { v } from "convex/values";
 import { llmConfig } from "../config/llmConfig";
-import { internal } from "./_generated/api";
 import { ConvexError } from "convex/values";
 import { ProposalService } from "./langchain";
 import { OpenAICompatibleChatAdapter } from "./langchain/models/openai_compatible_chat_adapter";
@@ -100,9 +101,14 @@ import {
   generatePremiumCoverLetterBodyPartsWithMistral,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
   isCoverLetterPremiumPathV1Enabled,
+  premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence,
+  refreshPremiumCoverLetterFinalProvenanceForContent,
+  renderPremiumCoverLetter,
   resolvePremiumCoverLetterWriterModel,
   type CoverLetterBodyParts,
   type PremiumCoverLetterFailureTrace,
+  type PremiumCoverLetterFinalProvenance,
+  type PremiumCoverLetterQualityRepairTrace,
   type PremiumCoverLetterQualityShadowResult,
 } from "./lib/proposals/premiumCoverLetter";
 import {
@@ -118,6 +124,9 @@ import {
   hasStrictNoContextRepairViolation,
   repairProposalSentenceLocally,
 } from "./lib/proposals/proposalEnforcement";
+
+const action = actionGeneric as typeof GeneratedServer.action;
+const internal = anyApi as unknown as typeof GeneratedApi.internal;
 
 export { getDeterministicProposalRenderPolicy };
 
@@ -558,6 +567,7 @@ type PersonalizationMode = "default" | "explicit_only";
 export type GenerateProposalArgs = {
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName?: string | null;
   jobId?: string;
   clientRunId?: string;
   proposalType:
@@ -592,6 +602,7 @@ export type GenerateProposalArgs = {
 export const generateProposalArgs = {
   jobTitle: v.string(),
   jobDescription: v.string(),
+  targetEmployerName: v.optional(v.union(v.string(), v.null())),
   jobId: v.optional(v.string()),
   clientRunId: v.optional(v.string()),
   proposalType: proposalTypeChoice,
@@ -994,6 +1005,15 @@ export type CoverLetterRoutingTelemetry = {
   premium_path_saved: boolean | null;
   premium_validation_passed: boolean | null;
   premium_quality_shadow_passed: boolean | null;
+  premium_quality_repair_enabled: boolean | null;
+  premium_quality_repair_eligible: boolean | null;
+  premium_quality_repair_attempted: boolean | null;
+  premium_quality_repair_outcome: string | null;
+  premium_quality_repair_rejection_category: string | null;
+  premium_quality_repair_before: PremiumCoverLetterQualityShadowResult | null;
+  premium_quality_repair_after: PremiumCoverLetterQualityShadowResult | null;
+  premium_final_provenance_status: string | null;
+  premium_verified_candidate_fact_count: number | null;
   premium_quality_gate_passed: boolean | null;
 };
 
@@ -3128,6 +3148,7 @@ function buildProposalRoutingMetadata(args: {
   attemptedPath: ProposalGenerationPathLabel;
   premiumValidationPassed?: boolean | null;
   premiumQualityShadowPassed?: boolean | null;
+  premiumQualityRepair?: PremiumCoverLetterQualityRepairTrace | null;
 }) {
   const premiumPathSaved =
     args.attemptedPath === "premium path saved" &&
@@ -3326,6 +3347,7 @@ export function buildCoverLetterRoutingTelemetry(args: {
   usedFallback?: boolean;
   premiumValidationPassed?: boolean | null;
   premiumQualityShadowPassed?: boolean | null;
+  premiumQualityRepair?: PremiumCoverLetterQualityRepairTrace | null;
 }): CoverLetterRoutingTelemetry {
   const resolvedStructuredRolloutMode =
     resolveStructuredMistralCoverLetterRolloutMode(args.rolloutValue);
@@ -3398,6 +3420,33 @@ export function buildCoverLetterRoutingTelemetry(args: {
       : null,
     premium_quality_shadow_passed: premiumPathAttempted
       ? args.premiumQualityShadowPassed ?? null
+      : null,
+    premium_quality_repair_enabled: premiumPathAttempted
+      ? args.premiumQualityRepair?.enabled ?? null
+      : null,
+    premium_quality_repair_eligible: premiumPathAttempted
+      ? args.premiumQualityRepair?.eligible ?? null
+      : null,
+    premium_quality_repair_attempted: premiumPathAttempted
+      ? args.premiumQualityRepair?.attempted ?? null
+      : null,
+    premium_quality_repair_outcome: premiumPathAttempted
+      ? args.premiumQualityRepair?.outcome ?? null
+      : null,
+    premium_quality_repair_rejection_category: premiumPathAttempted
+      ? args.premiumQualityRepair?.rejectionCategory ?? null
+      : null,
+    premium_quality_repair_before: premiumPathAttempted
+      ? args.premiumQualityRepair?.qualityBefore ?? null
+      : null,
+    premium_quality_repair_after: premiumPathAttempted
+      ? args.premiumQualityRepair?.qualityAfter ?? null
+      : null,
+    premium_final_provenance_status: premiumPathAttempted
+      ? args.premiumQualityRepair?.finalProvenanceStatus ?? null
+      : null,
+    premium_verified_candidate_fact_count: premiumPathAttempted
+      ? args.premiumQualityRepair?.verifiedCandidateFactCount ?? null
       : null,
     premium_quality_gate_passed: null,
   };
@@ -5244,6 +5293,9 @@ function isClosingDiscussionSentence(sentence: string): boolean {
     /^i\s+would\s+(?:be\s+glad|be\s+happy|welcome)\b[^.!?\n]{0,120}\bdiscuss\s+my\s+interest\s+in\s+(?:the\s+)?(?:role|position|opportunity)\b/.test(
       normalized,
     ) ||
+    /^i\s+would\s+(?:be\s+glad|be\s+happy|welcome(?:\s+the\s+(?:opportunity|chance))?)\b[^.!?\n]{0,120}\bdiscuss\s+(?:the\s+)?(?:role|position|opportunity)\s+further\b/.test(
+      normalized,
+    ) ||
     /^merci\b[^.!?\n]{0,120}\b(?:ma candidature|l['’]attention portee a ma candidature)\b/.test(
       normalized,
     ) ||
@@ -5293,9 +5345,13 @@ const GENERIC_ROLE_SUMMARY_SENTENCE_PATTERNS = [
   /^working remotely\b/i,
 ] as const;
 const NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN =
-  /^(?:the\s+(?:role|position)\b|the\s+role['’]s\s+focus\b|the\s+responsibilities?\s+of\b|this\s+(?:includes|involves|requires)\b)/i;
+  /^(?:the\s+(?:role|position)\b|the\s+role['’]s\s+focus\b|the\s+responsibilities?\s+of\b|this\s+(?:includes|involves|requires)\b|(?:ce|cet|cette|le|la|les)\s+(?:r[oô]le|poste|mission|missions?|travail)\b)/iu;
 const NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN =
-  /\b(?:coordinating|coordinate|managing|manage|supporting|support|drafting|draft|tracking|track|maintaining|maintain|leveraging|leverage|collaborating|collaborate|campaigns?|client\s+communications?|business\s+development|proposals?|pitch\s+materials?|marketing\s+collateral|credentials|brochures?|crm|engagement|content|events?|sector\s+trends|strategies|client\s+outreach|teams?|patrolling|patrol|monitoring|monitor|surveillance|incidents?|incident\s+reporting|logs?|log|hotel\s+policies|security\s+standards|safety\s+concerns?|guest\s+services?|property|departments?)\b/i;
+  /\b(?:coordinating|coordinate|managing|manage|supporting|support|drafting|draft|tracking|track|maintaining|maintain|leveraging|leverage|collaborating|collaborate|campaigns?|client\s+communications?|business\s+development|proposals?|pitch\s+materials?|marketing\s+collateral|credentials|brochures?|crm|engagement|content|events?|sector\s+trends|strategies|client\s+outreach|teams?|patrolling|patrol|monitoring|monitor|surveillance|incidents?|incident\s+reporting|logs?|log|hotel\s+policies|security\s+standards|safety\s+concerns?|guest\s+services?|property|departments?|coordination|communication|suivi|organisation|t[aâ]ches?|[ée]changes?|gestion|planification|dossiers?|relances?|op[ée]rations?|flux(?:\s+de\s+travail)?|[ée]quipes?)\b/iu;
+const NO_CONTEXT_FRENCH_ROLE_SURFACE_OPENER_PATTERN =
+  /^(?:(?:ce|cet|cette|le|la|les)\s+(?:r[oô]le|poste|mission|missions?|travail)(?=\s|$|[,.!?;:])|je\s+suis\s+int[eé]ress[ée]e?\s+par\s+(?:ce|cet|cette|le|la)\s+(?:r[oô]le|poste|mission|travail)(?=\s|$|[,.!?;:])|il\s+(?:implique|demande|exige|repose\s+sur|semble\s+(?:impliquer|demander))\b|elle\s+(?:implique|demande|exige|repose\s+sur|semble\s+(?:impliquer|demander))\b|une\s+(?:gestion|organisation|communication|coordination|planification)(?=\s|$|[,.!?;:])|un\s+suivi(?=\s|$|[,.!?;:]))/iu;
+const NO_CONTEXT_FRENCH_OPERATIONAL_DETAIL_PATTERN =
+  /(?:coordination|communication|suivi|organisation|t[aâ]ches?|[ée]changes?|gestion|planification|dossiers?|relances?|op[ée]rations?|flux(?:\s+de\s+travail)?|[ée]quipes?|rigueur)/iu;
 const LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS = [
   /^the role at\b/i,
   /^the role of\b/i,
@@ -5717,10 +5773,15 @@ function sentenceLooksGroundedNoContextRoleSummarySentence(
   sentence: string,
 ): boolean {
   const normalized = compactWhitespace(sentence);
+  const normalizedConstraint = normalizeProposalConstraintText(sentence);
+  const looksFrenchRoleSurface =
+    NO_CONTEXT_FRENCH_ROLE_SURFACE_OPENER_PATTERN.test(normalizedConstraint) &&
+    NO_CONTEXT_FRENCH_OPERATIONAL_DETAIL_PATTERN.test(normalizedConstraint);
   if (
     !normalized ||
     sentenceLooksNumericResidue(normalized) ||
-    !NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN.test(normalized)
+    (!NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN.test(normalized) &&
+      !looksFrenchRoleSurface)
   ) {
     return false;
   }
@@ -5728,7 +5789,8 @@ function sentenceLooksGroundedNoContextRoleSummarySentence(
   const factTokens = extractSentenceFactTokens(sentence);
   return (
     factTokens.length >= 5 &&
-    NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN.test(normalized)
+    (NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN.test(normalized) ||
+      looksFrenchRoleSurface)
   );
 }
 
@@ -5784,7 +5846,8 @@ function countNoContextGroundedOperationalSentences(
       return (
         groundedSentenceIndices.has(otherIndex) ||
         groundedRoleSummaryIndices.has(otherIndex) ||
-        sentenceLooksSaveableWorkSurfaceSentence(otherSentence)
+        sentenceLooksSaveableWorkSurfaceSentence(otherSentence) ||
+        sentenceLooksGroundedNoContextSupportSentence(otherSentence)
       );
     });
     if (hasGroundedPartner) {
@@ -7317,12 +7380,105 @@ function coverLetterBodyHasCvBackedCandidateEvidence(body: string): boolean {
   );
 }
 
+function premiumCoverLetterFinalProvenanceSatisfiesSubstantiveBody(args: {
+  provenance?: PremiumCoverLetterFinalProvenance;
+  finalText: string;
+}): boolean {
+  const provenance = args.provenance;
+  if (
+    !provenance ||
+    (provenance.status !== "validated_final_text" &&
+      provenance.status !== "validated_after_structured_repair")
+  ) {
+    return false;
+  }
+
+  const verifiedCvFactIds = new Set(
+    provenance.candidateFacts
+      .filter((fact) => fact.source === "cv")
+      .map((fact) => fact.id)
+      .filter((id) => provenance.verifiedCandidateFactIds.includes(id)),
+  );
+  if (verifiedCvFactIds.size === 0) {
+    return false;
+  }
+
+  const visibleSentences = new Set(
+    splitParagraphs(args.finalText)
+      .flatMap((paragraph) => splitSentences(paragraph))
+      .map((sentence) => compactWhitespace(sentence))
+      .filter(Boolean),
+  );
+  if (visibleSentences.size === 0) {
+    return false;
+  }
+
+  const sentenceLooksVerifiedPremiumCvEvidence = (sentence: string): boolean => {
+    const normalized = compactWhitespace(sentence);
+    if (
+      !normalized ||
+      sentenceLooksNumericResidue(normalized) ||
+      sentenceLooksMalformedFragment(normalized) ||
+      sentenceLooksGenericRoleSummary(normalized) ||
+      sentenceLooksUnsupportedRequirementLeakage(normalized) ||
+      containsForbiddenProposalBridge(normalized)
+    ) {
+      return false;
+    }
+
+    if (sentenceLooksCandidateBackedCvGroundedSentence(normalized)) {
+      return true;
+    }
+
+    const hasConcreteCvWorkDetail =
+      EVIDENCE_ACTION_VERB_PATTERN.test(normalized) ||
+      /\b(?:at|with)\s+[A-Z][\w&'.-]+/u.test(sentence) ||
+      /\b\d+(?:[%+]|k\b|x\b|\s*(?:percent|months?|years?|days?|hours?))\b/i.test(
+        normalized,
+      );
+    if (!hasConcreteCvWorkDetail) {
+      return false;
+    }
+
+    if (sentenceHasCvBackedCandidateEvidenceAnchor(sentence)) {
+      return true;
+    }
+
+    return /^(?:that|this)\s+work\s+included\b/i.test(normalized);
+  };
+
+  const verifiedCandidateSentences = new Set<string>();
+  for (const section of Object.values(provenance.sections)) {
+    if (
+      !section.verifiedCandidateFactIds.some((factId) =>
+        verifiedCvFactIds.has(factId),
+      )
+    ) {
+      continue;
+    }
+
+    for (const sentence of splitSentences(section.text)) {
+      const normalized = compactWhitespace(sentence);
+      if (
+        normalized &&
+        visibleSentences.has(normalized) &&
+        sentenceLooksVerifiedPremiumCvEvidence(sentence)
+      ) {
+        verifiedCandidateSentences.add(normalized);
+      }
+    }
+  }
+
+  return verifiedCandidateSentences.size >= 2;
+}
+
 function assertCvBackedCoverLetterHasCandidateEvidence(args: {
   content: string;
   format: OutputFormat;
   outputLanguage: ProposalOutputLanguage;
   candidateName?: string;
   requiresCandidateEvidence?: boolean;
+  premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): void {
   if (args.format !== "cover_letter" || !args.requiresCandidateEvidence) {
@@ -7336,6 +7492,14 @@ function assertCvBackedCoverLetterHasCandidateEvidence(args: {
     candidateName: args.candidateName,
   });
   if (coverLetterBodyHasCvBackedCandidateEvidence(body)) {
+    return;
+  }
+  if (
+    premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence({
+      provenance: args.premiumFinalProvenance,
+      finalText: body,
+    })
+  ) {
     return;
   }
 
@@ -8443,6 +8607,7 @@ function assertSavedOutputHasSubstantiveBody(args: {
   candidateName?: string;
   noContextMode: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): void {
   const body = stripTrailingClosingDiscussion(
@@ -8477,6 +8642,30 @@ function assertSavedOutputHasSubstantiveBody(args: {
         };
       }
       return;
+    }
+    if (args.format === "cover_letter" && !args.noContextMode) {
+      const provenanceBody = stripTrailingClosingDiscussion(
+        cleanProposalBodyText({
+          content: args.content,
+          candidateName: args.candidateName,
+          dropDuplicateSentences: false,
+          format: args.format,
+        }),
+      );
+      if (
+        premiumCoverLetterFinalProvenanceSatisfiesSubstantiveBody({
+          provenance: args.premiumFinalProvenance,
+          finalText: provenanceBody,
+        })
+      ) {
+        if (args.debugTrace) {
+          args.debugTrace.substantiveBodyAssertion = {
+            body: provenanceBody,
+            passed: true,
+          };
+        }
+        return;
+      }
     }
     if (
       args.format === "cover_letter" &&
@@ -9523,6 +9712,7 @@ export function finalizeProposalForSave(args: {
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  finalSentenceOverride?: string | null;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
   if (args.format !== "cover_letter" && args.format !== "application_message") {
@@ -9564,15 +9754,20 @@ export function finalizeProposalForSave(args: {
             debugTrace: args.debugTrace,
           })
         : selectedBody;
+  const bodyWithFinalSentenceOverride =
+    args.format === "cover_letter" && args.finalSentenceOverride !== undefined
+      ? stripTrailingClosingDiscussion(bodyForBoundaryRendering)
+      : bodyForBoundaryRendering;
 
   try {
     const rendered = applyDeterministicProposalBoundaries({
-      body: bodyForBoundaryRendering,
+      body: bodyWithFinalSentenceOverride,
       format: args.format,
       outputLanguage: args.outputLanguage,
       candidateName: args.candidateName,
       voicePreset: args.voicePreset,
       noContextMode: args.noContextMode,
+      finalSentenceOverride: args.finalSentenceOverride,
     });
     if (args.debugTrace) {
       args.debugTrace.deterministicBoundaryApplication = {
@@ -9598,6 +9793,8 @@ export function finalizeProposalForPersistence(args: {
   noContextMode: boolean;
   requiresCandidateEvidence?: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  finalSentenceOverride?: string | null;
+  premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
   const acceptanceMode =
@@ -9717,6 +9914,7 @@ export function finalizeProposalForPersistence(args: {
           candidateName: args.candidateName,
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
+          finalSentenceOverride: args.finalSentenceOverride,
         });
         guarded = applyFinalSavedOutputBridgeGuard({
           content: guarded,
@@ -9781,6 +9979,7 @@ export function finalizeProposalForPersistence(args: {
         candidateName: args.candidateName,
         noContextMode: args.noContextMode,
         acceptanceMode,
+        premiumFinalProvenance: args.premiumFinalProvenance,
         debugTrace: args.debugTrace,
       });
     } catch (error) {
@@ -9812,6 +10011,7 @@ export function finalizeProposalForPersistence(args: {
         candidateName: args.candidateName,
         noContextMode: args.noContextMode,
         acceptanceMode,
+        premiumFinalProvenance: args.premiumFinalProvenance,
         debugTrace: args.debugTrace,
       });
       usedFailOpenPersistenceFallback = true;
@@ -9834,6 +10034,7 @@ export function finalizeProposalForPersistence(args: {
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
     requiresCandidateEvidence: args.requiresCandidateEvidence,
+    premiumFinalProvenance: args.premiumFinalProvenance,
     debugTrace: args.debugTrace,
   });
 
@@ -9881,15 +10082,8 @@ function buildPremiumQualityShadowBodyPartsFromSavedContent(args: {
     .map((paragraph) => compactWhitespace(paragraph))
     .filter(Boolean);
 
-  if (paragraphs.length < 4) {
-    return args.fallbackBodyParts;
-  }
-
-  const [opening, proofBlock, ...remaining] = paragraphs;
-  const closeLine = remaining.pop();
-  if (!opening || !proofBlock || !closeLine || remaining.length === 0) {
-    return args.fallbackBodyParts;
-  }
+  const [opening = "", proofBlock = "", ...remaining] = paragraphs;
+  const closeLine = remaining.length > 0 ? remaining.pop() ?? "" : "";
 
   return {
     opening,
@@ -9899,12 +10093,61 @@ function buildPremiumQualityShadowBodyPartsFromSavedContent(args: {
   };
 }
 
+const PREMIUM_STRUCTURED_SECTION_ORDER = [
+  "opening",
+  "proofBlock",
+  "employerValueBlock",
+  "closeLine",
+] as const satisfies readonly (keyof CoverLetterBodyParts)[];
+
+function hasTrustedStructuredPremiumPersistenceSource(args: {
+  content: string;
+  bodyParts: CoverLetterBodyParts | undefined;
+  finalProvenance: PremiumCoverLetterFinalProvenance | undefined;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+}): args is {
+  content: string;
+  bodyParts: CoverLetterBodyParts;
+  finalProvenance: PremiumCoverLetterFinalProvenance;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+} {
+  if (
+    !args.bodyParts ||
+    !args.finalProvenance ||
+    ![
+      "validated_final_text",
+      "validated_after_structured_repair",
+    ].includes(args.finalProvenance.status)
+  ) {
+    return false;
+  }
+  const canonicalContent = renderPremiumCoverLetter({
+    bodyParts: args.bodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  }).content;
+  if (args.content !== canonicalContent) {
+    return false;
+  }
+  return PREMIUM_STRUCTURED_SECTION_ORDER.every(
+    (section) =>
+      normalizeProposalConstraintText(args.bodyParts![section]) ===
+      normalizeProposalConstraintText(
+        args.finalProvenance!.sections[section].text,
+      ),
+  );
+}
+
 export function finalizePremiumCoverLetterPayloadForPersistence(args: {
   payload: {
     content: string;
     sections: Array<{ type: "text"; content: string }>;
     bodyParts?: CoverLetterBodyParts;
     qualityShadow?: PremiumCoverLetterQualityShadowResult;
+    qualityRepair?: PremiumCoverLetterQualityRepairTrace;
+    finalProvenance?: PremiumCoverLetterFinalProvenance;
   };
   format: OutputFormat;
   outputLanguage: ProposalOutputLanguage;
@@ -9917,21 +10160,67 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
   sections: Array<{ type: "text"; content: string }>;
   bodyParts?: CoverLetterBodyParts;
   qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  qualityRepair?: PremiumCoverLetterQualityRepairTrace;
+  finalProvenance?: PremiumCoverLetterFinalProvenance;
 } {
   const noContextMode =
     args.format === "cover_letter" && !args.hasCandidateContext;
-  const content = finalizeProposalForPersistence({
+  const structuredSource = {
     content: args.payload.content,
-    format: args.format,
+    bodyParts: args.payload.bodyParts,
+    finalProvenance: args.payload.finalProvenance,
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
-    voicePreset: args.voicePreset,
-    noContextMode,
-    requiresCandidateEvidence:
-      args.format === "cover_letter" && args.hasCandidateContext,
-    debugTrace: args.debugTrace,
-  });
+  };
+  const trustedStructuredSource =
+    hasTrustedStructuredPremiumPersistenceSource(structuredSource);
+  const content = trustedStructuredSource
+    ? renderPremiumCoverLetter({
+        bodyParts: structuredSource.bodyParts,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+      }).content
+    : finalizeProposalForPersistence({
+        content: args.payload.content,
+        format: args.format,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+        voicePreset: args.voicePreset,
+        noContextMode,
+        finalSentenceOverride: args.payload.bodyParts?.closeLine,
+        requiresCandidateEvidence:
+          args.format === "cover_letter" && args.hasCandidateContext,
+        premiumFinalProvenance: args.payload.finalProvenance,
+        debugTrace: args.debugTrace,
+      });
+  if (trustedStructuredSource) {
+    assertCvBackedCoverLetterHasCandidateEvidence({
+      content,
+      format: args.format,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+      requiresCandidateEvidence:
+        args.format === "cover_letter" && args.hasCandidateContext,
+      premiumFinalProvenance: structuredSource.finalProvenance,
+      debugTrace: args.debugTrace,
+    });
+    if (args.debugTrace) {
+      args.debugTrace.deterministicBoundaryApplication = { content };
+      args.debugTrace.finalOutput = content;
+    }
+  }
 
+  const finalProvenance = args.payload.finalProvenance
+    ? refreshPremiumCoverLetterFinalProvenanceForContent({
+        provenance: args.payload.finalProvenance,
+        finalText: sanitizeGeneratedProposalBody({
+          content,
+          format: args.format,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+        }),
+      })
+    : undefined;
   const qualityShadow = args.payload.bodyParts
     ? evaluatePremiumCoverLetterQualityShadow({
         bodyParts: buildPremiumQualityShadowBodyPartsFromSavedContent({
@@ -9942,14 +10231,30 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
           fallbackBodyParts: args.payload.bodyParts,
         }),
         content,
+        contextClass:
+          args.payload.finalProvenance?.contextClass ??
+          (args.format === "cover_letter" && !args.hasCandidateContext
+            ? "no_cv"
+            : undefined),
       })
     : args.payload.qualityShadow;
+  const qualityRepair =
+    args.payload.qualityRepair && finalProvenance
+      ? {
+          ...args.payload.qualityRepair,
+          finalProvenanceStatus: finalProvenance.status,
+          verifiedCandidateFactCount:
+            finalProvenance.verifiedCandidateFactIds.length,
+        }
+      : args.payload.qualityRepair;
 
   return {
     ...args.payload,
     content,
     sections: [{ type: "text", content }],
     qualityShadow,
+    qualityRepair,
+    finalProvenance,
   };
 }
 
@@ -10659,10 +10964,14 @@ export async function handleGenerateProposal(
       outputFormat,
     });
   const normalizedSourceJobDescription = compactWhitespace(args.jobDescription);
+  const normalizedTargetEmployerName = args.targetEmployerName?.trim();
   const proposalMetadataBase = {
     platform: "web",
     ...(normalizedSourceJobDescription
       ? { sourceJobDescription: args.jobDescription }
+      : {}),
+    ...(normalizedTargetEmployerName
+      ? { targetEmployerName: normalizedTargetEmployerName }
       : {}),
     voicePreset: resolvedVoicePreset,
     requestedVoicePreset:
@@ -10681,7 +10990,7 @@ export async function handleGenerateProposal(
     proposalType: outputFormat,
   };
   let residualVerifierWarningTag: string | null = null;
-  let proposalContent: string;
+  let proposalContent: string | undefined;
   let structuredPersistencePayload: StructuredCoverLetterAttemptResult | null =
     null;
   let premiumPersistencePayload: {
@@ -10692,6 +11001,8 @@ export async function handleGenerateProposal(
     }>;
     bodyParts?: CoverLetterBodyParts;
     qualityShadow?: PremiumCoverLetterQualityShadowResult;
+    qualityRepair?: PremiumCoverLetterQualityRepairTrace;
+    finalProvenance?: PremiumCoverLetterFinalProvenance;
   } | null = null;
   let actualModelType: ProposalModelType = requestedModelType;
   let actualModelName: string =
@@ -10736,6 +11047,7 @@ export async function handleGenerateProposal(
   let premiumMistralCoverLetterAttempted = false;
   let premiumValidationPassed: boolean | null = null;
   let premiumQualityShadowPassed: boolean | null = null;
+  let premiumQualityRepair: PremiumCoverLetterQualityRepairTrace | null = null;
   let coverLetterRoutingTelemetryLogged = false;
   const mistralDiagnostics = createMistralDiagnosticsAccumulator();
   const getExecutionProvenance = (): ProposalExecutionProvenance => ({
@@ -10758,10 +11070,18 @@ export async function handleGenerateProposal(
   });
   const getGenerateProposalResult = () => ({
     proposalId,
-    proposalContent,
+    proposalContent: requireProposalContent(),
     ...getExecutionProvenance(),
     routing: getExecutionRoutingSummary(),
   });
+  const requireProposalContent = (): string => {
+    if (proposalContent === undefined) {
+      throw new ConvexError(
+        "Proposal generation reached persistence without generated content.",
+      );
+    }
+    return proposalContent;
+  };
   let mistralDiagnosticsLogged = false;
   const emitMistralDiagnosticsSummary = (
     outcome: "success" | "failure",
@@ -10812,6 +11132,7 @@ export async function handleGenerateProposal(
         usedFallback,
         premiumValidationPassed,
         premiumQualityShadowPassed,
+        premiumQualityRepair,
       }),
     );
     coverLetterRoutingTelemetryLogged = true;
@@ -10878,6 +11199,7 @@ export async function handleGenerateProposal(
       premiumPersistencePayload = null;
       premiumValidationPassed = null;
       premiumQualityShadowPassed = null;
+      premiumQualityRepair = null;
       residualVerifierWarningTag = null;
       try {
         await ensureGenerationActive();
@@ -10932,6 +11254,7 @@ export async function handleGenerateProposal(
                   outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  targetEmployerName: args.targetEmployerName,
                   candidateName,
                   generationControlsBlock,
                   companyValuesPack,
@@ -10945,17 +11268,21 @@ export async function handleGenerateProposal(
                       failure,
                     });
                   },
-                  writer: ({ prompt }) =>
+                  writer: ({ prompt, schema }) =>
                     generatePremiumCoverLetterBodyPartsWithOpenAI({
                       apiKey,
                       prompt,
                       writerModel: premiumCoverLetterWriterModel,
+                      schema,
                       signal: cancellationContext?.signal,
                     }),
                 });
               premiumValidationPassed = premiumPersistencePayload !== null;
               actualModelName = premiumCoverLetterWriterModel;
             } catch (premiumError) {
+              if (isProposalGenerationCanceledError(premiumError)) {
+                throw premiumError;
+              }
               console.warn(
                 isControlledPremiumMistralGptFallback
                   ? "Controlled GPT premium fallback failed after Mistral premium validation failure."
@@ -11037,6 +11364,7 @@ export async function handleGenerateProposal(
                   outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  targetEmployerName: args.targetEmployerName,
                   candidateName,
                   generationControlsBlock,
                   companyValuesPack,
@@ -11078,6 +11406,9 @@ export async function handleGenerateProposal(
               premiumValidationPassed = premiumPersistencePayload !== null;
               actualModelName = qwenPremiumCoverLetterWriterModel;
             } catch (premiumError) {
+              if (isProposalGenerationCanceledError(premiumError)) {
+                throw premiumError;
+              }
               const qwenDiagnostics =
                 buildQwenPremiumOuterDiagnostics(premiumError);
               if (qwenDiagnostics) {
@@ -11208,7 +11539,10 @@ export async function handleGenerateProposal(
               });
               proposalContent = proposal.content;
               actualModelName = proposal.metadata.modelName;
-            } else if (outputFormat === "application_message") {
+            } else if (
+              outputFormat === "application_message" ||
+              outputFormat === "cover_letter"
+            ) {
               const proposal = await proposalService.generateTextWithFallbacks(
                 prompt,
                 cancellationContext?.signal
@@ -11254,6 +11588,7 @@ export async function handleGenerateProposal(
                   outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  targetEmployerName: args.targetEmployerName,
                   candidateName,
                   generationControlsBlock,
                   companyValuesPack,
@@ -11278,6 +11613,9 @@ export async function handleGenerateProposal(
                 });
               premiumValidationPassed = premiumPersistencePayload !== null;
             } catch (premiumError) {
+              if (isProposalGenerationCanceledError(premiumError)) {
+                throw premiumError;
+              }
               console.warn(
                 "Premium Mistral cover letter path failed; falling back to existing Mistral generation.",
                 premiumError,
@@ -11753,6 +12091,7 @@ export async function handleGenerateProposal(
           });
           premiumQualityShadowPassed =
             premiumPersistencePayload.qualityShadow?.passed ?? null;
+          premiumQualityRepair = premiumPersistencePayload.qualityRepair ?? null;
           proposalContent = premiumPersistencePayload.content;
           routingTrace.executedPath = "structured";
           routingTrace.fallbackReason =
@@ -11783,12 +12122,21 @@ export async function handleGenerateProposal(
               attemptedPath: attemptedGenerationPath,
               premiumValidationPassed,
               premiumQualityShadowPassed,
+              premiumQualityRepair,
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,
                 "premium_cover_letter_path_v1",
                 ...(premiumCoverLetterFlagEnabled
                   ? ["feature_flag:cover_letter_premium_path_v1"]
+                  : []),
+                ...(premiumQualityRepair
+                  ? [
+                      `premium_quality_repair:${premiumQualityRepair.outcome}`,
+                      ...(premiumQualityRepair.enabled
+                        ? ["feature_flag:cover_letter_quality_repair_v1"]
+                        : []),
+                    ]
                   : []),
                 toGenerationPathTag(attemptedGenerationPath),
               ],
@@ -11804,8 +12152,9 @@ export async function handleGenerateProposal(
         const noContextPersistenceMode =
           plannerResult?.context_mode === "none" ||
           plannerContextMode === "none";
+        const generatedProposalContent = requireProposalContent();
         lastFinalizationTraceArgs = {
-          content: proposalContent,
+          content: generatedProposalContent,
           format: outputFormat,
           outputLanguage,
           candidateName,
@@ -11815,7 +12164,7 @@ export async function handleGenerateProposal(
             outputFormat === "cover_letter" && hasCandidateContext,
         };
         proposalContent = finalizeProposalForPersistence({
-          content: proposalContent,
+          content: generatedProposalContent,
           format: outputFormat,
           outputLanguage,
           candidateName,

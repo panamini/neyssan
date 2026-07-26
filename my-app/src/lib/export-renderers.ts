@@ -4386,7 +4386,10 @@ function renderResumeHtml(args: {
 
   const isEditorialSidebarResume =
     args.data.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
-  const renderExperienceTitle = (item: ResumeExperienceItem): string => {
+  const renderExperienceTitle = (item: {
+    role: string;
+    company: string;
+  }): string => {
     if (!isEditorialSidebarResume) {
       return `<h3 class="entry-title">${escapeHtml(
         [item.role, item.company].filter(Boolean).join(" · "),
@@ -5990,6 +5993,7 @@ function renderProposalHtml(args: {
   const senderLines = [
     args.data.applicantHeader.name,
     args.data.applicantHeader.role,
+    args.data.applicantHeader.company,
     args.data.contactLine
       ? normalizeLocaleTypography(args.data.contactLine, locale)
       : "",
@@ -6610,6 +6614,7 @@ export async function buildProposalDocxBuffer(args: {
   const locale = args.data.locale;
   const profile = resolveProposalExportProfile({
     mode: "styled",
+    pageSize: args.data.pageSize,
     proposalTemplateId: args.data.templateId,
     stylePreset: args.stylePreset,
   });
@@ -6633,6 +6638,9 @@ export async function buildProposalDocxBuffer(args: {
     profile.canonical.appearance.theme.ink,
   );
   const docxTokens = resolveProposalDocxSurfaceTokens(profile.canonical);
+  const usesCanonicalCoverLetterHierarchy =
+    args.data.templateId === "workshop_proposal_margin" ||
+    args.data.templateId === "modernist_signal";
   const docxDefaults = {
     bodySizeHalfPt: docxTokens.bodySizeHalfPt,
     bodyLineTwip: docxTokens.bodyLineTwip,
@@ -6659,6 +6667,7 @@ export async function buildProposalDocxBuffer(args: {
     const senderLines = [
       args.data.applicantHeader.name,
       args.data.applicantHeader.role,
+      args.data.applicantHeader.company,
       args.data.contactLine
         ? normalizeLocaleTypography(args.data.contactLine, locale)
         : "",
@@ -6692,7 +6701,9 @@ export async function buildProposalDocxBuffer(args: {
         normalizeLocaleTypography(args.data.letterDate, locale),
         docxDefaults,
         {
-          alignment: AlignmentType.RIGHT,
+          alignment: usesCanonicalCoverLetterHierarchy
+            ? AlignmentType.LEFT
+            : AlignmentType.RIGHT,
           font: bodyFont,
           line: docxTokens.compactLineTwip,
           size: docxTokens.metaSizeHalfPt,
@@ -6739,7 +6750,9 @@ export async function buildProposalDocxBuffer(args: {
           bold: true,
           font: headingFont,
           line: docxTokens.compactLineTwip,
-          size: docxTokens.subjectSizeHalfPt,
+          size: usesCanonicalCoverLetterHierarchy
+            ? docxTokens.bodySizeHalfPt
+            : docxTokens.subjectSizeHalfPt,
           spacingAfter: docxTokens.sectionGapTwip,
         },
       ),
@@ -6839,6 +6852,7 @@ export async function buildProposalDocxBuffer(args: {
       {
         properties: {
           page: {
+            size: docxTokens.pageSizeTwip,
             margin: docxTokens.pageMarginsTwip,
           },
         },
