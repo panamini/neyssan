@@ -2,17 +2,56 @@
 
 FastAPI service that parses CVs and returns a normalized JSON payload aligned with our Convex canonical shape.
 
-## Quick Start (local)
+## First-time collaborator setup
+
+`run.sh` is the development entry point; it is not a production launcher.
+From a fresh clone:
+
+```bash
+cp .env.example .env.local
+# Fill CONVEX_TEAM and CONVEX_PROJECT with the shared non-secret project slugs.
+npm ci --prefix my-app
+```
+
+Start the local Docker engine before continuing:
+
+- macOS: start Docker Desktop.
+- Linux: start the local Docker daemon (for example,
+  `sudo systemctl start docker`).
+- WSL2: start Docker Desktop and enable integration for the WSL2 distribution.
+
+Then use the one canonical lifecycle:
+
+```bash
+./run.sh doctor local-fast
+./run.sh local-fast
+./run.sh status
+./run.sh down
+```
+
+`doctor` is read-only. If dependencies or Docker are unavailable, it names the
+failed prerequisite and prints the exact remediation without installing or
+starting anything.
+
+`CONVEX_TEAM` and `CONVEX_PROJECT` are project identifiers, not secrets. Keep
+real API keys and personal tokens out of git.
+
+The root `.env.local` is the canonical operator configuration. Keep
+`my-app/.env.local` limited to app/Vite values as documented in
+`my-app/.env.local.example`.
+
+## Daily local commands
 
 ```bash
 ./run.sh doctor local-fast   # explain missing prerequisites without starting services
-./run.sh tunnel              # stable end-to-end validation via parser.dasti.ai
 ./run.sh local-fast          # fast full-app parser development
+./run.sh status              # inspect parser, local Convex, Vite, and tracked mode
+./run.sh down                # stop only resources owned by this worktree
+./run.sh tunnel              # stable end-to-end validation via parser.dasti.ai
 ./run.sh parser-dev          # parser-only / advanced Python hacking
 ./run.sh reload-env          # refresh parser/Vite/Convex/tunnel after env changes
 ./run.sh rebuild-docker      # explicit Docker/runtime rebuild + stable image validation
-./run.sh down                # normal stop, keep images/caches/stateful installs
-./run.sh reset               # stronger cleanup for stale local dev state
+./run.sh reset               # stronger cleanup for stale owned local dev state
 ```
 
 `local-fast` is the daily parser-development mode:
@@ -22,19 +61,6 @@ FastAPI service that parses CVs and returns a normalized JSON payload aligned wi
 - local Convex actions also resolve the local parser
 - export worker dependencies stay on the image-installed Linux runtime
 - normal Python parser edits do not require Docker rebuild
-
-First-time collaborators need a private root `.env.local` before `local-fast` can
-start local Convex:
-
-```bash
-cp .env.example .env.local
-# Fill CONVEX_TEAM and CONVEX_PROJECT with the shared Convex slugs.
-./run.sh doctor local-fast
-./run.sh local-fast
-```
-
-`CONVEX_TEAM` and `CONVEX_PROJECT` are project identifiers, not secrets. Keep
-real API keys and personal tokens out of git.
 
 Use `tunnel` when you want stable image-runtime validation against the edge path.
 

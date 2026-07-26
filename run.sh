@@ -634,8 +634,11 @@ doctor_check_platform() {
 doctor_check_file() {
   local path="${1:?path required}"
   local label="${2:?label required}"
+  local remediation="${3:-}"
   if [[ -f "${path}" ]]; then
     doctor_pass "${label} is available"
+  elif [[ -n "${remediation}" ]]; then
+    doctor_fail "${label} is missing; ${remediation}"
   else
     doctor_fail "${label} is missing"
   fi
@@ -644,8 +647,11 @@ doctor_check_file() {
 doctor_check_executable() {
   local path="${1:?path required}"
   local label="${2:?label required}"
+  local remediation="${3:-}"
   if [[ -x "${path}" ]]; then
     doctor_pass "${label} is available"
+  elif [[ -n "${remediation}" ]]; then
+    doctor_fail "${label} is missing or not executable; ${remediation}"
   else
     doctor_fail "${label} is missing or not executable"
   fi
@@ -1430,7 +1436,21 @@ doctor_check_docker() {
   if docker info >/dev/null 2>&1; then
     doctor_pass "Docker daemon is reachable"
   else
-    doctor_fail "Docker daemon is unavailable"
+    case "$(uname -s 2>/dev/null || true)" in
+      Darwin)
+        doctor_fail "Docker daemon is unavailable; start Docker Desktop, then rerun: ./run.sh doctor ${target}"
+        ;;
+      Linux)
+        if is_wsl_runtime; then
+          doctor_fail "Docker daemon is unavailable; start Docker Desktop and enable WSL2 integration, then rerun: ./run.sh doctor ${target}"
+        else
+          doctor_fail "Docker daemon is unavailable; start the local Docker daemon (for example: sudo systemctl start docker), then rerun: ./run.sh doctor ${target}"
+        fi
+        ;;
+      *)
+        doctor_fail "Docker daemon is unavailable; start the local Docker daemon, then rerun: ./run.sh doctor ${target}"
+        ;;
+    esac
     return 0
   fi
   if doctor_docker_endpoint_is_local; then
@@ -1806,8 +1826,8 @@ doctor() {
   resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT}"
   doctor_check_file "${ROOT_DIR}/cv_parser_service/Dockerfile" "parser Dockerfile"
   doctor_check_file "${ROOT_DIR}/my-app/package.json" "frontend package manifest"
-  doctor_check_file "${ROOT_DIR}/my-app/node_modules/vite/bin/vite.js" "Vite dependency"
-  doctor_check_executable "${ROOT_DIR}/my-app/node_modules/.bin/convex" "Convex CLI dependency"
+  doctor_check_file "${ROOT_DIR}/my-app/node_modules/vite/bin/vite.js" "Vite dependency" "run: npm ci --prefix my-app"
+  doctor_check_executable "${ROOT_DIR}/my-app/node_modules/.bin/convex" "Convex CLI dependency" "run: npm ci --prefix my-app"
   doctor_check_file "${ROOT_DIR}/scripts/local-convex-supervisor.cjs" "local Convex supervisor"
   doctor_check_runtime_paths
 
@@ -3057,6 +3077,21 @@ child.unref();
   rm -f "${vite_pid_file}"
 }
 
+wait_for_vite_ready() {
+  local pid="${1:?Vite PID required}"
+  local attempt=""
+  for attempt in $(seq 1 30); do
+    if curl -fsS "http://127.0.0.1:${VITE_PORT}/" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+      return 1
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 stop_vite() {
   local VPID="${1:-}"
   stop_owned_process "${VPID}" "Vite"
@@ -3234,6 +3269,15 @@ status() {
   if [[ -n "${STACK_MODE:-}" ]]; then
     echo "stack mode:     ${STACK_MODE}"
   fi
+  if [[ -n "${VITE_PID:-}" ]] && process_is_owned_by_run_sh "${VITE_PID}"; then
+    if curl -fsS "http://127.0.0.1:${VITE_PORT}/" >/dev/null 2>&1; then
+      echo "Vite:           running (http://127.0.0.1:${VITE_PORT})"
+    else
+      echo "Vite:           tracked but unreachable"
+    fi
+  else
+    echo "Vite:           stopped"
+  fi
   echo "Vite log: ${VITE_LOG}"
   print_command_banner
 }
@@ -3350,9 +3394,11 @@ up() {
     else
       VPID="$(start_vite "${ACTIVE_ORIGIN}")"
     fi
-    sleep 2
-    if ! kill -0 "${VPID}" >/dev/null 2>&1; then
-      echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
+    if ! wait_for_vite_ready "${VPID}"; then
+      echo "[run] ERROR: Vite did not become reachable (see ${VITE_LOG})" >&2
+      stop_vite "${VPID}" || true
+      stop_convex "${CPID}" || true
+      stop_parser || true
       exit 1
     fi
   fi

@@ -87,8 +87,24 @@ if test -n "\${FAKE_SCANNER_LOG:-}"; then printf '%s\n' "${name} $*" >> "\${FAKE
 test -n "\${FAKE_SCANNER_PID:-}" && printf '%s\n' "\${FAKE_SCANNER_PID}"
 exit 0
 `,
-    );
+      );
   }
+  writeExecutable(
+    join(binDirectory, "curl"),
+    `#!/bin/sh
+case "$*" in
+  *"127.0.0.1:\${FAKE_VITE_PORT:-5173}/"*)
+    test "\${FAKE_VITE_READY:-0}" = 1
+    ;;
+  *"127.0.0.1:8001/ready"*)
+    printf '200\\n'
+    ;;
+  *)
+    printf '000\\n'
+    ;;
+esac
+`,
+  );
 
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return { root, binDirectory, dockerLog, scannerLog };
@@ -208,6 +224,34 @@ test("down refuses a parser container owned by another worktree", (t) => {
   assert.equal(existsSync(stateFile), true);
   assert.match(`${result.stdout}${result.stderr}`, /refusing to .*unowned parser container/i);
   assert.doesNotMatch(readFileSync(fixture.dockerLog, "utf8"), /^stop /mu);
+});
+
+test("down is convergent when no tracked stack exists", (t) => {
+  const fixture = createFixture(t);
+
+  const first = runCommand(fixture, "down");
+  const second = runCommand(fixture, "down");
+
+  assert.equal(first.status, 0, `${first.stdout}${first.stderr}`);
+  assert.equal(second.status, 0, `${second.stdout}${second.stderr}`);
+  assert.match(first.stdout, /down: done/i);
+  assert.match(second.stdout, /down: done/i);
+  assert.equal(existsSync(fixture.dockerLog), false);
+});
+
+test("status reports a tracked reachable Vite server", (t) => {
+  const fixture = createFixture(t);
+  const sleeper = startSleeper(t);
+  const expectedOwner = ownerId(fixture.root);
+  writeState(fixture.root, { VITE_PID: String(sleeper.pid) });
+
+  const result = runCommand(fixture, "status", {
+    FAKE_PS_COMMAND: `twoweeks-run-sh-${expectedOwner.slice(0, 16)}:vite`,
+    FAKE_VITE_READY: "1",
+  });
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /Vite:\s+running \(http:\/\/127\.0\.0\.1:5173\)/i);
 });
 
 test("run.sh exposes no global process-kill recovery path", () => {
