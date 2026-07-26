@@ -39,6 +39,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./cv_parser_service/Dockerfile
           push: false
           load: true
           tags: ${{ env.IMAGE_NAME }}:test
@@ -54,6 +55,7 @@ jobs:
             curl -sf http://127.0.0.1:8000/ready && break
             sleep 1
           done
+          curl -fsS http://127.0.0.1:8000/ready
           curl -sf http://127.0.0.1:8000/metrics | egrep 'cv_parser_ocr_engine_total|cv_parser_route_total' || true
 
       - name: Bench fixtures
@@ -76,6 +78,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./cv_parser_service/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}

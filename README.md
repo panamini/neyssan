@@ -5,6 +5,7 @@ FastAPI service that parses CVs and returns a normalized JSON payload aligned wi
 ## Quick Start (local)
 
 ```bash
+./run.sh doctor local-fast   # explain missing prerequisites without starting services
 ./run.sh tunnel              # stable end-to-end validation via parser.dasti.ai
 ./run.sh local-fast          # fast full-app parser development
 ./run.sh parser-dev          # parser-only / advanced Python hacking
@@ -28,6 +29,7 @@ start local Convex:
 ```bash
 cp .env.example .env.local
 # Fill CONVEX_TEAM and CONVEX_PROJECT with the shared Convex slugs.
+./run.sh doctor local-fast
 ./run.sh local-fast
 ```
 
@@ -47,6 +49,22 @@ Compatibility and advanced commands:
 
 - `GET /health` → `{"status":"ok"}`
 - `POST /parse-cv` → normalized payload (stable shape)
+
+## Autonomous parser image
+
+`run.sh` is for local development only. The parser server has its own
+platform-neutral image contract:
+
+```bash
+docker build -f cv_parser_service/Dockerfile -t twoweeks-cv-parser .
+docker run --rm -e PORT=8000 -p 8000:8000 twoweeks-cv-parser
+curl -fsS http://127.0.0.1:8000/healthz
+```
+
+The image defaults to port `8000`, accepts an operator-provided `PORT`, starts
+Uvicorn directly, and exposes `/healthz` through its Docker healthcheck. Hosting
+credentials and application secrets remain runtime configuration; the image
+does not depend on a Railway- or Hetzner-specific entrypoint.
 
 ## Dev Scripts
 
