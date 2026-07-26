@@ -1479,6 +1479,8 @@ doctor_check_docker() {
     doctor_pass "parser runtime image is not required while the tracked parser is reusable"
   elif docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
     doctor_pass "parser runtime image is available"
+  elif [[ "${target}" == "local-fast" ]] && docker buildx version >/dev/null 2>&1; then
+    doctor_warn "parser runtime image is missing; local-fast startup will build it"
   elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx inspect >/dev/null 2>&1; then
     doctor_warn "parser runtime image is missing; mcp-private-beta startup will build it with the available builder"
   elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx version >/dev/null 2>&1; then
@@ -3024,7 +3026,7 @@ stop_convex() {
 start_vite() {
   local ORIGIN="${1:?origin required}"
   local CONVEX_URL="${2:-}"
-  require_port_available "${VITE_PORT}" "Vite port ${VITE_PORT}"
+  require_port_available "${VITE_PORT}" "Vite port ${VITE_PORT}" || return 1
   : > "${VITE_LOG}"
   local vite_pid_file="${STATE_DIR}/vite.pid"
   rm -f "${vite_pid_file}"
@@ -3368,6 +3370,7 @@ up() {
       ensure_runtime_image_exists
     fi
   else
+    ensure_runtime_image_exists
     if [[ "${START_UI}" -eq 1 && "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${PARSER_RELOAD}" == "1" ]]; then
       echo "[run] local-fast: workspace parser runtime with autoreload enabled"
     else
@@ -3390,9 +3393,18 @@ up() {
     fi
     echo "[run] starting Vite → ${ACTIVE_ORIGIN}"
     if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
-      VPID="$(start_vite "${ACTIVE_ORIGIN}" "${CURL}")"
+      if ! VPID="$(start_vite "${ACTIVE_ORIGIN}" "${CURL}")"; then
+        echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
+        stop_convex "${CPID}" || true
+        stop_parser || true
+        exit 1
+      fi
     else
-      VPID="$(start_vite "${ACTIVE_ORIGIN}")"
+      if ! VPID="$(start_vite "${ACTIVE_ORIGIN}")"; then
+        echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
+        stop_parser || true
+        exit 1
+      fi
     fi
     if ! wait_for_vite_ready "${VPID}"; then
       echo "[run] ERROR: Vite did not become reachable (see ${VITE_LOG})" >&2
