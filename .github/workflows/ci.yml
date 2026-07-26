@@ -18,6 +18,15 @@ jobs:
       - name: Run run.sh doctor regression suite
         run: node --test tests/run-sh-doctor.test.mjs
 
+      - name: Run run.sh ownership lifecycle contract
+        run: node --test tests/run-sh-lifecycle.test.mjs
+
+      - name: Run portable parser server contract
+        run: node --test tests/cv-parser-server-contract.test.mjs
+
+      - name: Run PDF.js sandbox contract
+        run: node --test tests/pdfjs-sandbox-contract.test.mjs
+
   mcp-private-beta-smoke:
     name: MCP private-beta offline smoke contract
     runs-on: ubuntu-latest

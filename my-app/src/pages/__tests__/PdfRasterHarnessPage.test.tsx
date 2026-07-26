@@ -67,7 +67,11 @@ describe("PdfRasterHarnessPage", () => {
       expect(window.__DASTI_PDF_RASTER_STATUS__?.status).toBe("ready");
     });
 
-    expect(getDocumentMock).toHaveBeenCalled();
+    expect(getDocumentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isEvalSupported: false,
+      }),
+    );
     expect(window.__DASTI_PDF_RASTER_STATUS__?.snapshot).toEqual(
       expect.objectContaining({
         pageCount: 1,

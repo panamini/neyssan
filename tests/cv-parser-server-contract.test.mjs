@@ -54,3 +54,18 @@ test("operator docs separate local orchestration from the server image", () => {
   );
   assert.match(readme, /docker run --rm -e PORT=8000 -p 8000:8000 twoweeks-cv-parser/u);
 });
+
+test("the manual release smoke owns its container and uses the canonical image", () => {
+  const releaseScript = read("scripts/release.sh");
+
+  assert.match(
+    releaseScript,
+    /docker build -f cv_parser_service\/Dockerfile -t "\$\{IMAGE\}" \./u,
+  );
+  assert.match(
+    releaseScript,
+    /--label "\$\{RELEASE_OWNER_LABEL\}=\$\{RELEASE_OWNER_ID\}"/u,
+  );
+  assert.match(releaseScript, /\[\[ "\$\{owner\}" == "\$\{RELEASE_OWNER_ID\}" \]\]/u);
+  assert.doesNotMatch(releaseScript, /docker rm -f cv-parser(?:\s|$)/u);
+});

@@ -47,7 +47,10 @@ GlobalWorkerOptions.workerSrc = workerUrl;
  * Returns a single string with reasonable line breaks and normalized whitespace.
  */
 export async function extractTextFromPdf(arrayBuffer: ArrayBuffer): Promise<string> {
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const loadingTask = pdfjsLib.getDocument({
+    data: arrayBuffer,
+    isEvalSupported: false,
+  });
   const pdf = await loadingTask.promise;
   let fullText = "";
 
