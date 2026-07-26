@@ -87,10 +87,10 @@ jobs:
         SMOKE_SUITE="e2e/playwright-pr-smoke.spec.ts"
         FULL_SUITE="e2e/cvforge-preview-linking.spec.ts e2e/ds-v2.spec.ts e2e/proposal-command-layer.spec.ts e2e/proposal-mobile-layout.spec.ts e2e/proposal-workspace-roundtrip.spec.ts e2e/topbar-document-geometry.spec.ts"
 
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "smoke" ]; then
+        if [ "$PLAYWRIGHT_EVENT_NAME" = "workflow_dispatch" ] && [ "${PLAYWRIGHT_SUITE_INPUT:-}" = "smoke" ]; then
           SUITE="$SMOKE_SUITE"
           GLOBAL_TIMEOUT=300000
-        elif [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+        elif [ "$PLAYWRIGHT_EVENT_NAME" = "workflow_dispatch" ] || [ "$PLAYWRIGHT_EVENT_NAME" = "schedule" ]; then
           SUITE="$FULL_SUITE"
           GLOBAL_TIMEOUT=840000
         else
@@ -101,6 +101,8 @@ jobs:
         echo "Running Playwright suite: $SUITE"
         timeout --kill-after=60s 15m npx playwright test --project=chromium $SUITE --global-timeout="$GLOBAL_TIMEOUT"
       env:
+        PLAYWRIGHT_EVENT_NAME: ${{ github.event_name }}
+        PLAYWRIGHT_SUITE_INPUT: ${{ inputs.suite }}
         PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
         VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
