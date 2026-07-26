@@ -1,4 +1,3 @@
-import { ListToolsResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import {
   buildMcpProductionReadonlySummaryOutputSchemaV2,
   MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
@@ -396,11 +395,6 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
 }
 
 function isExpectedV2ToolsList(value: unknown): boolean {
-  try {
-    ListToolsResultSchema.parse(value);
-  } catch {
-    return false;
-  }
   return structurallyEqual(value, buildMcpProductionToolsListResult());
 }
 

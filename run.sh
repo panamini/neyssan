@@ -1621,7 +1621,7 @@ const canonicalKeys = [
 ];
 
 try {
-  const mode = (fs.statSync(rootEnvPath).mode & 0o777).toString(8);
+  const mode = (fs.lstatSync(rootEnvPath).mode & 0o777).toString(8);
   if (mode !== "600") fail("root .env.local must have mode 600");
 } catch (error) {
   if (error && error.code === "ENOENT") fail("root .env.local is required");

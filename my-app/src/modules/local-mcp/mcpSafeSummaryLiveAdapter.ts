@@ -1,7 +1,4 @@
 import {
-  ListToolsResultSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import {
   buildMcpProductionToolsListResult,
 } from "./mcpProductionToolsListProjection";
 import {
@@ -696,11 +693,6 @@ function argumentFor(toolName: McpSafeSummaryProofToolName, id: string): Readonl
 
 function isToolsList(input: McpSafeSummaryLiveAdapterInputV8, value: unknown): boolean {
   if (value === undefined || input.listTools === undefined) return false;
-  try {
-    ListToolsResultSchema.parse(value);
-  } catch {
-    return false;
-  }
   return structurallyEqual(value, buildMcpProductionToolsListResult());
 }
 
