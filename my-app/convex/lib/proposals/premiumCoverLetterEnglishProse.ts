@@ -41,14 +41,21 @@ type TokenRange = Readonly<{ startIndex: number; endIndex: number }>;
 const tagger = winkPosTaggerFactory();
 const ORGANIZATION_ABBREVIATION_PATTERN = /\b(?:Co|Corp|Inc|Ltd|LLC|PLC|GmbH)\.$/u;
 const DOTTED_INITIALISM_PATTERN = /(?:\b\p{Lu}\.){2,}$/u;
+const INLINE_DOTTED_INITIALISM_PATTERN = /(?:\b\p{Lu}\.){2,}/u;
 const TITLE_ABBREVIATION_PATTERN = /\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|No|Fig)\.$/u;
 const CONTEXTUAL_ABBREVIATION_PATTERN = /\b(?:e\.g|i\.e|etc|vs|approx|dept)\.$/iu;
 const RELATIVE_MARKER_PATTERN = /^(?:that|which|who)$/iu;
 const RELATIVE_MARKER_POS_PATTERN = /^(?:WDT|WP|WP\$)$/u;
 const FINITE_POS_PATTERN = /^(?:MD|VBD|VBP|VBZ)$/u;
 const NOMINAL_POS_PATTERN = /^(?:NN|NNS|NNP|NNPS|PRP)$/u;
+const PROPER_NAME_PREFIX_POS_PATTERN = /^(?:NNP|NNPS|CC|IN|DT)$/u;
 const INITIAL_PARTICIPLE_POS_PATTERN = /^(?:VBD|VBN)$/u;
 const PUNCTUATION_POS_PATTERN = /^(?:[,.!?;:]|-LRB-|-RRB-)$/u;
+const INITIALISM_RELATIVE_MARKER_PATTERN = /^(?:that|which|who|whose|where)$/iu;
+const INITIALISM_RELATIVE_MARKER_POS_PATTERN = /^(?:WDT|WP|WP\$|WRB)$/u;
+const INITIALISM_ATTACHMENT_CONTEXT_PATTERN =
+  /\b(?:at|for|from|to|with|joined|consulted)\s+(?:\p{Lu}\.){2,}$/u;
+const INITIALISM_CONTINUATION_MAX_CHARS = 240;
 const SENTENCE_BOUNDARY_PATTERN =
   /[.!?]+(?:["'”’»)}\]]+)?(?=\s|$)/gu;
 function isRelativeMarker(token: TaggedToken | undefined): boolean {
@@ -58,70 +65,206 @@ function isRelativeMarker(token: TaggedToken | undefined): boolean {
     RELATIVE_MARKER_POS_PATTERN.test(token.pos),
   );
 }
-function firstPosIndexAfterName(
+function isCapitalizedNameStart(token: WinkPosToken | undefined): boolean {
+  return Boolean(token && /^\p{Lu}/u.test(token.value));
+}
+function isInlineInitialismCandidatePeriod(
+  value: string,
+  periodIndex: number,
+): boolean {
+  const throughPeriod = value.slice(0, periodIndex + 1);
+  return (
+    TITLE_ABBREVIATION_PATTERN.test(throughPeriod) ||
+    CONTEXTUAL_ABBREVIATION_PATTERN.test(throughPeriod) ||
+    ORGANIZATION_ABBREVIATION_PATTERN.test(throughPeriod) ||
+    DOTTED_INITIALISM_PATTERN.test(throughPeriod)
+  );
+}
+function buildBoundedInitialismCandidate(remaining: string): string {
+  const boundedRemaining = remaining.slice(
+    0,
+    INITIALISM_CONTINUATION_MAX_CHARS,
+  );
+  for (const match of boundedRemaining.matchAll(SENTENCE_BOUNDARY_PATTERN)) {
+    const punctuationIndex = match.index ?? 0;
+    if (
+      match[0].startsWith(".") &&
+      isInlineInitialismCandidatePeriod(boundedRemaining, punctuationIndex)
+    ) {
+      continue;
+    }
+    return boundedRemaining
+      .slice(0, punctuationIndex + match[0].length)
+      .trim();
+  }
+  return boundedRemaining.trim();
+}
+function isInitialismRelativeClauseContinuation(
   tokens: readonly WinkPosToken[],
-  pattern: RegExp,
-): number {
-  return tokens.findIndex(
-    (token, index) => index > 0 && pattern.test(token.pos),
+): boolean {
+  const relativeIndex = tokens.findIndex(
+    (token, index) =>
+      index > 0 &&
+      INITIALISM_RELATIVE_MARKER_PATTERN.test(token.normal) &&
+      INITIALISM_RELATIVE_MARKER_POS_PATTERN.test(token.pos),
+  );
+  if (relativeIndex < 0) return false;
+  const relativePredicateIndex = tokens.findIndex(
+    (token, index) =>
+      index > relativeIndex && FINITE_POS_PATTERN.test(token.pos),
+  );
+  if (relativePredicateIndex < 0) return true;
+  const closingCommaIndex = tokens.findIndex(
+    (token, index) =>
+      index > relativePredicateIndex && token.value === ",",
+  );
+  if (closingCommaIndex < 0) return true;
+  const trailingTokens = tokens.slice(closingCommaIndex + 1);
+  const trailingPredicateIndex = trailingTokens.findIndex((token) =>
+    FINITE_POS_PATTERN.test(token.pos),
+  );
+  if (trailingPredicateIndex < 0) return true;
+  return !trailingTokens
+    .slice(0, trailingPredicateIndex)
+    .some((token) => NOMINAL_POS_PATTERN.test(token.pos));
+}
+function hasCoordinatedProperNameBeforePredicate(
+  tokens: readonly WinkPosToken[],
+  predicateIndex: number,
+): boolean {
+  const nameTokens = tokens.slice(0, predicateIndex);
+  return nameTokens.some(
+    (token, conjunctionIndex) =>
+      token.pos === "CC" &&
+      nameTokens
+        .slice(0, conjunctionIndex)
+        .some((candidate) => isCapitalizedNameStart(candidate)) &&
+      nameTokens
+        .slice(conjunctionIndex + 1)
+        .some((candidate) => isCapitalizedNameStart(candidate)),
+  );
+}
+function hasNominalInitialismContinuation(
+  candidate: string,
+  hasAttachmentContext: boolean,
+): boolean {
+  return (
+    hasAttachmentContext ||
+    INLINE_DOTTED_INITIALISM_PATTERN.test(candidate)
+  );
+}
+function hasProperNamePrefixBeforeConjunction(
+  tokens: readonly WinkPosToken[],
+  conjunctionIndex: number,
+): boolean {
+  const prefix = tokens.slice(0, conjunctionIndex);
+  return (
+    prefix.some((token) => /^(?:NNP|NNPS)$/u.test(token.pos)) &&
+    prefix.every((token) => PROPER_NAME_PREFIX_POS_PATTERN.test(token.pos))
+  );
+}
+function hasAppositiveBeforeCoordination(candidate: string): boolean {
+  return (
+    /,[^,]+,\s+and\b/iu.test(candidate) ||
+    /\([^()]+\)\s+and\b/iu.test(candidate) ||
+    /(?:—|–|-)\s+[^—–-]+\s+(?:—|–|-)\s+and\b/iu.test(candidate)
+  );
+}
+function hasAttachedAppositive(
+  candidate: string,
+  hasAttachmentContext: boolean,
+): boolean {
+  return (
+    hasAttachmentContext &&
+    hasAppositiveBeforeCoordination(candidate)
   );
 }
 function isCoordinatedContinuationPredicate(args: {
   tokens: readonly WinkPosToken[];
-  conjunctionIndex: number;
   predicateIndex: number;
   finite: boolean;
+  allowAppositive: boolean;
 }): boolean {
-  if (
-    args.conjunctionIndex < 0 ||
-    args.conjunctionIndex >= args.predicateIndex
-  ) {
-    return false;
-  }
-  if (args.finite) {
-    return args.predicateIndex === args.conjunctionIndex + 1;
-  }
-  return !args.tokens
-    .slice(args.conjunctionIndex + 1, args.predicateIndex)
-    .some((token) => NOMINAL_POS_PATTERN.test(token.pos));
+  return args.tokens.some((token, conjunctionIndex) => {
+    if (token.pos !== "CC" || conjunctionIndex >= args.predicateIndex) {
+      return false;
+    }
+    if (
+      !args.allowAppositive &&
+      !hasProperNamePrefixBeforeConjunction(args.tokens, conjunctionIndex)
+    ) {
+      return false;
+    }
+    const intervening = args.tokens.slice(
+      conjunctionIndex + 1,
+      args.predicateIndex,
+    );
+    if (intervening.some(
+      (candidate) => NOMINAL_POS_PATTERN.test(candidate.pos),
+    )) {
+      return false;
+    }
+    return !(
+      args.finite &&
+      intervening.some((candidate) =>
+        INITIAL_PARTICIPLE_POS_PATTERN.test(candidate.pos),
+      )
+    );
+  });
 }
 function isProperNameInitialismContinuation(
   remaining: string,
   segmentPrefix: string,
 ): boolean {
-  const candidate = firstSentenceSegment(remaining)?.text ?? remaining;
-  const tokens = tagger.tagSentence(candidate).filter(
+  const candidate = buildBoundedInitialismCandidate(remaining);
+  const taggedTokens = tagger.tagSentence(candidate);
+  const tokens = taggedTokens.filter(
     (token) => !PUNCTUATION_POS_PATTERN.test(token.pos),
   );
-  if (tokens[0]?.pos !== "NNP") return false;
+  if (!isCapitalizedNameStart(tokens[0])) return false;
   if (/^(?:\p{Lu}\.){2,}$/u.test(segmentPrefix)) return true;
-  const conjunctionIndex = firstPosIndexAfterName(
-    tokens,
-    /^CC$/u,
+  const hasAttachmentContext =
+    INITIALISM_ATTACHMENT_CONTEXT_PATTERN.test(segmentPrefix);
+  const allowAppositive = hasAttachedAppositive(
+    candidate,
+    hasAttachmentContext,
   );
-  const finitePredicateIndex = firstPosIndexAfterName(
-    tokens,
-    FINITE_POS_PATTERN,
+  if (
+    hasAttachmentContext &&
+    isInitialismRelativeClauseContinuation(taggedTokens)
+  ) {
+    return true;
+  }
+  const finitePredicateIndex = tokens.findIndex(
+    (token, index) => index > 0 && FINITE_POS_PATTERN.test(token.pos),
   );
   if (finitePredicateIndex >= 0) {
     return isCoordinatedContinuationPredicate({
       tokens,
-      conjunctionIndex,
       predicateIndex: finitePredicateIndex,
       finite: true,
+      allowAppositive,
     });
   }
-  const participleIndex = firstPosIndexAfterName(
-    tokens,
-    INITIAL_PARTICIPLE_POS_PATTERN,
+  const participleIndex = tokens.findIndex(
+    (token, index) =>
+      index > 0 && INITIAL_PARTICIPLE_POS_PATTERN.test(token.pos),
   );
-  if (participleIndex < 0) return true;
-  return isCoordinatedContinuationPredicate({
-    tokens,
-    conjunctionIndex,
-    predicateIndex: participleIndex,
-    finite: false,
-  });
+  if (participleIndex < 0) {
+    return hasNominalInitialismContinuation(candidate, hasAttachmentContext);
+  }
+  return (
+    isCoordinatedContinuationPredicate({
+      tokens,
+      predicateIndex: participleIndex,
+      finite: false,
+      allowAppositive,
+    }) ||
+    (
+      hasAttachmentContext &&
+      hasCoordinatedProperNameBeforePredicate(tokens, participleIndex)
+    )
+  );
 }
 function hasCommaBetween(
   segment: SentenceSegment, previous: TaggedToken, marker: TaggedToken,
@@ -140,23 +283,6 @@ function buildSegment(value: string, start: number, end: number): SentenceSegmen
     start: start + leadingWhitespace,
     end: start + leadingWhitespace + text.length,
   };
-}
-function firstSentenceSegment(value: string): SentenceSegment | null {
-  for (const match of value.matchAll(SENTENCE_BOUNDARY_PATTERN)) {
-    const punctuationIndex = match.index ?? 0;
-    if (
-      match[0].startsWith(".") &&
-      isProtectedPeriod(value, punctuationIndex, 0)
-    ) {
-      continue;
-    }
-    return buildSegment(
-      value,
-      0,
-      punctuationIndex + match[0].length,
-    );
-  }
-  return buildSegment(value, 0, value.length);
 }
 function isProtectedPeriod(value: string, periodIndex: number, segmentStart: number): boolean {
   const throughPeriod = value.slice(0, periodIndex + 1);

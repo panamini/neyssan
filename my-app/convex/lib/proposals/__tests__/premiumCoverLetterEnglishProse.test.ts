@@ -245,6 +245,151 @@ describe("premium cover-letter English prose module", () => {
     ]);
   });
 
+  it("skips conjunctions inside a proper name before its coordinated predicate", () => {
+    expect(
+      analyze(
+        "I worked for U.S. Customs and Border Protection and improved reporting.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I worked for U.S. Customs and Border Protection and improved reporting.",
+        sentenceSpan: { start: 0, end: 71 },
+      }),
+    ]);
+  });
+
+  it("keeps relative clauses attached to a proper company name", () => {
+    expect(
+      analyze("I worked for U.S. Bank, where I improved reporting."),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I worked for U.S. Bank, where I improved reporting.",
+        sentenceSpan: { start: 0, end: 51 },
+      }),
+    ]);
+  });
+
+  it("keeps attached appositives before a coordinated predicate", () => {
+    for (const text of [
+      "I worked for U.S. Bank, a leading institution, and improved reporting.",
+      "I worked with U.S. Bank, my primary client, and improved reporting.",
+      "I worked for U.S. Bank (a leading institution) and improved reporting.",
+      "I worked for U.S. Bank — a leading institution — and improved reporting.",
+    ]) {
+      expect(analyze(text)).toEqual([
+        expect.objectContaining({ text }),
+      ]);
+    }
+  });
+
+  it("allows modifiers before a coordinated finite predicate", () => {
+    expect(
+      analyze("I worked for U.S. Bank and often was responsible for reporting."),
+    ).toEqual([
+      expect.objectContaining({
+        text: "I worked for U.S. Bank and often was responsible for reporting.",
+        sentenceSpan: { start: 0, end: 63 },
+      }),
+    ]);
+  });
+
+  it("does not merge a new sentence whose subject owns a relative clause", () => {
+    expect(
+      analyze(
+        "I served in the U.S. Tomorrow, which is Monday, I improved reporting.",
+      ).map(({ text }) => text),
+    ).toEqual([
+      "I served in the U.S.",
+      "Tomorrow, which is Monday, I improved reporting.",
+    ]);
+    expect(
+      analyze(
+        "I served in the U.S. Tomorrow, which is Monday, will be busy.",
+      ).map(({ text }) => text),
+    ).toEqual([
+      "I served in the U.S.",
+      "Tomorrow, which is Monday, will be busy.",
+    ]);
+  });
+
+  it("keeps coordinated proper names attached before a tagged participle", () => {
+    expect(
+      analyze(
+        "Experience with U.S. Health and Human Services strengthened delivery.",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        text: "Experience with U.S. Health and Human Services strengthened delivery.",
+      }),
+    ]);
+  });
+
+  it("splits coordinated subjects when no attachment context owns the initialism", () => {
+    expect(
+      analyze(
+        "I served in the U.S. Health and Human Services strengthened delivery.",
+      ).map(({ text }) => text),
+    ).toEqual([
+      "I served in the U.S.",
+      "Health and Human Services strengthened delivery.",
+    ]);
+    expect(
+      analyze(
+        "I served in the U.S. Research and Development strengthened delivery.",
+      ).map(({ text }) => text),
+    ).toEqual([
+      "I served in the U.S.",
+      "Research and Development strengthened delivery.",
+    ]);
+  });
+
+  it("splits terminal sentences without an attached initialism continuation", () => {
+    for (const continuation of [
+      "Thank you for your consideration.",
+      "Apply now.",
+      "Welcome aboard.",
+      "Next steps.",
+    ]) {
+      expect(
+        analyze(
+          `I am authorized to work in the U.S. ${continuation}`,
+        ).map(({ text }) => text),
+      ).toEqual([
+        "I am authorized to work in the U.S.",
+        continuation,
+      ]);
+    }
+  });
+
+  it("splits verb-led coordinated fragments after an initialism", () => {
+    for (const continuation of [
+      "Led and improved reporting.",
+      "Managed and improved reporting.",
+      "Managed teams and improved reporting.",
+      "Led projects and improved reporting.",
+      "Delivered results and improved reporting.",
+      "Strong teams and improved reporting.",
+      "Customer success and improved reporting.",
+      "High-performing teams and improved reporting.",
+    ]) {
+      const analyses = analyze(
+        `I served in the U.S. ${continuation}`,
+      );
+      expect(analyses.map(({ text }) => text)).toEqual([
+        "I served in the U.S.",
+        continuation,
+      ]);
+      expect(analyses[1]?.classification).not.toBe("VALID");
+    }
+  });
+
+  it("bounds repeated initialism scanning without recursive segmentation", () => {
+    const text =
+      `I worked for ${"U.S. Bank and ".repeat(20)}` +
+      "improved reporting.";
+    expect(analyze(text)).toHaveLength(1);
+  });
+
   it("splits before a coordinated nominal subject with a finite predicate", () => {
     expect(
       analyze(
@@ -326,5 +471,13 @@ describe("premium cover-letter English prose module", () => {
     expect(source).not.toContain("Department of Defense");
     expect(source).not.toContain("Salesforce");
     expect(source).not.toContain("Acme Inc.");
+    expect(source).not.toContain("Customs and Border Protection");
+    expect(source).not.toContain("Bank and often");
+    expect(source).toContain("INITIALISM_CONTINUATION_MAX_CHARS");
+    expect(source).toMatch(
+      /remaining\.slice\(\s*0,\s*INITIALISM_CONTINUATION_MAX_CHARS,\s*\)/u,
+    );
+    expect(source).not.toContain('tokens[0]?.pos !== "NNP"');
+    expect(source).not.toContain("firstSentenceSegment(boundedRemaining)");
   });
 });
