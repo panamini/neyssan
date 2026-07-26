@@ -2449,6 +2449,17 @@ sync_local_convex_env() {
         node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).adminKey || "")' "${LOCAL_CONVEX_STATE_CONFIG_RESULT}"
       )"
     fi
+    if [[ "${STACK_MODE_OVERRIDE:-}" != "mcp-private-beta" ]]; then
+      for name in ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL MCP_CONTROLLED_SYNTHETIC_RAIL_MODE; do
+        if [[ -n "${convex_env_url}" && -n "${convex_env_admin_key}" ]]; then
+          CONVEX_SELF_HOSTED_URL="${convex_env_url}" CONVEX_SELF_HOSTED_ADMIN_KEY="${convex_env_admin_key}" "${convex_bin}" env remove "${name}" >/dev/null 2>&1 || true
+        elif [[ -n "${convex_env_deployment_name}" ]]; then
+          CONVEX_DEPLOYMENT="local:${convex_env_deployment_name}" "${convex_bin}" env remove "${name}" >/dev/null 2>&1 || true
+        else
+          "${convex_bin}" env remove "${name}" >/dev/null 2>&1 || true
+        fi
+      done
+    fi
     for name in "${env_names[@]}"; do
       if [[ "${name}" == "CONVEX_PARSER_URL" ]]; then
         value="http://127.0.0.1:8001"
@@ -2930,6 +2941,9 @@ start_vite() {
     if [[ -n "${CONVEX_URL}" ]]; then
       export VITE_CONVEX_URL="${CONVEX_URL}"
       export NEXT_PUBLIC_CONVEX_URL="${CONVEX_URL}"
+      if [[ -n "${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT:-}}" ]]; then
+        export LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
+      fi
     fi
     export STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1
     local vite_bin="./node_modules/vite/bin/vite.js"
@@ -2992,6 +3006,14 @@ reload_env_stack() {
     exit 1
   fi
   if [[ "${STACK_MODE}" == "mcp-private-beta" ]]; then
+    STACK_MODE_OVERRIDE="mcp-private-beta"
+    export STACK_MODE_OVERRIDE
+    MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8="1"
+    export MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8
+    ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL="1"
+    export ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL
+    MCP_CONTROLLED_SYNTHETIC_RAIL_MODE="development"
+    export MCP_CONTROLLED_SYNTHETIC_RAIL_MODE
     MCP_PRIVATE_BETA_TUNNEL=1
     mcp_check
   fi

@@ -61,6 +61,7 @@ export const runControlledSyntheticProofOperation = internalAction({
   },
   returns: v.any(),
   handler: async (ctx, args): Promise<unknown> => {
+    assertControlledRailEnabled();
     const ownerProfileId: GenericId<"userProfiles"> | null = await ctx.runQuery(
       internal.mcpControlledSyntheticProof.internalResolveControlledSyntheticProofOwner,
       { twoweeksClerkId: args.twoweeksClerkId, version: 1 },

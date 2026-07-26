@@ -20,11 +20,24 @@ const CONTROLLED_PROOF_BRIDGE_OPERATIONS = new Set([
   "seed",
   "cleanup",
 ]);
+const CONTROLLED_PROOF_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
+const CONTROLLED_PROOF_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
+
+function isControlledProofRailEnabled(): boolean {
+  return process.env[CONTROLLED_PROOF_RAIL_FLAG] === "1" &&
+    process.env[CONTROLLED_PROOF_RAIL_MODE] === "development";
+}
 
 http.route({
   path: "/mcp-controlled-proof",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    if (!isControlledProofRailEnabled()) {
+      return new Response(JSON.stringify({ error: "controlled_proof_unavailable" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     const identity = await ctx.auth.getUserIdentity();
     if (!identity?.subject) {
       return new Response(JSON.stringify({ error: "controlled_proof_operator_auth_required" }), {

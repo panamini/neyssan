@@ -536,6 +536,16 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
+  if (!(await isAuthorizedControlledProofOperatorSubmission(submitted.role, submitted.token, env, dependencies))) {
+    sendLocalMcpJson(res, 403, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "invalid_operator_credential",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
   const pending = flight.pendingOperatorCredentials ?? {};
   if (pending[submitted.role]) {
     sendLocalMcpJson(res, 409, {
@@ -624,6 +634,37 @@ function parseOperatorCredentialSubmission(bodyText: string):
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function isAuthorizedControlledProofOperatorSubmission(
+  role: McpSafeSummaryProofOperatorRole,
+  credential: string,
+  env: Readonly<Record<string, string | undefined>>,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): Promise<boolean> {
+  const readAuthenticatedOwnerIdentity = dependencies.readAuthenticatedOwnerIdentity;
+  if (!readAuthenticatedOwnerIdentity) return false;
+  let identity: McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined;
+  try {
+    identity = await readAuthenticatedOwnerIdentity({
+      method: "POST",
+      path: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      headers: { authorization: `Bearer ${credential}` },
+    });
+  } catch {
+    return false;
+  }
+  if (!identity) return false;
+  const ownerConfig = readControlledProofOwnerConfig(env);
+  if (ownerConfig && (
+    identity.subject !== ownerConfig[role].subject ||
+    identity.issuer !== ownerConfig[role].issuer
+  )) return false;
+  const allowedSubjectDigests = readPrivateBetaSubjectDigestEnv(
+    env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS_VAR],
+  );
+  return !allowedSubjectDigests || allowedSubjectDigests.includes(hashSubject(identity.subject));
 }
 
 async function buildProductionMcpSafeSummaryLiveAdapterRunner(
@@ -1614,6 +1655,7 @@ function buildProductionPreAuthIntentCreatePort(
     if (!convexClient) return preAuthCreateUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>>>(
       convexClient,
+      "mutation",
       CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION,
       input,
     );
@@ -1631,6 +1673,7 @@ function buildProductionPreAuthOwnerBindingPort(
     if (!convexClient) return preAuthOwnerBindingUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>>>>(
       convexClient,
+      "mutation",
       BIND_MCP_OAUTH_PRE_AUTH_INTENT_TO_OWNER_MUTATION,
       {
         preAuthHandleHash: input.preAuthHandleHash,
@@ -1648,6 +1691,7 @@ function buildProductionAuthorizationIntentConsumePort(
     if (!convexClient) return authorizationIntentConsumeUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["consumeAuthorizationIntent"]>>>>(
       convexClient,
+      "mutation",
       CONSUME_MCP_OAUTH_AUTHORIZATION_INTENT_MUTATION,
       input,
     );
@@ -1661,6 +1705,7 @@ function buildProductionAuthorizationCodeCreatePort(
     if (!convexClient) return authorizationCodeCreateUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createAuthorizationCode"]>>>>(
       convexClient,
+      "mutation",
       CREATE_MCP_OAUTH_AUTHORIZATION_CODE_MUTATION,
       input,
     );
@@ -1674,6 +1719,7 @@ function buildProductionAuthorizationCodeValidatePort(
     if (!convexClient) return authorizationCodeValidateUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>>>>(
       convexClient,
+      "query",
       VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY,
       input,
     );
@@ -1687,6 +1733,7 @@ function buildProductionAccessTokenIssuePort(
     if (!convexClient) return accessTokenIssueUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]>>>>(
       convexClient,
+      "mutation",
       ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION,
       input,
     );
@@ -1700,6 +1747,7 @@ function buildProductionAccessTokenVerifyPort(
     if (!convexClient) return accessTokenVerifyUnavailableResult();
     return callConvexInternalFunction<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]>>>>(
       convexClient,
+      "query",
       VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY,
       input,
     );
@@ -1721,6 +1769,7 @@ function buildProductionReadonlySummaryQueryPort(
     }
     return callConvexInternalFunction<unknown>(
       convexClient,
+      "query",
       PRODUCTION_MCP_READONLY_SUMMARY_QUERY_REFERENCES[input.query],
       input.args,
     );
@@ -1740,6 +1789,7 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
     try {
       const ownerProfileId = await callConvexInternalFunction<unknown>(
         convexClient,
+        "query",
         RESOLVE_MCP_CONTROLLED_PROOF_OWNER_QUERY,
         { twoweeksClerkId: configured.subject, version: 1 },
       );
@@ -1763,6 +1813,7 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
     seedA: async (identity, runId) => {
       await callConvexInternalFunction<unknown>(
         convexClient,
+        "mutation",
         RECOVER_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
         {
           ownerProfileId: identity.ownerProfileId,
@@ -1774,6 +1825,7 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
       );
       return callConvexInternalFunction<unknown>(
         convexClient,
+        "mutation",
         SEED_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
         {
           ownerProfileId: identity.ownerProfileId,
@@ -1787,6 +1839,7 @@ function buildProductionMcpSafeSummaryControlledProofRunner(
     cleanupA: async (identity, runId) => {
       return callConvexInternalFunction<unknown>(
         convexClient,
+        "mutation",
         CLEANUP_MCP_CONTROLLED_SYNTHETIC_PROOF_MUTATION,
         {
           ownerProfileId: identity.ownerProfileId,
@@ -2011,17 +2064,18 @@ function buildEphemeralClerkAccessTokenVerifier(
 
 async function callConvexInternalFunction<T>(
   client: ConvexHttpClient,
+  kind: "query" | "mutation" | "action",
   reference: FunctionReference<"query" | "mutation" | "action">,
   args: unknown,
 ): Promise<T> {
-  const internalFunctionClient = client as ConvexHttpClient & {
-    function(
-      target: FunctionReference<"query" | "mutation" | "action">,
-      componentPath: undefined,
-      input: unknown,
-    ): Promise<T>;
-  };
-  return internalFunctionClient.function(reference, undefined, args);
+  switch (kind) {
+    case "query":
+      return client.query(reference as FunctionReference<"query">, args) as Promise<T>;
+    case "mutation":
+      return client.mutation(reference as FunctionReference<"mutation">, args, { skipQueue: true }) as Promise<T>;
+    case "action":
+      return client.action(reference as FunctionReference<"action">, args) as Promise<T>;
+  }
 }
 
 function buildProductionAuthenticatedOwnerIdentityReader(
