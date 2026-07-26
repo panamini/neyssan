@@ -1,4 +1,5 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { v, type GenericId } from "convex/values";
 import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../src/modules/local-mcp/mcpSafeSummaryProofMarker";
 
@@ -20,6 +21,143 @@ export const internalResolveControlledSyntheticProofOwner = internalQuery({
       .withIndex("by_clerk_id", (query) => query.eq("clerkId", args.twoweeksClerkId))
       .first();
     return profile?._id ?? null;
+  },
+});
+
+const CONTROLLED_PROOF_BRIDGE_OPERATION = v.union(
+  v.literal("resolve_owner"),
+  v.literal("application_package_summary"),
+  v.literal("evidence_graph_summary"),
+  v.literal("resume_variant_plan_summary"),
+  v.literal("review_cockpit_summary"),
+  v.literal("recover"),
+  v.literal("seed"),
+  v.literal("cleanup"),
+);
+
+const CONTROLLED_PROOF_BRIDGE_REF_IDS = Object.freeze({
+  application_package_summary: "mcp-safe-ref:application-package:latest",
+  evidence_graph_summary: "mcp-safe-ref:evidence-graph:profile",
+  resume_variant_plan_summary: "mcp-safe-ref:resume-variant-plan:latest",
+  review_cockpit_summary: "mcp-safe-ref:review-cockpit:latest",
+});
+
+/**
+ * Temporary Clerk-authenticated bridge for the local v10 proof only.
+ *
+ * Convex internal functions cannot be called directly over Convex HTTP. This
+ * public action keeps the internal functions server-side while binding every
+ * operation to the short-lived Clerk identity supplied by the proof adapter.
+ */
+export const runControlledSyntheticProofOperation = internalAction({
+  args: {
+    operation: CONTROLLED_PROOF_BRIDGE_OPERATION,
+    refId: v.optional(v.string()),
+    runId: v.optional(v.string()),
+    marker: v.optional(v.string()),
+    now: v.optional(v.number()),
+    twoweeksClerkId: v.string(),
+    version: v.literal(1),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<unknown> => {
+    assertControlledRailEnabled();
+    const callerIdentity = await ctx.auth.getUserIdentity();
+    if (!callerIdentity?.subject || callerIdentity.subject !== args.twoweeksClerkId) {
+      throw new Error("controlled_proof_operator_auth_mismatch");
+    }
+    const ownerProfileId: GenericId<"userProfiles"> | null = await ctx.runQuery(
+      internal.mcpControlledSyntheticProof.internalResolveControlledSyntheticProofOwner,
+      { twoweeksClerkId: args.twoweeksClerkId, version: 1 },
+    );
+    if (!ownerProfileId) throw new Error("controlled_proof_owner_not_found");
+    if (args.operation === "resolve_owner") return ownerProfileId;
+
+    if (
+      args.operation === "application_package_summary" ||
+      args.operation === "evidence_graph_summary" ||
+      args.operation === "resume_variant_plan_summary" ||
+      args.operation === "review_cockpit_summary"
+    ) {
+      const expectedRefId = CONTROLLED_PROOF_BRIDGE_REF_IDS[args.operation];
+      if (args.refId !== expectedRefId) throw new Error("controlled_proof_ref_not_allowed");
+      const common = { twoweeksClerkId: args.twoweeksClerkId };
+      switch (args.operation) {
+        case "application_package_summary":
+          return ctx.runQuery(internal.mcpApplicationPackageSummary.internalSummarizeMcpApplicationPackage, {
+            ...common,
+            applicationPackageRef: {
+              id: expectedRefId,
+              label: "Application package availability",
+              status: "available",
+              category: "application_package",
+              count: 1,
+              version: 1,
+            },
+          });
+        case "evidence_graph_summary":
+          return ctx.runQuery(internal.mcpEvidenceGraphSummary.internalSummarizeMcpEvidenceGraph, {
+            ...common,
+            evidenceGraphRef: {
+              id: expectedRefId,
+              label: "Candidate evidence availability",
+              status: "available",
+              category: "evidence_graph",
+              count: 1,
+              version: 1,
+            },
+          });
+        case "resume_variant_plan_summary":
+          return ctx.runQuery(internal.mcpResumeVariantPlanSummary.internalSummarizeMcpResumeVariantPlan, {
+            ...common,
+            resumeVariantPlanRef: {
+              id: expectedRefId,
+              label: "Resume variant plan availability",
+              status: "available",
+              category: "resume_variant_plan",
+              count: 1,
+              version: 1,
+            },
+          });
+        case "review_cockpit_summary":
+          return ctx.runQuery(internal.mcpReviewCockpitSummary.internalSummarizeMcpReviewCockpit, {
+            ...common,
+            reviewCockpitRef: {
+              id: expectedRefId,
+              label: "Review cockpit availability",
+              status: "available",
+              category: "review_cockpit",
+              count: 1,
+              version: 1,
+            },
+          });
+      }
+    }
+
+    if (
+      args.marker !== MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 ||
+      args.runId === undefined ||
+      args.now === undefined
+    ) {
+      throw new Error("controlled_proof_mutation_args_invalid");
+    }
+    const mutationArgs = {
+      ownerProfileId,
+      marker: args.marker,
+      runId: args.runId,
+      now: args.now,
+      version: 1 as const,
+    };
+    if (args.operation === "recover") {
+      return ctx.runMutation(internal.mcpControlledSyntheticProof.internalRecoverControlledSyntheticProof, mutationArgs);
+    }
+    if (args.operation === "seed") {
+      return ctx.runMutation(internal.mcpControlledSyntheticProof.internalSeedControlledSyntheticProof, mutationArgs);
+    }
+    if (args.operation === "cleanup") {
+      return ctx.runMutation(internal.mcpControlledSyntheticProof.internalCleanupControlledSyntheticProof, mutationArgs);
+    }
+    throw new Error("controlled_proof_operation_not_allowed");
   },
 });
 
@@ -125,6 +263,13 @@ async function queryOwnedRow(
       query.eq("userId", ownerProfileId).eq("id", id),
     )
     .unique();
+}
+
+async function insertControlledFixture(
+  ctx: any,
+  spec: ControlledFixtureSpec,
+): Promise<void> {
+  await ctx.db.insert(spec.tableName, spec.document);
 }
 
 async function queryControlledArtifacts(
@@ -490,7 +635,7 @@ export const internalSeedControlledSyntheticProof = internalMutation({
     let createdCount = 0;
     for (let index = 0; index < specs.length; index += 1) {
       if (existingRows[index] !== null) continue;
-      await ctx.db.insert(specs[index].tableName, specs[index].document);
+      await insertControlledFixture(ctx, specs[index]);
       createdCount += 1;
     }
 
@@ -498,7 +643,7 @@ export const internalSeedControlledSyntheticProof = internalMutation({
       status: "ready" as const,
       createdCount,
       reusedCount: EXPECTED_FIXTURE_COUNT - createdCount,
-      expectedCount: EXPECTED_FIXTURE_COUNT,
+      expectedCount: EXPECTED_FIXTURE_COUNT as typeof EXPECTED_FIXTURE_COUNT,
       ownerBound: true as const,
       version: 1 as const,
     };
@@ -510,6 +655,7 @@ export const internalCleanupControlledSyntheticProof = internalMutation({
     ownerProfileId: v.id("userProfiles"),
     marker: v.string(),
     runId: v.string(),
+    now: v.number(),
     version: v.literal(1),
   },
   returns: v.object({
@@ -565,9 +711,9 @@ export const internalCleanupControlledSyntheticProof = internalMutation({
 
     return {
       status: "clean" as const,
-      deletedCount: EXPECTED_FIXTURE_COUNT,
-      residualCount: 0,
-      expectedCount: EXPECTED_FIXTURE_COUNT,
+      deletedCount: EXPECTED_FIXTURE_COUNT as typeof EXPECTED_FIXTURE_COUNT,
+      residualCount: 0 as const,
+      expectedCount: EXPECTED_FIXTURE_COUNT as typeof EXPECTED_FIXTURE_COUNT,
       ownerBound: true as const,
       version: 1 as const,
     };
@@ -637,7 +783,7 @@ export const internalRecoverControlledSyntheticProof = internalMutation({
       status: "recovered" as const,
       deletedCount,
       residualCount: 0 as const,
-      expectedCount: EXPECTED_FIXTURE_COUNT,
+      expectedCount: EXPECTED_FIXTURE_COUNT as typeof EXPECTED_FIXTURE_COUNT,
       ownerBound: true as const,
       version: 1 as const,
     };

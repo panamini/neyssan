@@ -841,6 +841,8 @@ export default defineSchema({
       v.object({
         nonce: v.optional(v.string()),
         prompt: v.optional(v.string()),
+        // Compatibility for historical provider-forward authorization intents.
+        ui_locales: v.optional(v.string()),
       }),
     ),
     providerValidationStatus: v.literal("pending"),
@@ -917,6 +919,8 @@ export default defineSchema({
       v.object({
         nonce: v.optional(v.string()),
         prompt: v.optional(v.string()),
+        // Compatibility for historical provider-forward pre-auth intents.
+        ui_locales: v.optional(v.string()),
       }),
     ),
     providerValidationStatus: v.literal("pending"),

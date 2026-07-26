@@ -528,7 +528,7 @@ describe("MCP OAuth authorization request boundary", () => {
         expect(result.serverOnly.providerForwardRequest.approvedOptionalParameters).toEqual({
           ui_locales: "fr-FR",
         });
-        expect(result.serverOnly.loginReturn.path).not.toContain("ui_locales=");
+      expect(result.serverOnly.loginReturn.path).toContain("ui_locales=fr-FR");
         expect(result.serverOnly.loginReturn.sensitiveOptionalParametersInUrl).toBe(false);
       }
     });

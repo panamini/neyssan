@@ -243,10 +243,10 @@ mcp_resolve_clerk_publishable_key() {
 
 mcp_env_file_mode() {
   local file="${1:?file required}"
-  if stat -f '%Lp' "${file}" >/dev/null 2>&1; then
-    stat -f '%Lp' "${file}"
+  if stat -L -f '%Lp' "${file}" >/dev/null 2>&1; then
+    stat -L -f '%Lp' "${file}"
   else
-    stat -c '%a' "${file}"
+    stat -L -c '%a' "${file}"
   fi
 }
 
@@ -2399,7 +2399,9 @@ sync_local_convex_env() {
     EXTENSION_ORIGIN
     DEEPSEEK_API_KEY
     DEEPSEEK_CHAT_COMPLETIONS_URL
+    ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL
     MISTRAL_API_KEY
+    MCP_CONTROLLED_SYNTHETIC_RAIL_MODE
     NER_SERVICE_KEY
     NER_SERVICE_URL
     OPENAI_API_KEY
@@ -2446,6 +2448,17 @@ sync_local_convex_env() {
       convex_env_admin_key="$(
         node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).adminKey || "")' "${LOCAL_CONVEX_STATE_CONFIG_RESULT}"
       )"
+    fi
+    if [[ "${STACK_MODE_OVERRIDE:-}" != "mcp-private-beta" ]]; then
+      for name in ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL MCP_CONTROLLED_SYNTHETIC_RAIL_MODE; do
+        if [[ -n "${convex_env_url}" && -n "${convex_env_admin_key}" ]]; then
+          CONVEX_SELF_HOSTED_URL="${convex_env_url}" CONVEX_SELF_HOSTED_ADMIN_KEY="${convex_env_admin_key}" "${convex_bin}" env remove "${name}" >/dev/null 2>&1 || true
+        elif [[ -n "${convex_env_deployment_name}" ]]; then
+          CONVEX_DEPLOYMENT="local:${convex_env_deployment_name}" "${convex_bin}" env remove "${name}" >/dev/null 2>&1 || true
+        else
+          "${convex_bin}" env remove "${name}" >/dev/null 2>&1 || true
+        fi
+      done
     fi
     for name in "${env_names[@]}"; do
       if [[ "${name}" == "CONVEX_PARSER_URL" ]]; then
@@ -2922,9 +2935,15 @@ start_vite() {
     export CONVEX_PARSER_URL="${ORIGIN}"
     export VITE_PARSER_URL="${ORIGIN}"
     export VITE_CONVEX_PARSER_URL="${ORIGIN}"
+    if [[ "${STACK_MODE_OVERRIDE:-}" == "mcp-private-beta" ]]; then
+      export MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8="1"
+    fi
     if [[ -n "${CONVEX_URL}" ]]; then
       export VITE_CONVEX_URL="${CONVEX_URL}"
       export NEXT_PUBLIC_CONVEX_URL="${CONVEX_URL}"
+      if [[ -n "${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT:-}}" ]]; then
+        export LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
+      fi
     fi
     export STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1
     local vite_bin="./node_modules/vite/bin/vite.js"
@@ -2987,6 +3006,14 @@ reload_env_stack() {
     exit 1
   fi
   if [[ "${STACK_MODE}" == "mcp-private-beta" ]]; then
+    STACK_MODE_OVERRIDE="mcp-private-beta"
+    export STACK_MODE_OVERRIDE
+    MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8="1"
+    export MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8
+    ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL="1"
+    export ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL
+    MCP_CONTROLLED_SYNTHETIC_RAIL_MODE="development"
+    export MCP_CONTROLLED_SYNTHETIC_RAIL_MODE
     MCP_PRIVATE_BETA_TUNNEL=1
     mcp_check
   fi
@@ -3336,6 +3363,16 @@ local_fast_stack() {
 }
 
 mcp_private_beta_stack() {
+  # The controlled v10 proof adapter is scoped to the private-beta stack and
+  # must reach the Vite child without requiring a second .env.local file.
+  MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8="1"
+  export MCP_SAFE_SUMMARY_LIVE_ADAPTER_V8
+  # The synthetic rail is local/private-beta only and is synced to Convex
+  # without creating a second .env.local file.
+  ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL="1"
+  export ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL
+  MCP_CONTROLLED_SYNTHETIC_RAIL_MODE="development"
+  export MCP_CONTROLLED_SYNTHETIC_RAIL_MODE
   mcp_check
   VITE_PORT="${MCP_PRIVATE_BETA_VITE_PORT}"
   OPEN_BROWSER=0

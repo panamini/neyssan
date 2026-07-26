@@ -377,7 +377,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
       viteSource.indexOf("function buildProductionReadonlySummaryQueryPort"),
       viteSource.indexOf("function buildProductionMcpSafeSummaryControlledProofRunner"),
     );
-    expect(queryPortPath.match(/convexClient\.query\(/gu)).toHaveLength(1);
+    expect(queryPortPath.match(/callConvexInternalFunction<unknown>\(/gu)).toHaveLength(1);
     expect(queryPortPath).not.toMatch(/\b(?:retry|repair|fallback|provider|model)\b/iu);
 
     for (const expectation of CONVEX_SUMMARY_STRUCTURAL_EXPECTATIONS) {

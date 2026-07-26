@@ -4947,7 +4947,7 @@ function adjacentRoleCompanyContext(values: string[]): string | null {
     .map(parseRoleCompanyFact)
     .filter((item): item is { role: string; company: string } => item !== null);
   if (parsed.length === 0) return null;
-  const firstRole = parsed[0]!.role;
+  const firstRole = parsed[0].role;
   const companies = dedupeStrings(parsed.map((item) => item.company));
   if (parsed.every((item) => item.role === firstRole) && companies.length > 0) {
     return `while working as a ${firstRole} at ${listAsNaturalText(companies)}`;
@@ -5889,7 +5889,7 @@ function normalizeAdjacentEvidenceOrder(args: {
     reportingSentence && durationContext
       ? `Across ${conciseDurationEvidenceLead(durationContext)}, ${reportingSentence.replace(/[.!?]$/u, "")}`
       : durationContext
-        ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0]!.replace(/[.!?]$/u, "")}`
+        ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0].replace(/[.!?]$/u, "")}`
         : evidenceSentences[0] ?? args.bodyParts.opening;
   const proofSentences =
     reportingSentence && monitoringSentence
@@ -6035,6 +6035,7 @@ function buildStandaloneBriefNumericEvidenceContext(
       jobDemandGraph,
       targetEmployer: brief.targetEmployer,
     }),
+    allowMeasurementTranslation: brief.language !== "English",
     provenanceBySection: {
       opening: provenance,
       proofBlock: provenance,
@@ -6676,7 +6677,7 @@ function parsePremiumMistralWriterJson(content: string): unknown {
 
   const embedded = findPremiumEmbeddedJsonObjectCandidates(trimmed);
   if (embedded.length === 1) {
-    return tryParse(embedded[0]!);
+    return tryParse(embedded[0]);
   }
 
   throw new Error(
@@ -7045,7 +7046,7 @@ function repairSectionUsesUncitedCandidateFact(args: {
   factGraph: FactGraphV1;
 }): boolean {
   const candidateFacts = args.factGraph.facts.filter(
-    (fact) => fact.source === "cv",
+    (fact): fact is FactNodeV1 & { source: "cv" } => fact.source === "cv",
   );
   const evidenceFragments = splitSentences(args.text).flatMap((sentence) =>
     sentence
@@ -7469,7 +7470,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
-  let parsedWriterOutput = parsePremiumWriterOutputV1({
+  const parsedWriterOutput = parsePremiumWriterOutputV1({
     rawOutput: await args.writer({
       prompt,
       schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,

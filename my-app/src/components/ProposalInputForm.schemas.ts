@@ -34,6 +34,7 @@ export const formSchema = z.object({
   jobDescription: z.string().min(10, {
     message: "Job description must be at least 10 characters.",
   }),
+  targetEmployerName: z.string().nullable().optional(),
   proposalType: z.enum(
     ["cover_letter", "application_message", "freelance_proposal"],
     {

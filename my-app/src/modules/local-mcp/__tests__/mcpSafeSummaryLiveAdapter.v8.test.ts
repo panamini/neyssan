@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
 import {
@@ -15,6 +17,8 @@ import {
   buildMcpSafeSummaryLiveAdapterActivationV8,
   buildMcpSafeSummaryLiveAdapterHandlerV8,
   buildMcpSafeSummaryLiveAdapterV8,
+  classifyMcpSafeSummaryToolsCallResponseV8,
+  resolveMcpSafeSummaryLiveAdapterHostV8,
   type McpSafeSummaryLiveAdapterInputV8,
 } from "../mcpSafeSummaryLiveAdapter";
 import {
@@ -250,6 +254,7 @@ function inputFor(
     verifyOperatorCredential: vi.fn(async (role) => role === "A" ? IDENTITY_A : IDENTITY_B),
     listTools: vi.fn(async () => buildMcpProductionToolsListResult()),
     readBaseline: vi.fn(async (role, toolName) => baseline[role][toolName]),
+    readPostSeed: vi.fn(async (role, toolName) => postSeed[role][toolName]),
     resolveReference: vi.fn(async (_role, toolName) => ({ id: `ref:${toolName}` })),
     callToolsCall: vi.fn(async ({ role, toolName }) => ({
       jsonrpc: "2.0",
@@ -263,6 +268,88 @@ function inputFor(
 }
 
 describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
+  it("binds internal tools/call traffic to the canonical protected-resource host", () => {
+    expect(resolveMcpSafeSummaryLiveAdapterHostV8(TEST_RESOURCE)).toBe(TEST_HOST);
+    expect(resolveMcpSafeSummaryLiveAdapterHostV8("http://127.0.0.1:5196/mcp")).toBeUndefined();
+    expect(resolveMcpSafeSummaryLiveAdapterHostV8("not-a-resource")).toBeUndefined();
+    expect(resolveMcpSafeSummaryLiveAdapterHostV8(undefined)).toBeUndefined();
+
+    const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
+    const runnerPath = viteSource.slice(
+      viteSource.indexOf("async function buildProductionMcpSafeSummaryLiveAdapterRunner"),
+      viteSource.indexOf("function sameLiveAdapterIdentity"),
+    );
+    expect(runnerPath).toContain("resolveMcpSafeSummaryLiveAdapterHostV8(");
+    expect(runnerPath).toContain("dependencies.authorizationRequestConfig?.canonicalResource");
+    expect(runnerPath).not.toContain("headerValue(req.headers.host)");
+  });
+
+  it("uses opaque in-memory MCP bearers instead of Clerk operator credentials for tools/call", () => {
+    const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
+    const runnerPath = viteSource.slice(
+      viteSource.indexOf("async function buildProductionMcpSafeSummaryLiveAdapterRunner"),
+      viteSource.indexOf("function sameLiveAdapterIdentity"),
+    );
+
+    expect(runnerPath).toContain('randomBytes(32).toString("base64url")');
+    expect(runnerPath).toContain("identityByAccessTokenDigest.set(hashSubject(mcpBearerCredentials.A), identityA)");
+    expect(runnerPath).toContain("identityByAccessTokenDigest.set(hashSubject(mcpBearerCredentials.B), identityB)");
+    expect(runnerPath).toContain("bearerCredential: mcpBearerCredentials[input.role]");
+    expect(runnerPath).not.toContain("identityByAccessTokenDigest.set(hashSubject(credential), identity)");
+  });
+
+  it("classifies only allowlisted first-call fields and drops free text and sensitive values", () => {
+    const sensitive = "raw-bearer-or-private-identity-sentinel";
+    const routeDiagnostic = classifyMcpSafeSummaryToolsCallResponseV8({
+      handled: true,
+      status: 403,
+      headers: {},
+      json: {
+        reason: "invalid_host",
+        message: sensitive,
+        bearer: sensitive,
+        digest: sensitive,
+        refId: sensitive,
+      },
+    });
+    const rpcDiagnostic = classifyMcpSafeSummaryToolsCallResponseV8({
+      handled: true,
+      status: 400,
+      headers: {},
+      json: {
+        jsonrpc: "2.0",
+        id: sensitive,
+        error: { code: -32_600, message: sensitive, data: sensitive },
+      },
+    });
+    const unknownDiagnostic = classifyMcpSafeSummaryToolsCallResponseV8({
+      handled: true,
+      status: 418,
+      headers: {},
+      json: { reason: sensitive, message: sensitive },
+    });
+
+    expect(routeDiagnostic).toEqual({
+      kind: "mcp_safe_summary_first_tools_call_diagnostic",
+      step: "FIRST_TOOLS_CALL",
+      failureKind: "ROUTE_REJECTED",
+      httpStatus: 403,
+      publicReason: "invalid_host",
+      safeForLogging: true,
+      version: 1,
+    });
+    expect(rpcDiagnostic).toMatchObject({
+      failureKind: "JSON_RPC_ERROR",
+      httpStatus: 400,
+      jsonRpcCode: -32_600,
+    });
+    expect(unknownDiagnostic).toMatchObject({
+      failureKind: "RESULT_MALFORMED",
+      httpStatus: 418,
+    });
+    expect(JSON.stringify([routeDiagnostic, rpcDiagnostic, unknownDiagnostic])).not.toContain(sensitive);
+  });
+
   it("requires two ephemeral operator bearers and executes exactly eight handler calls", async () => {
     const baseline = fullSnapshot();
     const postSeed = fullSnapshot({
@@ -288,6 +375,37 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(input.verifyOperatorCredential).toHaveBeenCalledTimes(3);
     expect(JSON.stringify(result)).not.toContain("operator-a-synthetic");
     expect(JSON.stringify(result)).not.toContain("operator-b-synthetic");
+  });
+
+  it("validates the public V2 tools/call result while keeping delta counts server-only", async () => {
+    const baseline = fullSnapshot();
+    const postSeed = validPostSeedSnapshot();
+    const input = inputFor(baseline, postSeed);
+    input.callToolsCall = vi.fn(async ({ role, toolName }) => ({
+      jsonrpc: "2.0",
+      id: `${role}:${toolName}`,
+      result: {
+        structuredContent: {
+          kind: "mcp_readonly_summary_result",
+          status: "OK",
+          toolName,
+          freshness: "FRESH",
+          data: {},
+          nextActionCode: "ready_for_review",
+          version: 2,
+        },
+      },
+    }));
+
+    const result = await buildMcpSafeSummaryLiveAdapterV8(input).run();
+
+    expect(result.sequenceCompleted).toBe(true);
+    expect(result.proof.sequence).toMatchObject({
+      protectedCallCount: 8,
+      postSeedDelta: "ACCEPTED",
+    });
+    expect(input.callToolsCall).toHaveBeenCalledTimes(8);
+    expect(input.readPostSeed).toHaveBeenCalledTimes(8);
   });
 
   it("fails closed before seed when bearer B is missing", async () => {
@@ -323,11 +441,54 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(input.callToolsCall).not.toHaveBeenCalled();
   });
 
-  it("rejects absent deltas, saturation, and concurrent B drift", () => {
+  it("rejects absent deltas, saturation, and concurrent B drift", async () => {
     const baseline = fullSnapshot();
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, undefined)).toMatchObject({
       accepted: false,
       reason: "BASELINE_DRIFT",
+      diagnostic: {
+        kind: "mcp_safe_summary_post_seed_delta_diagnostic",
+        step: "POST_SEED_DELTA",
+        check: "SNAPSHOT_SHAPE",
+        safeForLogging: true,
+      },
+    });
+    const malformedCounts = replaceSummary(
+      validPostSeedSnapshot(),
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      {
+        ...validPostSeedSnapshot().A["twoweeks.evidence_graph.summarize"],
+        safeCounts: {
+          ...(validPostSeedSnapshot().A["twoweeks.evidence_graph.summarize"].safeCounts as object),
+          unexpectedCount: 1,
+        },
+      },
+    );
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, malformedCounts)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "COUNT_SHAPE",
+        role: "A",
+        toolName: "twoweeks.evidence_graph.summarize",
+      },
+    });
+    const malformedSummary = {
+      ...validPostSeedSnapshot(),
+      B: {
+        ...validPostSeedSnapshot().B,
+        "twoweeks.review_cockpit.summarize": undefined,
+      },
+    } as unknown as McpSafeSummarySnapshotV8;
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, malformedSummary)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "SNAPSHOT_SHAPE",
+        role: "B",
+        toolName: "twoweeks.review_cockpit.summarize",
+      },
     });
     expect(validateMcpSafeSummaryBaselineV8(fullSnapshot({
       "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 99 },
@@ -347,6 +508,47 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, drifted)).toMatchObject({
       accepted: false,
       reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "UNEXPECTED_CHANGE",
+        role: "B",
+        toolName: "twoweeks.review_cockpit.summarize",
+      },
+    });
+
+    const countMismatch = fullSnapshot({
+      "A.twoweeks.evidence_graph.summarize": {
+        sourceDocuments: 2,
+        candidateFacts: 1,
+        approvedFacts: 1,
+      },
+    });
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, countMismatch)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "COUNT_DELTA",
+        role: "A",
+        toolName: "twoweeks.evidence_graph.summarize",
+        countKey: "sourceDocuments",
+        expected: 1,
+        actual: 2,
+      },
+    });
+
+    const rejectedResult = await buildMcpSafeSummaryLiveAdapterV8(
+      inputFor(baseline, countMismatch),
+    ).run();
+    expect(rejectedResult.proof.sequence).toMatchObject({
+      outcome: "STOPPED",
+      postSeedDelta: "REJECTED",
+      postSeedDiagnostic: {
+        check: "COUNT_DELTA",
+        role: "A",
+        toolName: "twoweeks.evidence_graph.summarize",
+        countKey: "sourceDocuments",
+        expected: 1,
+        actual: 2,
+      },
     });
   });
 
@@ -534,13 +736,29 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
         id: "v8-error",
         error: { code: -32_000, message: "synthetic failure" },
       },
+      expectedDiagnostic: {
+        failureKind: "JSON_RPC_ERROR",
+        httpStatus: 200,
+        jsonRpcCode: -32_000,
+      },
     },
-    { name: "absent result", response: { jsonrpc: "2.0", id: "v8-absent" } },
+    {
+      name: "absent result",
+      response: { jsonrpc: "2.0", id: "v8-absent" },
+      expectedDiagnostic: {
+        failureKind: "RESULT_MALFORMED",
+        httpStatus: 200,
+      },
+    },
     {
       name: "malformed result",
       response: { jsonrpc: "2.0", id: "v8-malformed", result: { structuredContent: null } },
+      expectedDiagnostic: {
+        failureKind: "RESULT_MALFORMED",
+        httpStatus: 200,
+      },
     },
-  ])("rejects $name tools/call envelopes", async ({ response }) => {
+  ])("rejects $name tools/call envelopes", async ({ response, expectedDiagnostic }) => {
     const baseline = fullSnapshot();
     const input = inputFor(baseline, validPostSeedSnapshot());
     input.callToolsCall = vi.fn(async () => response);
@@ -557,7 +775,15 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "REJECTED",
+      firstToolsCallDiagnostic: {
+        kind: "mcp_safe_summary_first_tools_call_diagnostic",
+        step: "FIRST_TOOLS_CALL",
+        ...expectedDiagnostic,
+        safeForLogging: true,
+        version: 1,
+      },
     });
+    expect(input.readPostSeed).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -881,9 +1107,34 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       host: TEST_HOST,
       remoteAddress: "198.51.100.24",
     });
+    const localHostHandler = buildMcpSafeSummaryLiveAdapterHandlerV8({
+      config,
+      dependencies,
+      host: "127.0.0.1:5196",
+      remoteAddress: "127.0.0.1",
+    });
     const responses: unknown[] = [];
 
     expect(config.preflight.decision).toBe("ready_to_wire");
+    const localHostResponse = await localHostHandler({
+      role: "A",
+      bearerCredential: TEST_BEARER_A,
+      toolName: "twoweeks.application_package.summarize",
+      reference: { id: TOOL_METADATA["twoweeks.application_package.summarize"].refId },
+    });
+    expect(localHostResponse).toEqual({
+      kind: "mcp_safe_summary_live_adapter_call_failure",
+      diagnostic: {
+        kind: "mcp_safe_summary_first_tools_call_diagnostic",
+        step: "FIRST_TOOLS_CALL",
+        failureKind: "ROUTE_REJECTED",
+        httpStatus: 403,
+        publicReason: "invalid_host",
+        safeForLogging: true,
+        version: 1,
+      },
+      version: 1,
+    });
     for (const [role, bearerCredential] of [
       ["A", TEST_BEARER_A],
       ["B", TEST_BEARER_B],
@@ -899,7 +1150,12 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     }
 
     expect(responses).toHaveLength(8);
-    expect(responses[0]).toMatchObject({ jsonrpc: "2.0" });
+    expect(responses[0]).toMatchObject({
+      kind: "mcp_safe_summary_live_adapter_call_response",
+      httpStatus: 200,
+      json: { jsonrpc: "2.0" },
+      version: 1,
+    });
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(8);
     expect(verifyAccessToken).toHaveBeenCalledTimes(8);
     expect(executeReadonlySummaryTool).toHaveBeenCalledTimes(8);
@@ -912,8 +1168,11 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(responses.every((response) =>
       typeof response === "object" &&
       response !== null &&
-      "result" in response &&
-      !("error" in response)
+      "json" in response &&
+      typeof response.json === "object" &&
+      response.json !== null &&
+      "result" in response.json &&
+      !("error" in response.json)
     )).toBe(true);
     expect(executeReadonlySummaryTool.mock.calls.filter(
       ([input]) => input.twoweeksClerkId === IDENTITY_A.subject,

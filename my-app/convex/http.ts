@@ -10,6 +10,83 @@ import { ingestProfileHandler, llmRefineHandler } from "./http_actions";
 
 const http = httpRouter();
 
+const CONTROLLED_PROOF_BRIDGE_OPERATIONS = new Set([
+  "resolve_owner",
+  "application_package_summary",
+  "evidence_graph_summary",
+  "resume_variant_plan_summary",
+  "review_cockpit_summary",
+  "recover",
+  "seed",
+  "cleanup",
+]);
+const CONTROLLED_PROOF_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
+const CONTROLLED_PROOF_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
+
+function isControlledProofRailEnabled(): boolean {
+  return process.env[CONTROLLED_PROOF_RAIL_FLAG] === "1" &&
+    process.env[CONTROLLED_PROOF_RAIL_MODE] === "development";
+}
+
+http.route({
+  path: "/mcp-controlled-proof",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!isControlledProofRailEnabled()) {
+      return new Response(JSON.stringify({ error: "controlled_proof_unavailable" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) {
+      return new Response(JSON.stringify({ error: "controlled_proof_operator_auth_required" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "controlled_proof_invalid_json" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (!body || typeof body !== "object" || !CONTROLLED_PROOF_BRIDGE_OPERATIONS.has(body.operation)) {
+      return new Response(JSON.stringify({ error: "controlled_proof_operation_not_allowed" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const args: Record<string, unknown> = {
+      operation: body.operation,
+      twoweeksClerkId: identity.subject,
+      version: 1,
+    };
+    for (const key of ["refId", "runId", "marker"] as const) {
+      if (typeof body[key] === "string") args[key] = body[key];
+    }
+    if (typeof body.now === "number") args.now = body.now;
+    try {
+      const result = await ctx.runAction(
+        (internal as any).mcpControlledSyntheticProof.runControlledSyntheticProofOperation,
+        args,
+      );
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch {
+      return new Response(JSON.stringify({ error: "controlled_proof_bridge_failed" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 // Simple health check route to verify HTTP route registration (ping)
 http.route({
   path: "/ner-smoke",

@@ -27,6 +27,7 @@ import { ResumePrintPage } from "./pages/ResumePrintPage";
 import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
 import { PdfRasterHarnessPage } from "./pages/PdfRasterHarnessPage";
+import { McpSafeSummaryProofOperatorPage } from "./pages/McpSafeSummaryProofOperatorPage";
 import { Sidebar } from "./components/Sidebar";
 import { ForgeTemplatePanel } from "./components/ForgeTemplatePanel";
 import { CommandPalette } from "./components/CommandPalette";
@@ -280,6 +281,10 @@ function AppRouter(): JSX.Element {
 
   if (location.pathname === "/debug/pdf-raster") {
     return <PdfRasterHarnessPage />;
+  }
+
+  if (location.pathname === "/debug/mcp-safe-summary-proof-operator") {
+    return <McpSafeSummaryProofOperatorPage />;
   }
 
   return <AppShell />;
