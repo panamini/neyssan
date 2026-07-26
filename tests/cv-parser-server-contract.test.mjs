@@ -44,6 +44,13 @@ test("the server image owns its portable runtime contract", () => {
   assert.doesNotMatch(dockerfile, /run\.sh/u);
 });
 
+test("the parser dependency inputs agree on the compatible NumPy floor", () => {
+  const expectedPin = /^numpy==1\.24\.4$/mu;
+
+  assert.match(read("cv_parser_service/requirements.txt"), expectedPin);
+  assert.match(read("cv_parser_service/requirements.lock"), expectedPin);
+});
+
 test("operator docs separate local orchestration from the server image", () => {
   const readme = read("README.md");
 
