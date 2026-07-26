@@ -67,5 +67,9 @@ test("the manual release smoke owns its container and uses the canonical image",
     /--label "\$\{RELEASE_OWNER_LABEL\}=\$\{RELEASE_OWNER_ID\}"/u,
   );
   assert.match(releaseScript, /\[\[ "\$\{owner\}" == "\$\{RELEASE_OWNER_ID\}" \]\]/u);
+  assert.match(
+    releaseScript,
+    /BASE_URL="http:\/\/127\.0\.0\.1:\$\{PORT\}" \.\/scripts\/bench_fixtures\.sh/u,
+  );
   assert.doesNotMatch(releaseScript, /docker rm -f cv-parser(?:\s|$)/u);
 });

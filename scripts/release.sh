@@ -35,7 +35,7 @@ done
 curl -fsS "http://127.0.0.1:${PORT}/ready"
 curl -sf "http://127.0.0.1:${PORT}/metrics" | egrep 'cv_parser_ocr_engine_total|cv_parser_route_total' || true
 
-./scripts/bench_fixtures.sh
+BASE_URL="http://127.0.0.1:${PORT}" ./scripts/bench_fixtures.sh
 python scripts/review_bench.py
 
 echo "[ok] local release smoke passed"
