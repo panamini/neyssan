@@ -150,6 +150,7 @@ function cleanupArgs(ownerProfileId = OWNER_A, runId = RUN_ID_A) {
     ownerProfileId,
     marker: MARKER,
     runId,
+    now: SEEDED_AT,
     version: 1 as const,
   };
 }

@@ -10,10 +10,13 @@ import {
   type McpOAuthProductionAuthenticatedOwnerIdentityReaderV1,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
+  type McpOAuthProductionRouteAdapterResponseV1,
 } from "./mcpOAuthProductionRouteAdapter";
 import {
   validateMcpSafeSummaryBaselineV8,
   validateMcpSafeSummaryPostSeedDeltasV8,
+  type McpSafeSummaryDeltaProofResultV8,
+  type McpSafeSummaryPostSeedDeltaDiagnosticV8,
   type McpSafeSummarySnapshotV8,
 } from "./mcpSafeSummaryDeltaProof";
 import {
@@ -65,6 +68,26 @@ export type McpSafeSummaryLiveAdapterEffectObservationV8 = Readonly<{
   version: 1;
 }>;
 
+export type McpSafeSummaryFirstToolsCallDiagnosticV8 = Readonly<{
+  kind: "mcp_safe_summary_first_tools_call_diagnostic";
+  step: "FIRST_TOOLS_CALL";
+  failureKind: "ROUTE_REJECTED" | "JSON_RPC_ERROR" | "RESULT_MALFORMED";
+  httpStatus: number;
+  publicReason?:
+    | "dependency_unavailable"
+    | "invalid_configuration"
+    | "invalid_host"
+    | "invalid_authorization_header"
+    | "bearer_verification_caller_untrusted"
+    | "bearer_verification_quota_denied"
+    | "bearer_verification_failed"
+    | "private_beta_gate_denied"
+    | "launch_readiness_blocked";
+  jsonRpcCode?: number;
+  safeForLogging: true;
+  version: 1;
+}>;
+
 export type McpSafeSummaryLiveAdapterResultV8 = Readonly<{
   contractId: typeof MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID;
   contractVersion: typeof MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_VERSION;
@@ -81,6 +104,8 @@ export type McpSafeSummaryLiveAdapterResultV8 = Readonly<{
       recovery: "NOT_REQUIRED" | "RECOVERED" | "FAILED";
       baseline: "ACCEPTED" | "REJECTED";
       postSeedDelta: "ACCEPTED" | "REJECTED";
+      postSeedDiagnostic?: McpSafeSummaryPostSeedDeltaDiagnosticV8;
+      firstToolsCallDiagnostic?: McpSafeSummaryFirstToolsCallDiagnosticV8;
       version: 1;
     }>;
     effectObservation: McpSafeSummaryLiveAdapterEffectObservationV8;
@@ -128,6 +153,7 @@ export type McpSafeSummaryLiveAdapterInputV8 = Readonly<{
   ) => Promise<McpSafeSummaryServerIdentityV1 | undefined>;
   listTools: () => Promise<unknown>;
   readBaseline: McpSafeSummaryLiveAdapterBaselineReaderV8;
+  readPostSeed: McpSafeSummaryLiveAdapterBaselineReaderV8;
   resolveReference: (
     role: McpSafeSummaryProofIdentityRole,
     toolName: McpSafeSummaryProofToolName,
@@ -204,8 +230,41 @@ export function buildMcpSafeSummaryLiveAdapterHandlerV8(input: Readonly<{
       input.config,
       input.dependencies,
     );
+    const diagnostic = classifyMcpSafeSummaryToolsCallResponseV8(response);
+    if (diagnostic) {
+      return Object.freeze({
+        kind: "mcp_safe_summary_live_adapter_call_failure",
+        diagnostic,
+        version: 1 as const,
+      });
+    }
     return response.json;
   };
+}
+
+export function classifyMcpSafeSummaryToolsCallResponseV8(
+  response: McpOAuthProductionRouteAdapterResponseV1,
+): McpSafeSummaryFirstToolsCallDiagnosticV8 | undefined {
+  return classifyToolsCallPayload(response.json, safeHttpStatus(response.status));
+}
+
+export function resolveMcpSafeSummaryLiveAdapterHostV8(
+  canonicalResource: string | undefined,
+): string | undefined {
+  if (!canonicalResource) return undefined;
+  try {
+    const resource = new URL(canonicalResource);
+    if (
+      resource.protocol !== "https:" ||
+      resource.username.length > 0 ||
+      resource.password.length > 0
+    ) {
+      return undefined;
+    }
+    return resource.host;
+  } catch {
+    return undefined;
+  }
 }
 
 export function buildMcpSafeSummaryLiveAdapterOAuthCredentialVerifierV8(input: Readonly<{
@@ -248,6 +307,8 @@ async function runMcpSafeSummaryLiveAdapterV8(
   let cleanupRequired = false;
   let baselineAccepted = false;
   let effectBaseline: McpSafeSummaryProofEffectSnapshot | undefined;
+  let firstToolsCallDiagnostic: McpSafeSummaryFirstToolsCallDiagnosticV8 | undefined;
+  let postSeedResult: McpSafeSummaryDeltaProofResultV8 | undefined;
 
   try {
     if (input.effectObservation) {
@@ -284,14 +345,15 @@ async function runMcpSafeSummaryLiveAdapterV8(
     if (stopCode) return finish();
 
     let baselineB: McpSafeSummarySnapshotV8["B"];
+    let baselineA: McpSafeSummarySnapshotV8["A"];
     try {
-      baseline = await readSnapshot(input, "A");
+      baselineA = await readSnapshot(input, "A");
       baselineB = await readSnapshot(input, "B");
     } catch {
       stopCode = "BASELINE_UNAVAILABLE";
       return finish();
     }
-    baseline = mergeSnapshots(baseline, baselineB);
+    baseline = mergeSnapshots(baselineA, baselineB);
     const baselineResult = validateMcpSafeSummaryBaselineV8(baseline);
     if (!baselineResult.accepted) {
       stopCode = baselineResult.reason;
@@ -337,12 +399,15 @@ async function runMcpSafeSummaryLiveAdapterV8(
       return finish();
     }
 
-    const postSeedResult = validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed);
+    postSeedResult = validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed);
     if (!postSeedResult.accepted) {
       stopCode = postSeedResult.reason;
       return finish();
     }
-  } catch {
+  } catch (error) {
+    if (protectedCallCount === 1) {
+      firstToolsCallDiagnostic = readToolsCallFailureDiagnostic(error);
+    }
     stopCode ??= "PROTECTED_CALL_FAILED";
   }
   return finish();
@@ -386,11 +451,11 @@ async function runMcpSafeSummaryLiveAdapterV8(
           cleanupCount,
           recovery,
           baseline: baselineAccepted ? "ACCEPTED" as const : "REJECTED" as const,
-          postSeedDelta: baselineAccepted && baseline && postSeed
-            ? validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed).accepted
-              ? "ACCEPTED" as const
-              : "REJECTED" as const
-            : "REJECTED" as const,
+          postSeedDelta: postSeedResult?.accepted ? "ACCEPTED" as const : "REJECTED" as const,
+          ...(postSeedResult && !postSeedResult.accepted && postSeedResult.diagnostic
+            ? { postSeedDiagnostic: postSeedResult.diagnostic }
+            : {}),
+          ...(firstToolsCallDiagnostic ? { firstToolsCallDiagnostic } : {}),
           version: 1 as const,
         }),
         effectObservation,
@@ -426,11 +491,14 @@ async function readSnapshot(
   input: McpSafeSummaryLiveAdapterInputV8,
   role: McpSafeSummaryProofIdentityRole,
 ): Promise<McpSafeSummarySnapshotV8[typeof role]> {
-  const result = {} as McpSafeSummarySnapshotV8[typeof role];
+  const result: Partial<Record<
+    McpSafeSummaryProofToolName,
+    Readonly<Record<string, unknown>>
+  >> = {};
   for (const toolName of MCP_SAFE_SUMMARY_PROOF_TOOLS) {
     result[toolName] = asBaselineSummary(await input.readBaseline(role, toolName));
   }
-  return Object.freeze(result);
+  return Object.freeze(result) as McpSafeSummarySnapshotV8[typeof role];
 }
 
 async function callAllTools(
@@ -439,15 +507,19 @@ async function callAllTools(
   bearerCredential: string,
   onCall: () => void,
 ): Promise<McpSafeSummarySnapshotV8[typeof role] | undefined> {
-  const result = {} as McpSafeSummarySnapshotV8[typeof role];
+  const result: Partial<Record<
+    McpSafeSummaryProofToolName,
+    Readonly<Record<string, unknown>>
+  >> = {};
   for (const toolName of MCP_SAFE_SUMMARY_PROOF_TOOLS) {
     const reference = await input.resolveReference(role, toolName);
     if (!reference) return undefined;
     onCall();
     const response = await input.callToolsCall({ role, bearerCredential, toolName, reference });
-    result[toolName] = asToolsCallSummary(response);
+    asToolsCallSummary(response);
+    result[toolName] = asBaselineSummary(await input.readPostSeed(role, toolName));
   }
-  return Object.freeze(result);
+  return Object.freeze(result) as McpSafeSummarySnapshotV8[typeof role];
 }
 
 function asBaselineSummary(value: unknown): Readonly<Record<string, unknown>> {
@@ -462,16 +534,146 @@ function asBaselineSummary(value: unknown): Readonly<Record<string, unknown>> {
 }
 
 function asToolsCallSummary(value: unknown): Readonly<Record<string, unknown>> {
-  if (
-    !isRecord(value) ||
-    value.jsonrpc !== "2.0" ||
-    "error" in value ||
-    !isRecord(value.result) ||
-    !isRecord(value.result.structuredContent)
-  ) {
+  const failureDiagnostic = readToolsCallFailureEnvelopeDiagnostic(value);
+  if (failureDiagnostic) throw new McpSafeSummaryToolsCallFailure(failureDiagnostic);
+  const diagnostic = classifyToolsCallPayload(value, 200);
+  if (diagnostic) throw new McpSafeSummaryToolsCallFailure(diagnostic);
+  if (!isRecord(value) || !isRecord(value.result) || !isRecord(value.result.structuredContent)) {
     throw new Error("tools_call_result_malformed");
   }
   return value.result.structuredContent;
+}
+
+class McpSafeSummaryToolsCallFailure extends Error {
+  readonly diagnostic: McpSafeSummaryFirstToolsCallDiagnosticV8;
+
+  constructor(diagnostic: McpSafeSummaryFirstToolsCallDiagnosticV8) {
+    super("mcp_safe_summary_tools_call_failed");
+    this.name = "McpSafeSummaryToolsCallFailure";
+    this.diagnostic = diagnostic;
+  }
+}
+
+function readToolsCallFailureDiagnostic(
+  error: unknown,
+): McpSafeSummaryFirstToolsCallDiagnosticV8 | undefined {
+  return error instanceof McpSafeSummaryToolsCallFailure
+    ? error.diagnostic
+    : undefined;
+}
+
+function classifyToolsCallPayload(
+  value: unknown,
+  httpStatus: number,
+): McpSafeSummaryFirstToolsCallDiagnosticV8 | undefined {
+  if (isRecord(value)) {
+    const publicReason = readPublicRouteReason(value.reason);
+    if (publicReason) {
+      return firstToolsCallDiagnostic("ROUTE_REJECTED", httpStatus, {
+        publicReason,
+      });
+    }
+    if (value.jsonrpc === "2.0" && isRecord(value.error)) {
+      const jsonRpcCode = readSafeJsonRpcCode(value.error.code);
+      return firstToolsCallDiagnostic("JSON_RPC_ERROR", httpStatus, {
+        ...(jsonRpcCode !== undefined ? { jsonRpcCode } : {}),
+      });
+    }
+    if (
+      value.jsonrpc === "2.0" &&
+      isRecord(value.result) &&
+      isRecord(value.result.structuredContent)
+    ) {
+      return undefined;
+    }
+  }
+  return firstToolsCallDiagnostic("RESULT_MALFORMED", httpStatus);
+}
+
+function firstToolsCallDiagnostic(
+  failureKind: McpSafeSummaryFirstToolsCallDiagnosticV8["failureKind"],
+  httpStatus: number,
+  details: Readonly<{
+    publicReason?: McpSafeSummaryFirstToolsCallDiagnosticV8["publicReason"];
+    jsonRpcCode?: number;
+  }> = {},
+): McpSafeSummaryFirstToolsCallDiagnosticV8 {
+  return Object.freeze({
+    kind: "mcp_safe_summary_first_tools_call_diagnostic" as const,
+    step: "FIRST_TOOLS_CALL" as const,
+    failureKind,
+    httpStatus,
+    ...details,
+    safeForLogging: true as const,
+    version: 1 as const,
+  });
+}
+
+function readToolsCallFailureEnvelopeDiagnostic(
+  value: unknown,
+): McpSafeSummaryFirstToolsCallDiagnosticV8 | undefined {
+  if (
+    !isRecord(value) ||
+    value.kind !== "mcp_safe_summary_live_adapter_call_failure" ||
+    !isRecord(value.diagnostic) ||
+    value.version !== 1
+  ) {
+    return undefined;
+  }
+  const diagnostic = value.diagnostic;
+  const failureKind = diagnostic.failureKind === "ROUTE_REJECTED" ||
+    diagnostic.failureKind === "JSON_RPC_ERROR" ||
+    diagnostic.failureKind === "RESULT_MALFORMED"
+    ? diagnostic.failureKind
+    : undefined;
+  if (
+    diagnostic.kind !== "mcp_safe_summary_first_tools_call_diagnostic" ||
+    diagnostic.step !== "FIRST_TOOLS_CALL" ||
+    !failureKind ||
+    typeof diagnostic.httpStatus !== "number" ||
+    diagnostic.safeForLogging !== true ||
+    diagnostic.version !== 1
+  ) {
+    return undefined;
+  }
+  const publicReason = readPublicRouteReason(diagnostic.publicReason);
+  const jsonRpcCode = readSafeJsonRpcCode(diagnostic.jsonRpcCode);
+  return firstToolsCallDiagnostic(failureKind, safeHttpStatus(diagnostic.httpStatus), {
+    ...(publicReason ? { publicReason } : {}),
+    ...(jsonRpcCode !== undefined ? { jsonRpcCode } : {}),
+  });
+}
+
+function safeHttpStatus(value: number): number {
+  return Number.isInteger(value) && value >= 100 && value <= 599 ? value : 0;
+}
+
+function readSafeJsonRpcCode(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= -32_768 &&
+    value <= -32_000
+    ? value
+    : undefined;
+}
+
+function readPublicRouteReason(
+  value: unknown,
+): McpSafeSummaryFirstToolsCallDiagnosticV8["publicReason"] | undefined {
+  switch (value) {
+    case "dependency_unavailable":
+    case "invalid_configuration":
+    case "invalid_host":
+    case "invalid_authorization_header":
+    case "bearer_verification_caller_untrusted":
+    case "bearer_verification_quota_denied":
+    case "bearer_verification_failed":
+    case "private_beta_gate_denied":
+    case "launch_readiness_blocked":
+      return value;
+    default:
+      return undefined;
+  }
 }
 
 function mergeSnapshots(

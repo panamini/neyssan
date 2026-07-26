@@ -12,6 +12,25 @@ export type McpSafeSummaryDeltaProofFailureV8 =
   | "BASELINE_SATURATED"
   | "BASELINE_DRIFT";
 
+export type McpSafeSummaryPostSeedDeltaDiagnosticV8 = Readonly<{
+  kind: "mcp_safe_summary_post_seed_delta_diagnostic";
+  step: "POST_SEED_DELTA";
+  check:
+    | "SNAPSHOT_SHAPE"
+    | "UNEXPECTED_CHANGE"
+    | "DERIVED_METADATA"
+    | "COUNT_SHAPE"
+    | "COUNT_DELTA"
+    | "SAFE_FLAGS";
+  role?: McpSafeSummaryProofIdentityRoleV8;
+  toolName?: McpProductionReadonlySummaryToolNameV1;
+  countKey?: string;
+  expected?: number;
+  actual?: number;
+  safeForLogging: true;
+  version: 1;
+}>;
+
 export type McpSafeSummaryDeltaProofResultV8 = Readonly<
   | {
       accepted: true;
@@ -22,6 +41,7 @@ export type McpSafeSummaryDeltaProofResultV8 = Readonly<
   | {
       accepted: false;
       reason: McpSafeSummaryDeltaProofFailureV8;
+      diagnostic?: McpSafeSummaryPostSeedDeltaDiagnosticV8;
       exactIdentityCount: 2;
       exactQueryKindCount: 4;
       version: 1;
@@ -199,18 +219,35 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
   baseline: McpSafeSummarySnapshotV8,
   postSeed: McpSafeSummarySnapshotV8 | undefined,
 ): McpSafeSummaryDeltaProofResultV8 {
-  if (!isValidSnapshot(baseline)) return failure("BASELINE_UNAVAILABLE");
-  if (!postSeed || !isValidSnapshot(postSeed)) return failure("BASELINE_DRIFT");
+  const baselineShapeDiagnostic = findSnapshotShapeDiagnostic(baseline);
+  if (baselineShapeDiagnostic) {
+    return failure("BASELINE_UNAVAILABLE", baselineShapeDiagnostic);
+  }
+  if (!postSeed) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({ check: "SNAPSHOT_SHAPE" }));
+  }
+  const postSeedShapeDiagnostic = findSnapshotShapeDiagnostic(postSeed);
+  if (postSeedShapeDiagnostic) {
+    return failure("BASELINE_DRIFT", postSeedShapeDiagnostic);
+  }
   for (const toolName of TOOLS) {
     if (!structurallyEqual(baseline.B[toolName], postSeed.B[toolName])) {
-      return failure("BASELINE_DRIFT");
+      return failure("BASELINE_DRIFT", deltaDiagnostic({
+        check: "UNEXPECTED_CHANGE",
+        role: "B",
+        toolName,
+      }));
     }
   }
   if (!structurallyEqual(
     baseline.A["twoweeks.application_package.summarize"],
     postSeed.A["twoweeks.application_package.summarize"],
   )) {
-    return failure("BASELINE_DRIFT");
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "UNEXPECTED_CHANGE",
+      role: "A",
+      toolName: "twoweeks.application_package.summarize",
+    }));
   }
 
   const evidenceBaselineSummary = baseline.A["twoweeks.evidence_graph.summarize"];
@@ -223,17 +260,32 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     evidencePostSummary,
     "twoweeks.evidence_graph.summarize",
   );
-  if (
-    !matchesOutsideDerivedMetadata(
-      "twoweeks.evidence_graph.summarize",
-      evidenceBaselineSummary,
-      evidencePostSummary,
-    ) ||
-    !evidenceBaseline ||
-    !evidencePost ||
-    !matchesDelta(evidenceBaseline, evidencePost, EVIDENCE_DELTA)
-  ) {
-    return failure("BASELINE_DRIFT");
+  if (!matchesOutsideDerivedMetadata(
+    "twoweeks.evidence_graph.summarize",
+    evidenceBaselineSummary,
+    evidencePostSummary,
+  )) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "DERIVED_METADATA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+    }));
+  }
+  if (!evidenceBaseline || !evidencePost) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "COUNT_SHAPE",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+    }));
+  }
+  const evidenceCountDiagnostic = findCountDeltaDiagnostic(
+    "twoweeks.evidence_graph.summarize",
+    evidenceBaseline,
+    evidencePost,
+    EVIDENCE_DELTA,
+  );
+  if (evidenceCountDiagnostic) {
+    return failure("BASELINE_DRIFT", evidenceCountDiagnostic);
   }
 
   const resumeBaselineSummary = baseline.A["twoweeks.resume_variant_plan.summarize"];
@@ -246,18 +298,32 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     resumePostSummary,
     "twoweeks.resume_variant_plan.summarize",
   );
-  if (
-    !matchesOutsideDerivedMetadata(
-      "twoweeks.resume_variant_plan.summarize",
-      resumeBaselineSummary,
-      resumePostSummary,
-    ) ||
-    !resumeBaseline ||
-    !resumePost ||
-    resumePost.plans !== resumeBaseline.plans + 1 ||
-    !matchesDelta(resumeBaseline, resumePost, RESUME_DELTA)
-  ) {
-    return failure("BASELINE_DRIFT");
+  if (!matchesOutsideDerivedMetadata(
+    "twoweeks.resume_variant_plan.summarize",
+    resumeBaselineSummary,
+    resumePostSummary,
+  )) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "DERIVED_METADATA",
+      role: "A",
+      toolName: "twoweeks.resume_variant_plan.summarize",
+    }));
+  }
+  if (!resumeBaseline || !resumePost) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "COUNT_SHAPE",
+      role: "A",
+      toolName: "twoweeks.resume_variant_plan.summarize",
+    }));
+  }
+  const resumeCountDiagnostic = findCountDeltaDiagnostic(
+    "twoweeks.resume_variant_plan.summarize",
+    resumeBaseline,
+    resumePost,
+    RESUME_DELTA,
+  );
+  if (resumeCountDiagnostic) {
+    return failure("BASELINE_DRIFT", resumeCountDiagnostic);
   }
 
   const reviewBaselineSummary = baseline.A["twoweeks.review_cockpit.summarize"];
@@ -270,19 +336,43 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     reviewPostSummary,
     "twoweeks.review_cockpit.summarize",
   );
+  if (!reviewBaseline || !reviewPost) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "COUNT_SHAPE",
+      role: "A",
+      toolName: "twoweeks.review_cockpit.summarize",
+    }));
+  }
   if (
-    !reviewBaseline ||
-    !reviewPost ||
     !hasExactReviewSafeFlags(reviewBaselineSummary, reviewBaseline) ||
-    !hasExactReviewSafeFlags(reviewPostSummary, reviewPost) ||
-    !matchesOutsideDerivedMetadata(
-      "twoweeks.review_cockpit.summarize",
-      reviewBaselineSummary,
-      reviewPostSummary,
-    ) ||
-    !matchesDelta(reviewBaseline, reviewPost, REVIEW_DELTA, { staleInputs: 0 })
+    !hasExactReviewSafeFlags(reviewPostSummary, reviewPost)
   ) {
-    return failure("BASELINE_DRIFT");
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "SAFE_FLAGS",
+      role: "A",
+      toolName: "twoweeks.review_cockpit.summarize",
+    }));
+  }
+  if (!matchesOutsideDerivedMetadata(
+    "twoweeks.review_cockpit.summarize",
+    reviewBaselineSummary,
+    reviewPostSummary,
+  )) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "DERIVED_METADATA",
+      role: "A",
+      toolName: "twoweeks.review_cockpit.summarize",
+    }));
+  }
+  const reviewCountDiagnostic = findCountDeltaDiagnostic(
+    "twoweeks.review_cockpit.summarize",
+    reviewBaseline,
+    reviewPost,
+    REVIEW_DELTA,
+    { staleInputs: 0 },
+  );
+  if (reviewCountDiagnostic) {
+    return failure("BASELINE_DRIFT", reviewCountDiagnostic);
   }
 
   return success();
@@ -326,20 +416,32 @@ function readCounts(
   return Object.freeze(counts);
 }
 
-function matchesDelta(
+function findCountDeltaDiagnostic(
+  toolName: McpProductionReadonlySummaryToolNameV1,
   baseline: Readonly<Record<string, number>>,
   postSeed: Readonly<Record<string, number>>,
   delta: Readonly<Record<string, number>>,
   exactPost: Readonly<Record<string, number>> = {},
-): boolean {
+): McpSafeSummaryPostSeedDeltaDiagnosticV8 | undefined {
   const keys = Object.keys(baseline);
-  return (
-    keys.length === Object.keys(postSeed).length &&
-    keys.every((key) => {
-      const expected = exactPost[key] ?? baseline[key] + (delta[key] ?? 0);
-      return postSeed[key] === expected;
-    })
-  );
+  if (keys.length !== Object.keys(postSeed).length) {
+    return deltaDiagnostic({ check: "COUNT_SHAPE", role: "A", toolName });
+  }
+  for (const key of keys) {
+    const expected = exactPost[key] ?? baseline[key] + (delta[key] ?? 0);
+    const actual = postSeed[key];
+    if (actual !== expected) {
+      return deltaDiagnostic({
+        check: "COUNT_DELTA",
+        role: "A",
+        toolName,
+        countKey: key,
+        expected,
+        actual,
+      });
+    }
+  }
+  return undefined;
 }
 
 function hasInsufficientHeadroom(
@@ -381,15 +483,29 @@ function normalizeForPostSeedComparison(
   return normalized;
 }
 
-function isValidSnapshot(value: unknown): value is McpSafeSummarySnapshotV8 {
-  if (!isPlainRecord(value) || !isPlainRecord(value.A) || !isPlainRecord(value.B)) return false;
+function findSnapshotShapeDiagnostic(
+  value: unknown,
+): McpSafeSummaryPostSeedDeltaDiagnosticV8 | undefined {
+  if (!isPlainRecord(value) || !isPlainRecord(value.A) || !isPlainRecord(value.B)) {
+    return deltaDiagnostic({ check: "SNAPSHOT_SHAPE" });
+  }
   for (const role of ["A", "B"] as const) {
+    const summaries = value[role];
+    if (!isPlainRecord(summaries)) {
+      return deltaDiagnostic({ check: "SNAPSHOT_SHAPE" });
+    }
     for (const toolName of TOOLS) {
-      const counts = readCounts(value[role][toolName], toolName);
-      if (!counts || Object.values(counts).some((count) => count >= MAX_SAFE_COUNT)) return false;
+      const summary = summaries[toolName];
+      if (!isPlainRecord(summary)) {
+        return deltaDiagnostic({ check: "SNAPSHOT_SHAPE", role, toolName });
+      }
+      const counts = readCounts(summary, toolName);
+      if (!counts || Object.values(counts).some((count) => count >= MAX_SAFE_COUNT)) {
+        return deltaDiagnostic({ check: "COUNT_SHAPE", role, toolName });
+      }
     }
   }
-  return true;
+  return undefined;
 }
 
 function success(): McpSafeSummaryDeltaProofResultV8 {
@@ -403,12 +519,29 @@ function success(): McpSafeSummaryDeltaProofResultV8 {
 
 function failure(
   reason: McpSafeSummaryDeltaProofFailureV8,
+  diagnostic?: McpSafeSummaryPostSeedDeltaDiagnosticV8,
 ): McpSafeSummaryDeltaProofResultV8 {
   return Object.freeze({
     accepted: false,
     reason,
+    ...(diagnostic ? { diagnostic } : {}),
     exactIdentityCount: 2,
     exactQueryKindCount: 4,
+    version: 1,
+  });
+}
+
+function deltaDiagnostic(
+  input: Omit<
+    McpSafeSummaryPostSeedDeltaDiagnosticV8,
+    "kind" | "step" | "safeForLogging" | "version"
+  >,
+): McpSafeSummaryPostSeedDeltaDiagnosticV8 {
+  return Object.freeze({
+    kind: "mcp_safe_summary_post_seed_delta_diagnostic",
+    step: "POST_SEED_DELTA",
+    ...input,
+    safeForLogging: true,
     version: 1,
   });
 }

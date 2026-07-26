@@ -507,6 +507,7 @@ describe("Convex MCP OAuth pre-auth intents", () => {
     expect(schemaSource).toContain('.index("by_pre_auth_handle_hash", ["preAuthHandleHash"])');
     expect(schemaSource).toContain('.index("by_expires_at", ["expiresAt"])');
     const tableSource = schemaSource.slice(schemaSource.indexOf("mcpOAuthPreAuthIntents: defineTable"));
+    expect(tableSource).toContain("ui_locales: v.optional(v.string())");
     expect(tableSource).not.toContain("login_hint");
     expect(tableSource).not.toContain("id_token_hint");
     expect(tableSource).not.toContain("twoweeksClerkId");

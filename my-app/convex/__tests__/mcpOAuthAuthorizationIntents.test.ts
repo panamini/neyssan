@@ -489,6 +489,7 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(schemaSource).toContain("mcpOAuthAuthorizationIntents: defineTable");
     expect(schemaSource).toContain('.index("by_intent_handle_hash", ["intentHandleHash"])');
     expect(schemaSource).toContain('.index("by_expires_at", ["expiresAt"])');
+    expect(schemaSource).toContain("ui_locales: v.optional(v.string())");
     expect(schemaSource).not.toContain("login_hint");
     expect(schemaSource).not.toContain("id_token_hint");
   });
