@@ -141,6 +141,11 @@ hash_string() {
   fi
 }
 
+RUN_OWNER_LABEL="com.twoweeks.run-sh.owner"
+RUN_OWNER_ID="$(hash_string "${ROOT_DIR}")"
+RUN_OWNER_PROCESS_PREFIX="twoweeks-run-sh-${RUN_OWNER_ID:0:16}"
+readonly RUN_OWNER_LABEL RUN_OWNER_ID RUN_OWNER_PROCESS_PREFIX
+
 env_reload_hash() {
   local payload=""
   local file=""
@@ -1358,12 +1363,14 @@ doctor_running_parser_matches_target() {
   if [[ "${target}" == "mcp-private-beta" ]]; then
     expected_runtime="image"
   fi
+  container_is_owned_by_run_sh "${PARSER_NAME}" || return 1
   parser_container_matches_runtime "${expected_runtime}"
 }
 
 doctor_running_parser_is_tracked() {
   command -v docker >/dev/null 2>&1 || return 1
-  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${PARSER_NAME}"
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${PARSER_NAME}" \
+    && container_is_owned_by_run_sh "${PARSER_NAME}"
 }
 
 parser_container_owns_port() {
@@ -1924,21 +1931,75 @@ ensure_runtime_image_exists() {
   build_runtime_image
 }
 
-kill_vite_ports() {
-  # Kill any dev servers lingering on 5173–5215
-  for p in $(seq 5173 5215); do
-    # macOS & Linux-friendly lsof usage
-    pids="$(lsof -ti tcp:$p -sTCP:LISTEN 2>/dev/null || true)"
-    if [[ -n "${pids}" ]]; then
-      echo "[run] killing process(es) on :${p} -> ${pids}" >&2
-      kill -9 ${pids} || true
-    fi
+require_port_available() {
+  local port="${1:?port required}"
+  local label="${2:?label required}"
+  if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "[run] ERROR: ${label} is already in use; run ./run.sh status or stop the owning process explicitly." >&2
+    return 1
+  fi
+}
+
+process_is_owned_by_run_sh() {
+  local pid="${1:-}"
+  [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "${pid}" >/dev/null 2>&1 || return 1
+  command -v ps >/dev/null 2>&1 || return 1
+  ps ww -p "${pid}" -o command= 2>/dev/null | grep -Fq "${RUN_OWNER_PROCESS_PREFIX}:"
+}
+
+stop_owned_process() {
+  local pid="${1:-}"
+  local label="${2:?label required}"
+  [[ -n "${pid}" ]] || return 0
+  if ! [[ "${pid}" =~ ^[0-9]+$ ]]; then
+    echo "[run] ERROR: refusing to stop ${label}; tracked PID is invalid." >&2
+    return 1
+  fi
+  if ! kill -0 "${pid}" >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! process_is_owned_by_run_sh "${pid}"; then
+    echo "[run] ERROR: refusing to stop unowned ${label} process (PID ${pid})." >&2
+    return 1
+  fi
+  echo "[run] stopping ${label} (PID ${pid})"
+  kill -TERM -- "-${pid}" >/dev/null 2>&1 || kill "${pid}" >/dev/null 2>&1 || true
+  wait "${pid}" 2>/dev/null || true
+  for _ in {1..20}; do
+    kill -0 "${pid}" >/dev/null 2>&1 || return 0
+    process_is_owned_by_run_sh "${pid}" || return 0
+    sleep 0.1
   done
+  if process_is_owned_by_run_sh "${pid}"; then
+    echo "[run] ${label} did not stop after SIGTERM; sending SIGKILL to its owned process group." >&2
+    kill -KILL -- "-${pid}" >/dev/null 2>&1 || kill -KILL "${pid}" >/dev/null 2>&1 || true
+  fi
+}
+
+container_owner_id() {
+  local name="${1:?container name required}"
+  docker inspect --format "{{ index .Config.Labels \"${RUN_OWNER_LABEL}\" }}" "${name}" 2>/dev/null || true
+}
+
+container_is_owned_by_run_sh() {
+  local name="${1:?container name required}"
+  [[ "$(container_owner_id "${name}")" == "${RUN_OWNER_ID}" ]]
+}
+
+require_owned_container() {
+  local name="${1:?container name required}"
+  local label="${2:?label required}"
+  if ! container_is_owned_by_run_sh "${name}"; then
+    echo "[run] ERROR: refusing to stop or replace unowned ${label} container (${name})." >&2
+    return 1
+  fi
 }
 
 write_state() {
   mkdir -p "${STATE_DIR}"
   {
+    printf 'STATE_OWNER_ID=%s\n' "${RUN_OWNER_ID}"
     printf 'VITE_PID=%s\n' "${1:-}"
     printf 'PARSER_STARTED=%s\n' "${2:-0}"
     printf 'CONVEX_PID=%s\n' "${3:-}"
@@ -1975,9 +2036,11 @@ write_current_state() {
 }
 
 read_state() {
+  STATE_OWNER_ID=""
   [[ -f "${STATE_FILE}" ]] || return 0
   while IFS='=' read -r k v; do
     case "$k" in
+      STATE_OWNER_ID) STATE_OWNER_ID="$v" ;;
       VITE_PID) VITE_PID="$v" ;;
       PARSER_STARTED) PARSER_STARTED="$v" ;;
       CONVEX_PID) CONVEX_PID="$v" ;;
@@ -2097,15 +2160,19 @@ tunnel_container_running() {
 }
 
 vite_process_running() {
-  [[ -n "${VITE_PID:-}" ]] && kill -0 "${VITE_PID}" >/dev/null 2>&1
+  [[ -n "${VITE_PID:-}" ]] && process_is_owned_by_run_sh "${VITE_PID}"
 }
 
 convex_process_running() {
-  [[ -n "${CONVEX_PID:-}" ]] && kill -0 "${CONVEX_PID}" >/dev/null 2>&1 && [[ -n "${CONVEX_URL:-}" ]] && is_convex_ready "${CONVEX_URL}"
+  [[ -n "${CONVEX_PID:-}" ]] \
+    && process_is_owned_by_run_sh "${CONVEX_PID}" \
+    && [[ -n "${CONVEX_URL:-}" ]] \
+    && is_convex_ready "${CONVEX_URL}"
 }
 
 tracked_stack_is_live() {
   if [[ "${PARSER_STARTED:-0}" == "1" ]]; then
+    container_is_owned_by_run_sh "${PARSER_NAME}" || return 1
     parser_container_matches_runtime "${PARSER_RUNTIME_MODE:-image}" || return 1
     parser_container_owns_port || return 1
     curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1 || return 1
@@ -2120,6 +2187,9 @@ tracked_stack_is_live() {
     return 1
   fi
   if state_requests_tunnel && ! tunnel_container_running; then
+    return 1
+  fi
+  if state_requests_tunnel && ! container_is_owned_by_run_sh "${CLOUDFLARED_NAME}"; then
     return 1
   fi
   return 0
@@ -2139,6 +2209,10 @@ handle_existing_stack_request() {
 
   read_state
   [[ -n "${STACK_MODE:-}" ]] || return 1
+  if [[ "${STATE_OWNER_ID:-}" != "${RUN_OWNER_ID}" ]]; then
+    echo "[run] ERROR: tracked stack state is legacy or belongs to another worktree; run ./run.sh doctor before recovery." >&2
+    return 1
+  fi
   [[ "${STACK_MODE}" == "${requested_stack_mode}" ]] || return 1
   [[ "${ACTIVE_ORIGIN:-}" == "${requested_active_origin}" ]] || return 1
   [[ "${PARSER_RUNTIME_MODE:-}" == "${requested_runtime_mode}" ]] || return 1
@@ -2166,7 +2240,7 @@ ensure_workspace_runtime_surface() {
       echo "${diagnostic}" >&2
     fi
     echo "[run] Run \`./run.sh rebuild-docker\` to refresh the parser/export runtime image, then retry \`./run.sh local-fast\`." >&2
-    docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
+    stop_parser || true
     exit 1
   }
 }
@@ -2362,10 +2436,11 @@ reuse_running_local_convex_from_state() {
   local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
   read_state
 
+  [[ "${STATE_OWNER_ID:-}" == "${RUN_OWNER_ID}" ]] || return 1
   if [[ -z "${CONVEX_PID:-}" || -z "${CONVEX_URL:-}" ]]; then
     return 1
   fi
-  if ! kill -0 "${CONVEX_PID}" >/dev/null 2>&1; then
+  if ! process_is_owned_by_run_sh "${CONVEX_PID}"; then
     return 1
   fi
   if ! is_convex_ready "${CONVEX_URL}"; then
@@ -2495,6 +2570,7 @@ start_parser() {
   local PARSER_NEEDS_START=1
 
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
+    require_owned_container "${PARSER_NAME}" "parser" || return 1
     local current_mode
     current_mode="$(parser_runtime_mode)"
     if parser_container_matches_runtime "${RUNTIME_MODE}" && parser_container_owns_port; then
@@ -2538,6 +2614,7 @@ start_parser() {
     if [[ "${RUNTIME_MODE}" == "workspace" ]]; then
       docker run -d --rm \
         --name "${PARSER_NAME}" \
+        --label "${RUN_OWNER_LABEL}=${RUN_OWNER_ID}" \
         --platform "${PLATFORM}" \
         -p 8001:8001 \
         "${mounts[@]}" \
@@ -2550,6 +2627,7 @@ start_parser() {
     else
       docker run -d --rm \
         --name "${PARSER_NAME}" \
+        --label "${RUN_OWNER_LABEL}=${RUN_OWNER_ID}" \
         --platform "${PLATFORM}" \
         -p 8001:8001 \
         "${envs[@]}" \
@@ -2588,6 +2666,7 @@ remove_parser_container() {
     if ! docker container inspect "${PARSER_NAME}" >/dev/null 2>&1; then
       return 0
     fi
+    require_owned_container "${PARSER_NAME}" "parser" || return 1
     docker rm -f "${PARSER_NAME}" >/dev/null 2>&1 || true
     sleep 0.5
   done
@@ -2597,9 +2676,12 @@ remove_parser_container() {
 }
 
 stop_parser() {
-  if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
-    echo "[run] stopping parser (${PARSER_NAME})"
-    docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
+  if docker container inspect "${PARSER_NAME}" >/dev/null 2>&1; then
+    require_owned_container "${PARSER_NAME}" "parser" || return 1
+    if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
+      echo "[run] stopping parser (${PARSER_NAME})"
+      docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
+    fi
     remove_parser_container
   fi
 }
@@ -2613,7 +2695,10 @@ start_tunnel() {
   else
     docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
   fi
-  docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
+  if docker container inspect "${CLOUDFLARED_NAME}" >/dev/null 2>&1; then
+    require_owned_container "${CLOUDFLARED_NAME}" "tunnel" || return 1
+    docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
+  fi
   echo "[run] starting cloudflared (${CLOUDFLARED_NAME})"
   if [[ "${MCP_PRIVATE_BETA_TUNNEL:-0}" == "1" ]]; then
     local config_temp="${MCP_TUNNEL_CONFIG_FILE}.tmp.$$"
@@ -2630,6 +2715,7 @@ EOF
     chmod 600 "${config_temp}"
     mv "${config_temp}" "${MCP_TUNNEL_CONFIG_FILE}"
     if ! docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
+      --label "${RUN_OWNER_LABEL}=${RUN_OWNER_ID}" \
       "${tunnel_network_args[@]}" \
       --mount "type=bind,source=${MCP_TUNNEL_CONFIG_FILE},target=/etc/cloudflared/config.yml,readonly" \
       --mount "type=bind,source=${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE},target=/run/secrets/cloudflared-mcp-credentials.json,readonly" \
@@ -2650,6 +2736,7 @@ EOF
     chmod 600 "${token_temp}"
     mv "${token_temp}" "${TUNNEL_TOKEN_FILE}"
     if ! docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
+      --label "${RUN_OWNER_LABEL}=${RUN_OWNER_ID}" \
       --network "${TUNNEL_NETWORK}" \
       --mount "type=bind,source=${TUNNEL_TOKEN_FILE},target=/run/secrets/cloudflared-token,readonly" \
       cloudflare/cloudflared:latest \
@@ -2664,23 +2751,15 @@ EOF
 }
 
 stop_tunnel() {
-  if docker ps --format '{{.Names}}' | grep -qx "${CLOUDFLARED_NAME}"; then
-    echo "[run] stopping tunnel (${CLOUDFLARED_NAME})"
-    docker stop "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
+  if docker container inspect "${CLOUDFLARED_NAME}" >/dev/null 2>&1; then
+    require_owned_container "${CLOUDFLARED_NAME}" "tunnel" || return 1
+    if docker ps --format '{{.Names}}' | grep -qx "${CLOUDFLARED_NAME}"; then
+      echo "[run] stopping tunnel (${CLOUDFLARED_NAME})"
+      docker stop "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
+    fi
+    docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
   fi
   rm -f "${TUNNEL_TOKEN_FILE}" "${MCP_TUNNEL_CONFIG_FILE}"
-}
-
-kill_stale_convex() {
-  local pids=""
-  pids="$(pgrep -f 'node .*/node_modules/\.bin/convex dev|npm exec convex dev|convex-local-backend .*--instance-name' 2>/dev/null || true)"
-  if [[ -n "${pids}" ]]; then
-    echo "[run] killing stale Convex process(es): ${pids}"
-    kill ${pids} >/dev/null 2>&1 || true
-    sleep 1
-    pids="$(pgrep -f 'node .*/node_modules/\.bin/convex dev|npm exec convex dev|convex-local-backend .*--instance-name' 2>/dev/null || true)"
-    [[ -n "${pids}" ]] && kill -9 ${pids} >/dev/null 2>&1 || true
-  fi
 }
 
 clear_dev_state() {
@@ -2798,6 +2877,7 @@ start_convex() {
     export CONVEX_PARSER_URL="http://127.0.0.1:8001"
     export STRUCTURED_UPLOAD_PREFER_LOOPBACK=1
     export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
+    export TWOWEEKS_RUN_OWNER_ARGV0="${RUN_OWNER_PROCESS_PREFIX}:convex"
     local direct_backend_bin=""
     local direct_backend_state_dir=""
     if [[ -n "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" && -n "${convex_deployment_name}" ]]; then
@@ -2819,6 +2899,7 @@ const { spawn } = require("node:child_process");
 const [pidFile, logFile, supervisor, ...args] = process.argv.slice(1);
 const logFd = fs.openSync(logFile, "a");
 const child = spawn(process.execPath, [supervisor, pidFile, logFile, ...args], {
+  argv0: process.env.TWOWEEKS_RUN_OWNER_ARGV0,
   cwd: process.cwd(),
   env: process.env,
   detached: true,
@@ -2841,7 +2922,7 @@ child.unref();
         "${LOCAL_CONVEX_STATE_CONFIG_RESULT}" \
         "${LOCAL_CONVEX_STARTUP_TIMEOUT}"
     else
-      local -a convex_cmd=("${convex_bin}" dev --verbose --tail-logs always --local-cloud-port "${convex_cloud_port}" --local-site-port "${convex_site_port}" --local-force-upgrade)
+      local -a convex_cmd=(node "${convex_bin}" dev --verbose --tail-logs always --local-cloud-port "${convex_cloud_port}" --local-site-port "${convex_site_port}" --local-force-upgrade)
       if [[ -n "${convex_deployment_name}" ]]; then
         convex_cmd+=(--local)
       else
@@ -2853,6 +2934,7 @@ const { spawn } = require("node:child_process");
 const [pidFile, logFile, cmd, ...args] = process.argv.slice(1);
 const logFd = fs.openSync(logFile, "a");
 const child = spawn(cmd, args, {
+  argv0: process.env.TWOWEEKS_RUN_OWNER_ARGV0,
   cwd: process.cwd(),
   env: process.env,
   detached: true,
@@ -2915,18 +2997,14 @@ child.unref();
 
 stop_convex() {
   local CPID="${1:-}"
-  if [[ -n "${CPID}" ]] && kill -0 "${CPID}" >/dev/null 2>&1; then
-    echo "[run] stopping local Convex (PID ${CPID})"
-    kill "${CPID}" >/dev/null 2>&1 || true
-    wait "${CPID}" 2>/dev/null || true
-  fi
+  stop_owned_process "${CPID}" "local Convex"
 }
 
 # ===== Vite =====
 start_vite() {
   local ORIGIN="${1:?origin required}"
   local CONVEX_URL="${2:-}"
-  kill_vite_ports
+  require_port_available "${VITE_PORT}" "Vite port ${VITE_PORT}"
   : > "${VITE_LOG}"
   local vite_pid_file="${STATE_DIR}/vite.pid"
   rm -f "${vite_pid_file}"
@@ -2946,6 +3024,7 @@ start_vite() {
       fi
     fi
     export STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1
+    export TWOWEEKS_RUN_OWNER_ARGV0="${RUN_OWNER_PROCESS_PREFIX}:vite"
     local vite_bin="./node_modules/vite/bin/vite.js"
     if [[ ! -f "${vite_bin}" ]]; then
       echo "[run] ERROR: missing Vite binary at ${vite_bin}" >&2
@@ -2964,6 +3043,7 @@ const { spawn } = require("node:child_process");
 const [pidFile, logFile, cmd, ...args] = process.argv.slice(1);
 const logFd = fs.openSync(logFile, "a");
 const child = spawn(cmd, args, {
+  argv0: process.env.TWOWEEKS_RUN_OWNER_ARGV0,
   cwd: process.cwd(),
   env: process.env,
   detached: true,
@@ -2979,12 +3059,7 @@ child.unref();
 
 stop_vite() {
   local VPID="${1:-}"
-  if [[ -n "${VPID}" ]] && kill -0 "${VPID}" >/dev/null 2>&1; then
-    echo "[run] stopping Vite (PID ${VPID})"
-    kill "${VPID}" >/dev/null 2>&1 || true
-    wait "${VPID}" 2>/dev/null || true
-  fi
-  kill_vite_ports
+  stop_owned_process "${VPID}" "Vite"
 }
 
 reload_env_stack() {
@@ -3003,6 +3078,10 @@ reload_env_stack() {
   read_state
   if [[ -z "${STACK_MODE:-}" ]]; then
     echo "[run] ERROR: no tracked stack to reload. Start one with ./run.sh up, ./run.sh local-fast, ./run.sh tunnel, or ./run.sh parser-dev." >&2
+    exit 1
+  fi
+  if [[ "${STATE_OWNER_ID:-}" != "${RUN_OWNER_ID}" ]]; then
+    echo "[run] ERROR: refusing to reload legacy or foreign stack state; run ./run.sh doctor before recovery." >&2
     exit 1
   fi
   if [[ "${STACK_MODE}" == "mcp-private-beta" ]]; then
@@ -3321,14 +3400,23 @@ up() {
 
 down() {
   local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  local stop_failed="0"
   read_state
-  stop_vite "${VITE_PID:-}"
-  stop_convex "${CONVEX_PID:-}"
+  if [[ -f "${STATE_FILE}" && "${STATE_OWNER_ID:-}" != "${RUN_OWNER_ID}" ]]; then
+    echo "[run] ERROR: refusing to use legacy or foreign stack state; inspect it and stop those resources explicitly." >&2
+    return 1
+  fi
+  stop_vite "${VITE_PID:-}" || stop_failed="1"
+  stop_convex "${CONVEX_PID:-}" || stop_failed="1"
   if [[ "${PARSER_STARTED:-0}" == "1" ]]; then
-    stop_parser
+    stop_parser || stop_failed="1"
   fi
   if [[ "${TUNNEL_STARTED:-0}" == "1" ]]; then
-    stop_tunnel
+    stop_tunnel || stop_failed="1"
+  fi
+  if [[ "${stop_failed}" == "1" ]]; then
+    echo "[run] ERROR: down preserved state because at least one resource was not proven to be owned by this worktree." >&2
+    return 1
   fi
   rm -f "${STATE_FILE}"
   echo "[run] down: done."
@@ -3338,14 +3426,15 @@ down() {
 reset() {
   local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
   read_state
-  down >/dev/null 2>&1 || true
-  stop_tunnel || true
-  docker rm -f "${PARSER_NAME}" "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
-  stop_parser || true
-  kill_stale_convex
-  kill_vite_ports
+  if ! down >/dev/null; then
+    echo "[run] ERROR: reset stopped because tracked ownership could not be proven." >&2
+    return 1
+  fi
+  stop_tunnel
+  stop_parser
   clear_dev_state
   echo "[run] reset: done."
+  echo "[run] reset never scans or kills unrelated port ranges; run ./run.sh doctor if a port remains occupied."
   print_command_banner
 }
 
@@ -3504,7 +3593,6 @@ usage:
   ./run.sh smoke
   ./run.sh assert-ocr FILE.pdf
   ./run.sh probe-edge [FILE.pdf]     # uses CF_ACCESS_CLIENT_ID/SECRET if set
-  ./run.sh kill-vite-ports
 
 notes:
 - doctor = read-only, secret-free startup diagnostics. macOS and Linux are supported directly; Windows uses WSL2 with Docker Desktop integration.
@@ -3520,7 +3608,8 @@ notes:
 - reload-env = restart-only refresh for parser/Vite/local Convex/tunnel after env changes, without rebuilding the Docker image.
 - rebuild-docker = explicit rebuild for parser/export Docker runtime, then clean restart + readiness checks.
 - down stops only the processes/containers tracked as started by run.sh and keeps images/caches intact.
-- reset does down plus stale process/container cleanup and clears tmp/dev-stack state and stale temp logs.
+- reset does down plus cleanup of orphaned containers carrying this worktree's ownership label, then clears tmp/dev-stack state and stale temp logs.
+- legacy or foreign processes and containers are never killed automatically; inspect them explicitly when doctor reports a conflict.
 - workspace mount mode is explicit-only via --workspace-mount and is not the default runtime.
 - FE origin defaults to PARSER_ORIGIN (edge). Use --local-origin to point FE to http://127.0.0.1:8001.
 - Use --local-convex when you want the app to talk to the local Convex backend managed by run.sh.
@@ -3561,6 +3650,5 @@ case "${CMD}" in
   smoke) smoke;;
   assert-ocr) assert_ocr "$@";;
   probe-edge) probe_edge "${1:-}";;
-  kill-vite-ports) kill_vite_ports;;
   help|*) help;;
 esac

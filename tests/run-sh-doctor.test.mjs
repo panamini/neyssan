@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
@@ -25,6 +26,10 @@ const generatedDirectories = ["tmp", ".docker", ".buildx-cache"];
 
 function writeExecutable(path, source) {
   writeFileSync(path, source, { mode: 0o755 });
+}
+
+function fixtureOwnerId(root) {
+  return createHash("sha256").update(realpathSync(root)).digest("hex");
 }
 
 function findHostTool(name) {
@@ -106,6 +111,9 @@ case "\${1:-}" in
     ;;
   inspect)
     case "\$*" in
+      *Config.Labels*)
+        if test -n "\${FAKE_DOCKER_OWNER:-}"; then printf '%s\\n' "\${FAKE_DOCKER_OWNER}"; fi
+        ;;
       *Mounts*)
         if test -n "\${FAKE_DOCKER_WORKSPACE_ROOT:-}"; then printf '%s -> /app\\n' "\${FAKE_DOCKER_WORKSPACE_ROOT}"; fi
         ;;
@@ -155,6 +163,10 @@ exec ${JSON.stringify(process.execPath)} "\$@"
   writeExecutable(
     join(binDirectory, "lsof"),
     '#!/bin/sh\nif test -n "${FAKE_LSOF_LOG:-}"; then printf "%s\\n" "$*" >> "${FAKE_LSOF_LOG}"; fi\nif test -n "${FAKE_LSOF_BUSY_PATTERN:-}"; then case "$*" in *"${FAKE_LSOF_BUSY_PATTERN}"*) exit 0 ;; esac; fi\nexit 1\n',
+  );
+  writeExecutable(
+    join(binDirectory, "ps"),
+    '#!/bin/sh\nprintf "%s\\n" "twoweeks-run-sh-${FAKE_PS_OWNER:-foreign-owner}:doctor-fixture"\n',
   );
 
   writeFileSync(join(root, "cv_parser_service", "Dockerfile"), "FROM scratch\n");
@@ -227,6 +239,8 @@ function runDoctor(fixture, args = [], env = {}) {
       LANG: "C",
       LC_ALL: "C",
       PATH: fixture.binDirectory,
+      FAKE_DOCKER_OWNER: fixtureOwnerId(fixture.root),
+      FAKE_PS_OWNER: fixtureOwnerId(fixture.root).slice(0, 16),
       ...env,
     },
   });
@@ -1620,7 +1634,8 @@ test("doctor local-fast requires the image when tracked env changes restart the 
   mkdirSync(stateDirectory, { recursive: true });
   writeFileSync(
     join(stateDirectory, "pids.env"),
-    `VITE_PID=${process.pid}
+    `STATE_OWNER_ID=${fixtureOwnerId(fixture.root)}
+VITE_PID=${process.pid}
 PARSER_STARTED=1
 CONVEX_PID=${process.pid}
 CONVEX_URL=http://127.0.0.1:3210
@@ -1658,7 +1673,8 @@ test("doctor suppresses tracked local Convex reuse details", (t) => {
   mkdirSync(stateDirectory, { recursive: true });
   writeFileSync(
     join(stateDirectory, "pids.env"),
-    `VITE_PID=
+    `STATE_OWNER_ID=${fixtureOwnerId(fixture.root)}
+VITE_PID=
 PARSER_STARTED=0
 CONVEX_PID=${process.pid}
 CONVEX_URL=${hiddenConvexUrl}
