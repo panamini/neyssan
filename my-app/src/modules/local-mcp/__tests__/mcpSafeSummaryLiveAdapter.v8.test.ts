@@ -1150,7 +1150,12 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     }
 
     expect(responses).toHaveLength(8);
-    expect(responses[0]).toMatchObject({ jsonrpc: "2.0" });
+    expect(responses[0]).toMatchObject({
+      kind: "mcp_safe_summary_live_adapter_call_response",
+      httpStatus: 200,
+      json: { jsonrpc: "2.0" },
+      version: 1,
+    });
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(8);
     expect(verifyAccessToken).toHaveBeenCalledTimes(8);
     expect(executeReadonlySummaryTool).toHaveBeenCalledTimes(8);
@@ -1163,8 +1168,11 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(responses.every((response) =>
       typeof response === "object" &&
       response !== null &&
-      "result" in response &&
-      !("error" in response)
+      "json" in response &&
+      typeof response.json === "object" &&
+      response.json !== null &&
+      "result" in response.json &&
+      !("error" in response.json)
     )).toBe(true);
     expect(executeReadonlySummaryTool.mock.calls.filter(
       ([input]) => input.twoweeksClerkId === IDENTITY_A.subject,

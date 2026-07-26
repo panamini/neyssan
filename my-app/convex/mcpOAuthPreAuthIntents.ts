@@ -86,7 +86,7 @@ const PRE_AUTH_INTENT_KEYS = [
   "modelVisible",
   "version",
 ] as const;
-const STORAGE_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt"] as const;
+const STORAGE_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt", "ui_locales"] as const;
 const SENSITIVE_OPTIONAL_PARAMETER_KEYS = ["login_hint", "id_token_hint"] as const;
 const PROVIDER_FORWARD_OPTIONAL_PARAMETER_KEYS = [
   ...STORAGE_OPTIONAL_PARAMETER_KEYS,

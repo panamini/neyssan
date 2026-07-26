@@ -330,7 +330,11 @@ const PROVIDER_FORWARD_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorization
   "id_token_hint",
   "ui_locales",
 ];
-const LOGIN_RETURN_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorizationOptionalParameterV1[] = ["nonce", "prompt"];
+const LOGIN_RETURN_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorizationOptionalParameterV1[] = [
+  "nonce",
+  "prompt",
+  "ui_locales",
+];
 const OPTIONAL_SCOPE_ORDER: readonly McpOAuthAuthorizationOptionalScopeV1[] = ["openid", "email", "profile"];
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,256}$/u;
 const SAFE_SCOPE_PATTERN = /^[A-Za-z][A-Za-z0-9:._-]{0,127}$/u;

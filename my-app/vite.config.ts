@@ -831,7 +831,18 @@ async function buildProductionMcpSafeSummaryLiveAdapterRunner(
         now: Date.now(),
       });
     },
-    recover: async () => true,
+    recover: async () => {
+      try {
+        const result = await callControlledProofBridge(convexConnection, operatorCredentials.A, "recover", {
+          marker: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5,
+          runId,
+          now: Date.now(),
+        });
+        return isRecord(result) && result.status === "recovered" && result.residualCount === 0;
+      } catch {
+        return false;
+      }
+    },
   };
   return buildMcpSafeSummaryLiveAdapterV8(runnerInput);
 }

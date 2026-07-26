@@ -94,7 +94,7 @@ const LOGIN_RETURN_KEYS = [
   "persisted",
   "version",
 ] as const;
-const STORAGE_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt"] as const;
+const STORAGE_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt", "ui_locales"] as const;
 const SENSITIVE_OPTIONAL_PARAMETER_KEYS = ["login_hint", "id_token_hint"] as const;
 const PROVIDER_FORWARD_OPTIONAL_PARAMETER_KEYS = [
   ...STORAGE_OPTIONAL_PARAMETER_KEYS,
@@ -782,6 +782,9 @@ function buildLoginReturnQuery(record: StoredMcpOAuthAuthorizationIntentRecordV1
   }
   if (record.approvedOptionalParameters?.prompt !== undefined) {
     query.append("prompt", record.approvedOptionalParameters.prompt);
+  }
+  if (record.approvedOptionalParameters?.ui_locales !== undefined) {
+    query.append("ui_locales", record.approvedOptionalParameters.ui_locales);
   }
   return query.toString();
 }

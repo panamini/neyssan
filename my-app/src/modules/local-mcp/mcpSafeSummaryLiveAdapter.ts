@@ -46,6 +46,13 @@ export type McpSafeSummaryLiveAdapterHandlerV8 = (
   input: McpSafeSummaryLiveAdapterHandlerInputV8,
 ) => Promise<unknown>;
 
+type McpSafeSummaryToolsCallResponseEnvelopeV8 = Readonly<{
+  kind: "mcp_safe_summary_live_adapter_call_response";
+  httpStatus: number;
+  json: unknown;
+  version: 1;
+}>;
+
 export type McpSafeSummaryLiveAdapterBaselineReaderV8 = (
   role: McpSafeSummaryProofIdentityRole,
   toolName: McpSafeSummaryProofToolName,
@@ -235,7 +242,12 @@ export function buildMcpSafeSummaryLiveAdapterHandlerV8(input: Readonly<{
         version: 1 as const,
       });
     }
-    return response.json;
+    return Object.freeze({
+      kind: "mcp_safe_summary_live_adapter_call_response" as const,
+      httpStatus: safeHttpStatus(response.status),
+      json: response.json,
+      version: 1 as const,
+    });
   };
 }
 
@@ -513,7 +525,11 @@ async function callAllTools(
     if (!reference) return undefined;
     onCall();
     const response = await input.callToolsCall({ role, bearerCredential, toolName, reference });
-    asToolsCallSummary(response);
+    if (isToolsCallResponseEnvelope(response)) {
+      asToolsCallSummary(response.json, response.httpStatus);
+    } else {
+      asToolsCallSummary(response);
+    }
     result[toolName] = asBaselineSummary(await input.readPostSeed(role, toolName));
   }
   return Object.freeze(result) as McpSafeSummarySnapshotV8[typeof role];
@@ -530,15 +546,25 @@ function asBaselineSummary(value: unknown): Readonly<Record<string, unknown>> {
   return structured;
 }
 
-function asToolsCallSummary(value: unknown): Readonly<Record<string, unknown>> {
+function asToolsCallSummary(value: unknown, httpStatus = 200): Readonly<Record<string, unknown>> {
   const failureDiagnostic = readToolsCallFailureEnvelopeDiagnostic(value);
   if (failureDiagnostic) throw new McpSafeSummaryToolsCallFailure(failureDiagnostic);
-  const diagnostic = classifyToolsCallPayload(value, 200);
+  const diagnostic = classifyToolsCallPayload(value, httpStatus);
   if (diagnostic) throw new McpSafeSummaryToolsCallFailure(diagnostic);
   if (!isRecord(value) || !isRecord(value.result) || !isRecord(value.result.structuredContent)) {
     throw new Error("tools_call_result_malformed");
   }
   return value.result.structuredContent;
+}
+
+function isToolsCallResponseEnvelope(
+  value: unknown,
+): value is McpSafeSummaryToolsCallResponseEnvelopeV8 {
+  return isRecord(value) &&
+    value.kind === "mcp_safe_summary_live_adapter_call_response" &&
+    typeof value.httpStatus === "number" &&
+    "json" in value &&
+    value.version === 1;
 }
 
 class McpSafeSummaryToolsCallFailure extends Error {

@@ -62,6 +62,10 @@ export const runControlledSyntheticProofOperation = internalAction({
   returns: v.any(),
   handler: async (ctx, args): Promise<unknown> => {
     assertControlledRailEnabled();
+    const callerIdentity = await ctx.auth.getUserIdentity();
+    if (!callerIdentity?.subject || callerIdentity.subject !== args.twoweeksClerkId) {
+      throw new Error("controlled_proof_operator_auth_mismatch");
+    }
     const ownerProfileId: GenericId<"userProfiles"> | null = await ctx.runQuery(
       internal.mcpControlledSyntheticProof.internalResolveControlledSyntheticProofOwner,
       { twoweeksClerkId: args.twoweeksClerkId, version: 1 },
