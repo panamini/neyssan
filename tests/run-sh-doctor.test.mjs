@@ -1390,6 +1390,19 @@ test("Vite startup refuses to move away from the validated port", () => {
   assert.match(source, /vite_cmd=\([^\n]*--port "\$\{VITE_PORT\}" --strictPort/u);
 });
 
+test("local-fast waits for Vite to become reachable before reporting success", () => {
+  const source = readFileSync(sourceRunScript, "utf8");
+
+  assert.match(
+    source,
+    /wait_for_vite_ready\(\)[\s\S]*curl -fsS "http:\/\/127\.0\.0\.1:\$\{VITE_PORT\}\/"[\s\S]*if ! wait_for_vite_ready "\$\{VPID\}"; then/u,
+  );
+  assert.match(
+    source,
+    /if ! wait_for_vite_ready "\$\{VPID\}"; then[\s\S]*stop_vite "\$\{VPID\}"[\s\S]*stop_convex "\$\{CPID\}"[\s\S]*stop_parser/u,
+  );
+});
+
 test("doctor rejects an unknown target without running checks", (t) => {
   const fixture = createFixture(t);
 
@@ -1870,8 +1883,42 @@ test("doctor fails when the Docker daemon is unavailable", (t) => {
   });
 
   assertFailure(result);
-  assert.match(result.output, /Docker daemon/i);
-  assert.match(result.output, /(start|unavailable|not running|required)/i);
+  assert.match(
+    result.output,
+    /Docker daemon is unavailable; start the local Docker daemon \(for example: sudo systemctl start docker\), then rerun: \.\/run\.sh doctor local-fast/i,
+  );
+});
+
+test("doctor gives the macOS Docker Desktop startup instruction", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_DAEMON: "unavailable",
+    FAKE_UNAME_S: "Darwin",
+  });
+
+  assertFailure(result);
+  assert.match(
+    result.output,
+    /Docker daemon is unavailable; start Docker Desktop, then rerun: \.\/run\.sh doctor local-fast/i,
+  );
+});
+
+test("doctor gives the WSL2 Docker Desktop integration instruction", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_DAEMON: "unavailable",
+    FAKE_UNAME_S: "Linux",
+    FAKE_UNAME_R: "5.15.153.1-microsoft-standard-WSL2",
+    WSL_DISTRO_NAME: "Ubuntu",
+  });
+
+  assertFailure(result);
+  assert.match(
+    result.output,
+    /Docker daemon is unavailable; start Docker Desktop and enable WSL2 integration, then rerun: \.\/run\.sh doctor local-fast/i,
+  );
 });
 
 for (const [label, env] of [
@@ -1909,8 +1956,14 @@ for (const dependency of ["vite", "convex"]) {
     const result = runDoctor(fixture, ["local-fast"]);
 
     assertFailure(result);
-    assert.match(result.output, new RegExp(dependency, "i"));
-    assert.match(result.output, /(install|missing|required)/i);
+    assert.match(
+      result.output,
+      new RegExp(`${dependency}.*npm ci --prefix my-app`, "i"),
+    );
+    assert.equal(
+      existsSync(join(fixture.root, "my-app", "node_modules", dependency)),
+      false,
+    );
   });
 }
 
