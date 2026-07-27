@@ -1479,8 +1479,10 @@ doctor_check_docker() {
     doctor_pass "parser runtime image is not required while the tracked parser is reusable"
   elif docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
     doctor_pass "parser runtime image is available"
+  elif [[ "${target}" == "local-fast" ]] && docker buildx inspect >/dev/null 2>&1; then
+    doctor_warn "parser runtime image is missing; local-fast startup will build it with the configured builder"
   elif [[ "${target}" == "local-fast" ]] && docker buildx version >/dev/null 2>&1; then
-    doctor_warn "parser runtime image is missing; local-fast startup will build it"
+    doctor_warn "parser runtime image is missing; local-fast startup will configure a builder and build it"
   elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx inspect >/dev/null 2>&1; then
     doctor_warn "parser runtime image is missing; mcp-private-beta startup will build it with the available builder"
   elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx version >/dev/null 2>&1; then

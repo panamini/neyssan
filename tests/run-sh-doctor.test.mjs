@@ -1689,7 +1689,7 @@ CONVEX_BINDING_HASH=stale-do-not-print
   assert.match(result.output, /tracked local-fast stack will restart the parser/i);
   assert.match(
     result.output,
-    /WARN - parser runtime image is missing; local-fast startup will build it/i,
+    /WARN - parser runtime image is missing; local-fast startup will build it with the configured builder/i,
   );
   assert.doesNotMatch(result.output, /stale-do-not-print|8001|3210/u);
 });
@@ -1961,7 +1961,22 @@ test("doctor local-fast warns when startup can build a missing parser image", (t
   assert.equal(result.status, 0, result.output);
   assert.match(
     result.output,
-    /WARN - parser runtime image is missing; local-fast startup will build it/i,
+    /WARN - parser runtime image is missing; local-fast startup will build it with the configured builder/i,
+  );
+});
+
+test("doctor local-fast explains when startup will configure a missing buildx builder", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_BUILDER: "unavailable",
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(
+    result.output,
+    /WARN - parser runtime image is missing; local-fast startup will configure a builder and build it/i,
   );
 });
 
