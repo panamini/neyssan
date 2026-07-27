@@ -24,6 +24,7 @@ import {
   evaluatePremiumCoverLetterEligibility,
   extractOpenAIJsonPayload,
   inferPremiumCoverLetterContextClass,
+  isCoverLetterFreeProseSidecarV1Enabled,
   isCoverLetterQualityRepairV1Enabled,
   isCoverLetterPremiumPromptV2Enabled,
   isCoverLetterPremiumPathV1Enabled,
@@ -2687,6 +2688,45 @@ describe("premium cover letter prompt contract", () => {
     });
   };
 
+  it("distills a CV-backed plan into one free-prose letter plus evidence spans", () => {
+    const { brief } = buildDirectClaimPlanFixture();
+    const prompt = buildPremiumCoverLetterPrompt({
+      brief,
+      freeProseSidecar: true,
+    });
+
+    expect(prompt).toContain("Write a letter, not labeled sections");
+    expect(prompt).toContain("(primary proof)");
+    expect(prompt).toContain("CV facts as source material");
+    expect(prompt).toContain("restrained professional interpretation");
+    expect(prompt).toContain("letter and evidenceSpans");
+    expect(prompt).toContain("exact substring of letter");
+    expect(prompt).not.toContain("bodyParts");
+    expect(prompt).not.toContain("PremiumWriterOutputV1");
+    expect(prompt.length).toBeLessThan(4_500);
+  });
+
+  it("keeps the no-CV prompt byte-identical when free prose is requested", () => {
+    const { brief } = buildDirectClaimPlanFixture();
+    const noCvBrief = {
+      ...brief,
+      contextClass: "no_cv" as const,
+      candidateEvidenceAvailable: false,
+    };
+
+    expect(
+      buildPremiumCoverLetterPrompt({
+        brief: noCvBrief,
+        freeProseSidecar: true,
+      }),
+    ).toBe(
+      buildPremiumCoverLetterPrompt({
+        brief: noCvBrief,
+        freeProseSidecar: false,
+      }),
+    );
+  });
+
   it("adds the CV-backed editorial quality contract to English and French direct and adjacent prompts only", () => {
     const inScopePrompts = [
       buildPremiumCoverLetterPrompt({ brief: buildDirectBrief("English") }),
@@ -4096,6 +4136,167 @@ describe("premium cover letter generation and rendering", () => {
       rankedEvidencePack,
     });
   };
+
+  it("keeps free prose visible, derives a hidden sidecar, and makes one writer call", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    vi.stubEnv("ENABLE_COVER_LETTER_QUALITY_REPAIR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const migrationFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Led a design system migration"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const factualSentences = {
+      conversion:
+        "At Orbit, I improved signup conversion by 11% after iterative UI experiments, giving product teams a clearer view of what moved users to act.",
+      migration:
+        "I also led a design system migration used across 4 product squads, which required keeping shared interface work consistent across teams.",
+      dashboards:
+        "I built experimentation dashboards used by product and growth teams, so the same evidence could guide both delivery and iteration.",
+    };
+    const letter = [
+      `I am interested in the Senior Frontend Engineer role because strong interface work depends on connecting delivery to clear product decisions. ${factualSentences.conversion}`,
+      `That work made experimentation a practical input to product decisions rather than a reporting exercise. ${factualSentences.migration}`,
+      `${factualSentences.dashboards} I would bring that same focus to React and TypeScript delivery where design systems and experimentation reinforce one another.`,
+    ].join("\n\n");
+    let calls = 0;
+    let capturedPrompt = "";
+    let capturedSchema: Record<string, unknown> | undefined;
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      onFailure: (failure) => failures.push(failure),
+      writer: async ({ prompt, schema }) => {
+        calls += 1;
+        capturedPrompt = prompt;
+        capturedSchema = schema;
+        return {
+          letter,
+          evidenceSpans: [
+            { quote: factualSentences.conversion, factIds: [conversionFactId] },
+            { quote: factualSentences.migration, factIds: [migrationFactId] },
+            { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
+          ],
+        };
+      },
+    });
+
+    expect(failures, JSON.stringify(failures)).toEqual([]);
+    expect(result).not.toBeNull();
+    expect(calls).toBe(1);
+    expect(capturedPrompt).toContain("letter and evidenceSpans");
+    expect(capturedPrompt).not.toContain("bodyParts");
+    expect(JSON.stringify(capturedSchema)).toContain(conversionFactId);
+    expect(result?.content).toContain(letter);
+    expect(result?.bodyParts.opening).toContain("I am interested");
+    expect(result?.bodyParts.proofBlock).toContain("signup conversion by 11%");
+    expect(result?.bodyParts.employerValueBlock).toContain(
+      "design system migration used across 4 product squads",
+    );
+    expect(result?.qualityRepair).toMatchObject({
+      enabled: true,
+      eligible: false,
+      attempted: false,
+    });
+    expect(result?.finalProvenance.status).toBe("validated_final_text");
+    expect(result?.finalProvenance.verifiedCandidateFactIds).toEqual(
+      expect.arrayContaining([
+        conversionFactId,
+        migrationFactId,
+        dashboardFactId,
+      ]),
+    );
+  });
+
+  it("rejects a free-prose evidence span absent from the visible letter", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter:
+          "I work where interface delivery and product decisions meet. I improved signup conversion by 11% after iterative UI experiments. That result gave the team a clearer basis for iteration. I would bring the same discipline to this role.",
+        evidenceSpans: [
+          {
+            quote: "This sentence is absent from the letter.",
+            factIds: [conversionFactId],
+          },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(result).toBeNull();
+    expect(failures.flatMap((failure) => failure.issues ?? [])).toContain(
+      "free_prose_evidence_quote_not_in_letter",
+    );
+  });
+
+  it("rejects a new metric in a free-prose letter", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const fabricatedSentence =
+      "At Orbit, I improved signup conversion by 37% after iterative UI experiments.";
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter: [
+          "I work where interface delivery and product decisions meet.",
+          fabricatedSentence,
+          "That work gave product teams a clearer basis for iteration.",
+          "I would bring the same discipline to this role.",
+        ].join(" "),
+        evidenceSpans: [
+          {
+            quote: fabricatedSentence,
+            factIds: [conversionFactId],
+          },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(result).toBeNull();
+    expect(failures.flatMap((failure) => failure.issues ?? [])).toContain(
+      "free_prose_unsupported_numeric_claim",
+    );
+  });
 
   const buildAdjacentAdminBrief = (outputLanguage = "English") => {
     const allowedFactsPack = buildAllowedFactsPack({
@@ -8666,6 +8867,14 @@ describe("premium cover letter generation and rendering", () => {
     expect(isCoverLetterQualityRepairV1Enabled("0")).toBe(false);
     expect(isCoverLetterQualityRepairV1Enabled("off")).toBe(false);
     expect(isCoverLetterQualityRepairV1Enabled("")).toBe(false);
+  });
+
+  it("keeps the free-prose sidecar flag disabled by default", () => {
+    expect(isCoverLetterFreeProseSidecarV1Enabled(undefined)).toBe(false);
+    expect(isCoverLetterFreeProseSidecarV1Enabled("1")).toBe(true);
+    expect(isCoverLetterFreeProseSidecarV1Enabled("true")).toBe(true);
+    expect(isCoverLetterFreeProseSidecarV1Enabled("on")).toBe(true);
+    expect(isCoverLetterFreeProseSidecarV1Enabled("off")).toBe(false);
   });
 
   it("reads the premium prompt V2 flag conservatively and gates it to Mistral provider", () => {
