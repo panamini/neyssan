@@ -353,6 +353,10 @@ test("help gives a complete collaborator path without reading config or creating
   assert.match(result.output, /Recovery and maintenance:/);
   assert.match(result.output, /Troubleshooting order:/);
   assert.match(result.output, /run\.sh is for local development only/);
+  assert.match(result.output, /my-app\/\.env\.local\.example/);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY/);
+  assert.match(result.output, /does not enforce a quality threshold/);
+  assert.match(result.output, /may read them to validate the contract/);
   for (const directory of generatedDirectories) {
     assert.equal(
       existsSync(join(fixture.root, directory)),
@@ -367,7 +371,12 @@ test("global and command help flags are safe aliases for help", (t) => {
   const envBefore = readFileSync(fixture.envFile, "utf8");
   writeFileSync(fixture.envFile, `${envBefore}false\n`, { mode: 0o600 });
 
-  for (const args of [["--help"], ["-h"], ["local-fast", "--help"]]) {
+  for (const args of [
+    ["--help"],
+    ["-h"],
+    ["local-fast", "--help"],
+    ["local-fast", "--ocr", "auto", "--help"],
+  ]) {
     const result = runScript(fixture, args);
     assert.equal(result.status, 0, `${args.join(" ")}\n${result.output}`);
     assert.match(result.output, /Recommended lifecycle:/);

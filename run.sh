@@ -9,9 +9,14 @@ if [[ "${CMD}" == "-ui" ]]; then
 fi
 if [[ "${CMD}" == "-h" || "${CMD}" == "--help" ]]; then
   CMD="help"
-elif [[ "${CMD}" != "help" && ( "${1:-}" == "-h" || "${1:-}" == "--help" ) ]]; then
-  CMD="help"
-  set --
+elif [[ "${CMD}" != "help" ]]; then
+  for arg in "$@"; do
+    if [[ "${arg}" == "-h" || "${arg}" == "--help" ]]; then
+      CMD="help"
+      set --
+      break
+    fi
+  done
 fi
 
 MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=0
@@ -3717,10 +3722,13 @@ First-time collaborator setup:
   1. cp .env.example .env.local
   2. Set CONVEX_TEAM and CONVEX_PROJECT in root .env.local.
      These are shared project slugs, not secrets; ask a project owner for them.
-  3. npm ci --prefix my-app
-  4. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
-  5. ./run.sh doctor local-fast
-  6. ./run.sh local-fast
+  3. cp my-app/.env.local.example my-app/.env.local
+     Set VITE_CLERK_PUBLISHABLE_KEY for signed-in app flows; it is client-visible,
+     not a server secret. Ask a project owner for the correct public key.
+  4. npm ci --prefix my-app
+  5. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
+  6. ./run.sh doctor local-fast
+  7. ./run.sh local-fast
 
 Recommended lifecycle:
   doctor [local-fast]  Diagnose prerequisites without installing or starting anything.
@@ -3746,13 +3754,15 @@ Validation and specialist workflows:
   parser-dev          Run only the workspace-mounted parser with autoreload.
                       Intended for advanced Python parser iteration.
   smoke               Check the local parser /ready endpoint and format the response.
-  assert-ocr FILE.pdf Parse a PDF locally and fail if OCR/text extraction is insufficient.
+  assert-ocr FILE.pdf Legacy diagnostic helper: print OCR fields for a local PDF.
+                      It reports parser output but does not enforce a quality threshold.
   probe-edge [FILE]   Probe the configured edge parser; uses Cloudflare Access credentials
                       only when CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are set.
 
 Private-beta MCP workflows:
   doctor mcp-private-beta
-                      Diagnose the MCP startup contract without reading secret values.
+                      Diagnose the MCP startup contract without sourcing local env files
+                      or printing secret values. It may read them to validate the contract.
   mcp-private-beta    Start the exact private-beta MCP stack on port 5196 with local
                       Convex, the image parser runtime, and the named Cloudflare tunnel.
   mcp-check           Validate required MCP key names and status without printing values.
@@ -3778,8 +3788,9 @@ Advanced low-level command:
 Configuration:
   root .env.local     Canonical operator configuration used by run.sh.
   my-app/.env.local   App/Vite-only configuration; do not duplicate operator settings here.
-  VITE_PORT           Optional Vite port; defaults to 5173.
-  OPEN_BROWSER        Set to 0 to prevent automatic browser opening.
+  VITE_PORT           Optional Vite port; defaults to 5173 when unset. The provided
+                      root template sets 5196 for private-beta and local-fast honors it.
+  OPEN_BROWSER        Set to 0 to prevent automatic browser opening; the template sets 0.
   PARSER_ORIGIN       Edge parser origin used by tunnel/image workflows.
 
 Troubleshooting order:
