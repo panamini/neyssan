@@ -26,7 +26,10 @@ import {
   validateMcpSafeSummaryPostSeedDeltasV8,
   type McpSafeSummarySnapshotV8,
 } from "../mcpSafeSummaryDeltaProof";
-import { MCP_SAFE_SUMMARY_PROOF_TOOLS } from "../mcpSafeSummaryProjectionProofHarness";
+import {
+  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+  MCP_SAFE_SUMMARY_PROOF_TOOLS,
+} from "../mcpSafeSummaryProjectionProofHarness";
 import type { McpSafeSummaryServerIdentityV1 } from "../mcpSafeSummaryServerSession";
 
 const IDENTITY_A = {
@@ -120,11 +123,21 @@ function fullSnapshot(overrides: Readonly<Record<string, Readonly<Record<string,
 }
 
 function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
-  return fullSnapshot({
+  // Minimal zero-baseline effects of the four controlled rows across each
+  // active summary. Latest-package fields use replacement, not additive, counts.
+  const counts = fullSnapshot({
+    "A.twoweeks.application_package.summarize": {
+      packages: 1,
+      artifacts: 2,
+      provenanceLinks: 2,
+      reviewItems: 1,
+    },
     "A.twoweeks.evidence_graph.summarize": {
       sourceDocuments: 1,
       candidateFacts: 1,
       approvedFacts: 1,
+      provenanceLinks: 2,
+      allowedClaims: 1,
     },
     "A.twoweeks.resume_variant_plan.summarize": {
       plans: 1,
@@ -136,10 +149,28 @@ function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
     },
     "A.twoweeks.review_cockpit.summarize": {
       reviewArtifacts: 1,
-      pendingReviews: 1,
-      approvalNeeded: 1,
+      applicationPackages: 1,
+      pendingReviews: 2,
+      missingReviewItems: 1,
+      approvalNeeded: 3,
     },
   });
+  return replaceSummary(
+    counts,
+    "A",
+    "twoweeks.application_package.summarize",
+    {
+      ...counts.A["twoweeks.application_package.summarize"],
+      status: "available",
+      packageRef: { status: "available", count: 1 },
+      safeCategories: {
+        packageStatus: "needs_review",
+        resumeVariantArtifactStatus: "draft",
+        coverLetterArtifactStatus: "needs_review",
+        version: 1,
+      },
+    },
+  );
 }
 
 function replaceSummary(
@@ -169,11 +200,25 @@ function deferred<T>(): Readonly<{
 }
 
 function validSeed() {
-  return { status: "ready", createdCount: 3, reusedCount: 0, expectedCount: 3, ownerBound: true, version: 1 };
+  return {
+    status: "ready",
+    createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    reusedCount: 0,
+    expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    ownerBound: true,
+    version: 1,
+  };
 }
 
 function validCleanup() {
-  return { status: "clean", deletedCount: 3, residualCount: 0, expectedCount: 3, ownerBound: true, version: 1 };
+  return {
+    status: "clean",
+    deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    residualCount: 0,
+    expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    ownerBound: true,
+    version: 1,
+  };
 }
 
 function zeroEffects() {
@@ -352,11 +397,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
 
   it("requires two ephemeral operator bearers and executes exactly eight handler calls", async () => {
     const baseline = fullSnapshot();
-    const postSeed = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 1, candidateFacts: 1, approvedFacts: 1 },
-      "A.twoweeks.resume_variant_plan.summarize": { plans: 1, planItems: 1, claimBackedItems: 1, reviewNeededItems: 1, allowedClaims: 1, sourceFacts: 1 },
-      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1, pendingReviews: 1, approvalNeeded: 1 },
-    });
+    const postSeed = validPostSeedSnapshot();
     const input = inputFor(baseline, postSeed);
     const result = await buildMcpSafeSummaryLiveAdapterV8(input).run();
 
@@ -365,8 +406,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(result.proof.staticProof.kind).toBe("STATIC_ONLY");
     expect(result.proof.sequence).toMatchObject({
       protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "ACCEPTED",
@@ -439,6 +480,118 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(input.verifyOperatorCredential).not.toHaveBeenCalled();
     expect(input.seedA).not.toHaveBeenCalled();
     expect(input.callToolsCall).not.toHaveBeenCalled();
+  });
+
+  it("accepts latest-package replacement counts for a populated account A", () => {
+    const baseline = fullSnapshot({
+      "A.twoweeks.application_package.summarize": {
+        packages: 3,
+        artifacts: 8,
+        provenanceLinks: 7,
+        reviewItems: 6,
+        warnings: 4,
+        blockers: 1,
+      },
+    });
+    const expectedPostSeed = validPostSeedSnapshot();
+    const postSeed = replaceSummary(
+      expectedPostSeed,
+      "A",
+      "twoweeks.application_package.summarize",
+      {
+        ...expectedPostSeed.A["twoweeks.application_package.summarize"],
+        safeCounts: snapshot("twoweeks.application_package.summarize", {
+          packages: 4,
+          artifacts: 2,
+          provenanceLinks: 2,
+          reviewItems: 1,
+          warnings: 0,
+          blockers: 0,
+        }).safeCounts,
+        packageRef: { status: "available", count: 4 },
+      },
+    );
+
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed)).toMatchObject({
+      accepted: true,
+    });
+
+    const wrongPackageState = replaceSummary(
+      postSeed,
+      "A",
+      "twoweeks.application_package.summarize",
+      {
+        ...postSeed.A["twoweeks.application_package.summarize"],
+        safeCategories: {
+          packageStatus: "ready_for_review",
+          resumeVariantArtifactStatus: "draft",
+          coverLetterArtifactStatus: "needs_review",
+          version: 1,
+        },
+      },
+    );
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, wrongPackageState)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "DERIVED_METADATA",
+        toolName: "twoweeks.application_package.summarize",
+      },
+    });
+  });
+
+  it("accepts bounded stale-source changes caused by advancing the latest package", () => {
+    const baseline = fullSnapshot({
+      "A.twoweeks.evidence_graph.summarize": {
+        sourceDocuments: 2,
+        candidateFacts: 1,
+        approvedFacts: 1,
+      },
+    });
+    const expectedPostSeed = validPostSeedSnapshot();
+    const postSeed = replaceSummary(
+      expectedPostSeed,
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      snapshot("twoweeks.evidence_graph.summarize", {
+        sourceDocuments: 3,
+        candidateFacts: 2,
+        approvedFacts: 2,
+        provenanceLinks: 2,
+        allowedClaims: 1,
+        staleSources: 3,
+        warnings: 3,
+      }),
+    );
+
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed)).toMatchObject({
+      accepted: true,
+    });
+
+    const warningMismatch = replaceSummary(
+      postSeed,
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      snapshot("twoweeks.evidence_graph.summarize", {
+        sourceDocuments: 3,
+        candidateFacts: 2,
+        approvedFacts: 2,
+        provenanceLinks: 2,
+        allowedClaims: 1,
+        staleSources: 3,
+        warnings: 2,
+      }),
+    );
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, warningMismatch)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "COUNT_DELTA",
+        countKey: "warnings",
+        expected: 3,
+        actual: 2,
+      },
+    });
   });
 
   it("rejects absent deltas, saturation, and concurrent B drift", async () => {
@@ -515,13 +668,19 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       },
     });
 
-    const countMismatch = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": {
+    const expectedPostSeed = validPostSeedSnapshot();
+    const countMismatch = replaceSummary(
+      expectedPostSeed,
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      snapshot("twoweeks.evidence_graph.summarize", {
         sourceDocuments: 2,
         candidateFacts: 1,
         approvedFacts: 1,
-      },
-    });
+        provenanceLinks: 2,
+        allowedClaims: 1,
+      }),
+    );
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, countMismatch)).toMatchObject({
       accepted: false,
       reason: "BASELINE_DRIFT",
@@ -718,7 +877,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       stopCode: "SEED_FAILED",
       protectedCallCount: 0,
       seedCount: 0,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "REJECTED",
@@ -770,8 +929,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode: "PROTECTED_CALL_FAILED",
       protectedCallCount: 1,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "REJECTED",
@@ -816,7 +975,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode,
       protectedCallCount: 8,
-      seedCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       cleanupCount: 0,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
@@ -844,8 +1003,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode: "RECOVERY_FAILED",
       protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "FAILED",
       baseline: "ACCEPTED",
       postSeedDelta: "ACCEPTED",
@@ -882,11 +1041,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
 
   it("fails closed when the separate effect ledger reports a forbidden effect", async () => {
     const baseline = fullSnapshot();
-    const postSeed = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 1, candidateFacts: 1, approvedFacts: 1 },
-      "A.twoweeks.resume_variant_plan.summarize": { plans: 1, planItems: 1, claimBackedItems: 1, reviewNeededItems: 1, allowedClaims: 1, sourceFacts: 1 },
-      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1, pendingReviews: 1, approvalNeeded: 1 },
-    });
+    const postSeed = validPostSeedSnapshot();
     const input = inputFor(baseline, postSeed);
     input.effectObservation = vi.fn(async () => ({
       retryCount: 0,
@@ -908,11 +1063,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
 
   it("reports STOPPED when the final effect observation detects a forbidden effect", async () => {
     const baseline = fullSnapshot();
-    const postSeed = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 1, candidateFacts: 1, approvedFacts: 1 },
-      "A.twoweeks.resume_variant_plan.summarize": { plans: 1, planItems: 1, claimBackedItems: 1, reviewNeededItems: 1, allowedClaims: 1, sourceFacts: 1 },
-      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1, pendingReviews: 1, approvalNeeded: 1 },
-    });
+    const postSeed = validPostSeedSnapshot();
     const input = inputFor(baseline, postSeed);
     let observationCount = 0;
     input.effectObservation = vi.fn(async () => {
@@ -930,8 +1081,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode: "EFFECT_OBSERVER_FAILED",
       protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       baseline: "ACCEPTED",
       postSeedDelta: "ACCEPTED",
     });

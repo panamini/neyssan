@@ -3,6 +3,7 @@ import {
   buildMcpSafeSummaryProofOperatorResponse,
   normalizeMcpSafeSummaryOperatorToken,
 } from "../mcpSafeSummaryProofOperatorContract";
+import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from "../mcpSafeSummaryProjectionProofHarness";
 import {
   formatMcpSafeSummaryFirstToolsCallDiagnostic,
   formatMcpSafeSummaryPostSeedDeltaDiagnostic,
@@ -29,7 +30,7 @@ describe("mcp safe-summary operator credential transport", () => {
       stopCode: "SEED_FAILED" as const,
       protectedCallCount: 0,
       seedCount: 0,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED" as const,
       baseline: "ACCEPTED" as const,
       postSeedDelta: "REJECTED" as const,

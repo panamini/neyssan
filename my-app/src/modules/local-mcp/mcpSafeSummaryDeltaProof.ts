@@ -125,6 +125,20 @@ const EVIDENCE_DELTA = Object.freeze({
   sourceDocuments: 1,
   candidateFacts: 1,
   approvedFacts: 1,
+  provenanceLinks: 2,
+  allowedClaims: 1,
+} satisfies Readonly<Record<string, number>>);
+
+const APPLICATION_PACKAGE_DELTA = Object.freeze({
+  packages: 1,
+} satisfies Readonly<Record<string, number>>);
+
+const APPLICATION_PACKAGE_EXACT_POST = Object.freeze({
+  artifacts: 2,
+  provenanceLinks: 2,
+  reviewItems: 1,
+  warnings: 0,
+  blockers: 0,
 } satisfies Readonly<Record<string, number>>);
 
 const RESUME_DELTA = Object.freeze({
@@ -150,11 +164,18 @@ const RESUME_DELTA = Object.freeze({
 
 const REVIEW_DELTA = Object.freeze({
   reviewArtifacts: 1,
-  pendingReviews: 1,
-  approvalNeeded: 1,
+  applicationPackages: 1,
+  pendingReviews: 2,
+  missingReviewItems: 1,
+  approvalNeeded: 3,
 } satisfies Readonly<Record<string, number>>);
 
 const DERIVED_METADATA = Object.freeze({
+  "twoweeks.application_package.summarize": Object.freeze({
+    topLevel: Object.freeze(["status", "safeCategories", "updatedAt", "missingDataReason"]),
+    reference: Object.freeze(["status", "count", "updatedAt"]),
+    referenceKey: "packageRef",
+  }),
   "twoweeks.evidence_graph.summarize": Object.freeze({
     topLevel: Object.freeze(["status", "safeCategories", "updatedAt", "missingDataReason"]),
     reference: Object.freeze(["status", "count", "updatedAt"]),
@@ -171,9 +192,7 @@ const DERIVED_METADATA = Object.freeze({
     referenceKey: "reviewCockpitRef",
   }),
 } satisfies Readonly<Record<
-  Exclude<McpProductionReadonlySummaryToolNameV1,
-    "twoweeks.application_package.summarize"
-  >,
+  McpProductionReadonlySummaryToolNameV1,
   Readonly<{
     topLevel: readonly string[];
     reference: readonly string[];
@@ -182,7 +201,7 @@ const DERIVED_METADATA = Object.freeze({
 >>);
 
 const POSITIVE_DELTAS = Object.freeze({
-  "twoweeks.application_package.summarize": Object.freeze({}),
+  "twoweeks.application_package.summarize": APPLICATION_PACKAGE_DELTA,
   "twoweeks.evidence_graph.summarize": EVIDENCE_DELTA,
   "twoweeks.resume_variant_plan.summarize": RESUME_DELTA,
   "twoweeks.review_cockpit.summarize": REVIEW_DELTA,
@@ -239,12 +258,50 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
       }));
     }
   }
-  if (!structurallyEqual(
-    baseline.A["twoweeks.application_package.summarize"],
-    postSeed.A["twoweeks.application_package.summarize"],
+  const applicationPackageBaselineSummary = baseline.A["twoweeks.application_package.summarize"];
+  const applicationPackagePostSummary = postSeed.A["twoweeks.application_package.summarize"];
+  const applicationPackageBaseline = readCounts(
+    applicationPackageBaselineSummary,
+    "twoweeks.application_package.summarize",
+  );
+  const applicationPackagePost = readCounts(
+    applicationPackagePostSummary,
+    "twoweeks.application_package.summarize",
+  );
+  if (!matchesOutsideDerivedMetadata(
+    "twoweeks.application_package.summarize",
+    applicationPackageBaselineSummary,
+    applicationPackagePostSummary,
   )) {
     return failure("BASELINE_DRIFT", deltaDiagnostic({
-      check: "UNEXPECTED_CHANGE",
+      check: "DERIVED_METADATA",
+      role: "A",
+      toolName: "twoweeks.application_package.summarize",
+    }));
+  }
+  if (!applicationPackageBaseline || !applicationPackagePost) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "COUNT_SHAPE",
+      role: "A",
+      toolName: "twoweeks.application_package.summarize",
+    }));
+  }
+  const applicationPackageCountDiagnostic = findCountDeltaDiagnostic(
+    "twoweeks.application_package.summarize",
+    applicationPackageBaseline,
+    applicationPackagePost,
+    APPLICATION_PACKAGE_DELTA,
+    APPLICATION_PACKAGE_EXACT_POST,
+  );
+  if (applicationPackageCountDiagnostic) {
+    return failure("BASELINE_DRIFT", applicationPackageCountDiagnostic);
+  }
+  if (!hasExpectedApplicationPackagePostState(
+    applicationPackagePostSummary,
+    applicationPackagePost.packages,
+  )) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "DERIVED_METADATA",
       role: "A",
       toolName: "twoweeks.application_package.summarize",
     }));
@@ -278,11 +335,22 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
       toolName: "twoweeks.evidence_graph.summarize",
     }));
   }
+  const evidenceStalenessDiagnostic = findEvidenceStalenessDiagnostic(
+    evidenceBaseline,
+    evidencePost,
+  );
+  if (evidenceStalenessDiagnostic) {
+    return failure("BASELINE_DRIFT", evidenceStalenessDiagnostic);
+  }
   const evidenceCountDiagnostic = findCountDeltaDiagnostic(
     "twoweeks.evidence_graph.summarize",
     evidenceBaseline,
     evidencePost,
     EVIDENCE_DELTA,
+    {
+      staleSources: evidencePost.staleSources,
+      warnings: evidencePost.warnings,
+    },
   );
   if (evidenceCountDiagnostic) {
     return failure("BASELINE_DRIFT", evidenceCountDiagnostic);
@@ -444,6 +512,66 @@ function findCountDeltaDiagnostic(
   return undefined;
 }
 
+function findEvidenceStalenessDiagnostic(
+  baseline: Readonly<Record<string, number>>,
+  postSeed: Readonly<Record<string, number>>,
+): McpSafeSummaryPostSeedDeltaDiagnosticV8 | undefined {
+  if (postSeed.staleSources < baseline.staleSources) {
+    return deltaDiagnostic({
+      check: "COUNT_DELTA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+      countKey: "staleSources",
+      expected: baseline.staleSources,
+      actual: postSeed.staleSources,
+    });
+  }
+  const maximumStaleSources = postSeed.sourceDocuments + postSeed.candidateFacts;
+  if (postSeed.staleSources > maximumStaleSources) {
+    return deltaDiagnostic({
+      check: "COUNT_DELTA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+      countKey: "staleSources",
+      expected: maximumStaleSources,
+      actual: postSeed.staleSources,
+    });
+  }
+  const staleSourceDelta = postSeed.staleSources - baseline.staleSources;
+  const expectedWarnings = baseline.warnings + staleSourceDelta;
+  if (postSeed.warnings !== expectedWarnings) {
+    return deltaDiagnostic({
+      check: "COUNT_DELTA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+      countKey: "warnings",
+      expected: expectedWarnings,
+      actual: postSeed.warnings,
+    });
+  }
+  return undefined;
+}
+
+function hasExpectedApplicationPackagePostState(
+  summary: Readonly<Record<string, unknown>>,
+  expectedPackageCount: number,
+): boolean {
+  const packageRef = summary.packageRef;
+  const safeCategories = summary.safeCategories;
+  return summary.status === "available" &&
+    !Object.prototype.hasOwnProperty.call(summary, "missingDataReason") &&
+    isPlainRecord(packageRef) &&
+    packageRef.status === "available" &&
+    packageRef.count === expectedPackageCount &&
+    isPlainRecord(safeCategories) &&
+    structurallyEqual(safeCategories, {
+      packageStatus: "needs_review",
+      resumeVariantArtifactStatus: "draft",
+      coverLetterArtifactStatus: "needs_review",
+      version: 1,
+    });
+}
+
 function hasInsufficientHeadroom(
   counts: Readonly<Record<string, number>>,
   positiveDelta: Readonly<Record<string, number>>,
@@ -476,9 +604,14 @@ function normalizeForPostSeedComparison(
   for (const key of metadata.topLevel) delete normalized[key];
   const reference = normalized[metadata.referenceKey];
   if (isPlainRecord(reference)) {
-    normalized[metadata.referenceKey] = Object.fromEntries(
+    const invariantReference = Object.fromEntries(
       Object.entries(reference).filter(([key]) => !metadata.reference.includes(key)),
     );
+    if (Object.keys(invariantReference).length === 0) {
+      delete normalized[metadata.referenceKey];
+    } else {
+      normalized[metadata.referenceKey] = invariantReference;
+    }
   }
   return normalized;
 }

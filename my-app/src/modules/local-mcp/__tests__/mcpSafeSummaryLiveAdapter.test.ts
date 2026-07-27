@@ -10,7 +10,10 @@ import {
 import { MCP_PRODUCTION_OPERATION_TIMEOUT_MS } from "../mcpProductionOperationTimeout";
 import { createMcpSafeSummaryProofEffectLedger } from "../mcpSafeSummaryProofEffectLedger";
 import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../mcpSafeSummaryProofMarker";
-import type { McpSafeSummaryProofToolName } from "../mcpSafeSummaryProjectionProofHarness";
+import {
+  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+  type McpSafeSummaryProofToolName,
+} from "../mcpSafeSummaryProjectionProofHarness";
 import type { McpSafeSummaryServerIdentityV1 } from "../mcpSafeSummaryServerSession";
 
 const OWNER_A = {
@@ -282,17 +285,17 @@ function runnerFor(resolveIdentity: (
     },
     seedA: options.seedA ?? (async () => ({
       status: "ready",
-      createdCount: 3,
+      createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       reusedCount: 0,
-      expectedCount: 3,
+      expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       ownerBound: true,
       version: 1,
     })),
     cleanupA: options.cleanupA ?? (async () => ({
       status: "clean",
-      deletedCount: 3,
+      deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       residualCount: 0,
-      expectedCount: 3,
+      expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       ownerBound: true,
       version: 1,
     })),
@@ -434,8 +437,8 @@ describe("v5 controlled MCP safe-summary adapter", () => {
       sequence: {
         outcome: "PASS",
         protectedCallCount: 8,
-        seedCount: 3,
-        cleanupCount: 3,
+        seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+        cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         recovery: "RECOVERED",
       },
     });
@@ -468,9 +471,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
         seedRunIds.push(runId);
         return {
           status: "ready",
-          createdCount: 3,
+          createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
           reusedCount: 0,
-          expectedCount: 3,
+          expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
           ownerBound: true,
           version: 1,
         };
@@ -479,9 +482,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
         cleanupRunIds.push(runId);
         return {
           status: "clean",
-          deletedCount: 3,
+          deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
           residualCount: 0,
-          expectedCount: 3,
+          expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
           ownerBound: true,
           version: 1,
         };
@@ -565,7 +568,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
         outcome: "STOPPED",
         stopCode: "IDENTITY_B_NOT_DISTINCT",
         protectedCallCount: 4,
-        cleanupCount: 3,
+        cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         recovery: "RECOVERED",
       },
     });
@@ -590,7 +593,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
         outcome: "STOPPED",
         stopCode: "IDENTITY_B_NOT_DISTINCT",
         protectedCallCount: 4,
-        cleanupCount: 3,
+        cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         recovery: "RECOVERED",
       },
     });
@@ -616,7 +619,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
         outcome: "STOPPED",
         stopCode: "IDENTITY_B_NOT_DISTINCT",
         protectedCallCount: 4,
-        cleanupCount: 3,
+        cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         recovery: "RECOVERED",
       },
     });
@@ -634,7 +637,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
       outcome: "STOPPED",
       stopCode: "IDENTITY_B_NOT_DISTINCT",
       protectedCallCount: 4,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
     expect(calls).toHaveLength(4);
@@ -668,9 +671,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
             events.push("seed_settled");
             return {
               status: "ready",
-              createdCount: 3,
+              createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               reusedCount: 0,
-              expectedCount: 3,
+              expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               ownerBound: true,
               version: 1,
             };
@@ -681,9 +684,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
             residualCount = 0;
             return {
               status: "clean",
-              deletedCount: 3,
+              deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               residualCount,
-              expectedCount: 3,
+              expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               ownerBound: true,
               version: 1,
             };
@@ -727,7 +730,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
         outcome: "STOPPED",
         stopCode: "SEED_FAILED",
         seedCount: 0,
-        cleanupCount: 3,
+        cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         protectedCallCount: 0,
         recovery: "RECOVERED",
       });
@@ -761,9 +764,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
             residualCount = 3;
             return {
               status: "ready",
-              createdCount: 3,
+              createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               reusedCount: 0,
-              expectedCount: 3,
+              expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               ownerBound: true,
               version: 1,
             };
@@ -776,9 +779,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
             events.push("cleanup_settled");
             return {
               status: "clean",
-              deletedCount: 3,
+              deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               residualCount,
-              expectedCount: 3,
+              expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               ownerBound: true,
               version: 1,
             };
@@ -819,7 +822,7 @@ describe("v5 controlled MCP safe-summary adapter", () => {
       expect(result.proof.sequence).toMatchObject({
         outcome: "STOPPED",
         stopCode: "CLEANUP_FAILED",
-        seedCount: 3,
+        seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         cleanupCount: 0,
         protectedCallCount: 8,
         recovery: "RECOVERED",
@@ -854,9 +857,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
             residualCount = 3;
             return {
               status: "ready",
-              createdCount: 3,
+              createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               reusedCount: 0,
-              expectedCount: 3,
+              expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               ownerBound: true,
               version: 1,
             };
@@ -866,9 +869,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
             residualCount = 0;
             return {
               status: "clean",
-              deletedCount: 3,
+              deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               residualCount,
-              expectedCount: 3,
+              expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
               ownerBound: true,
               version: 1,
             };
@@ -907,8 +910,8 @@ describe("v5 controlled MCP safe-summary adapter", () => {
       expect(result.proof.sequence).toMatchObject({
         outcome: "STOPPED",
         stopCode: "RECOVERY_FAILED",
-        seedCount: 3,
-        cleanupCount: 3,
+        seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+        cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         protectedCallCount: 8,
         recovery: "FAILED",
       });
@@ -951,9 +954,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
           return {
             status: "ready",
             ownerBound: true,
-            createdCount: 3,
+            createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
             reusedCount: 0,
-            expectedCount: 3,
+            expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
             version: 1,
           };
         },
@@ -962,9 +965,9 @@ describe("v5 controlled MCP safe-summary adapter", () => {
           return {
             status: "clean",
             ownerBound: true,
-            deletedCount: 3,
+            deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
             residualCount: 0,
-            expectedCount: 3,
+            expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
             version: 1,
           };
         },
@@ -1004,7 +1007,14 @@ describe("v5 controlled MCP safe-summary adapter", () => {
       status: "completed",
       completed: true,
       liveCalls: true,
-      proof: { sequence: { protectedCallCount: 8, seedCount: 3, cleanupCount: 3, recovery: "RECOVERED" } },
+      proof: {
+        sequence: {
+          protectedCallCount: 8,
+          seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+          cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+          recovery: "RECOVERED",
+        },
+      },
     });
   });
 });
