@@ -1,4 +1,5 @@
 import {
+  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
   MCP_SAFE_SUMMARY_PROOF_TOOLS,
   runMcpSafeSummaryProjectionProof,
   type McpSafeSummaryProofLedger,
@@ -136,8 +137,8 @@ export function buildMcpSafeSummaryControlledProofRunner(
       });
       const completed = proof.outcome === "PASS" &&
         proof.protectedCallCount === MCP_SAFE_SUMMARY_PROOF_TOOLS.length * 2 &&
-        proof.seedCount === 3 &&
-        proof.cleanupCount === 3 &&
+        proof.seedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+        proof.cleanupCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
         proof.recovery === "RECOVERED";
       return Object.freeze({
         contractId: MCP_SAFE_SUMMARY_CONTROLLED_PROOF_CONTRACT_ID,

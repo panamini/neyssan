@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
+  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
   MCP_SAFE_SUMMARY_PROOF_TOOLS,
   runMcpSafeSummaryProjectionProof,
   type McpSafeSummaryIdentityAttestation,
@@ -168,9 +169,9 @@ function makeAdapter(overrides: Overrides = {}) {
       events.push("seed:A");
       return overrides.seed ?? {
         status: "ready",
-        createdCount: 3,
+        createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         reusedCount: 0,
-        expectedCount: 3,
+        expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         ownerBound: true,
         version: 1,
       };
@@ -190,9 +191,9 @@ function makeAdapter(overrides: Overrides = {}) {
       events.push("cleanup:A");
       return overrides.cleanup ?? {
         status: "clean",
-        deletedCount: 3,
+        deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         residualCount: 0,
-        expectedCount: 3,
+        expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         ownerBound: true,
         version: 1,
       };
@@ -247,8 +248,8 @@ describe("runMcpSafeSummaryProjectionProof", () => {
 
     expect(result).toMatchObject({
       outcome: "PASS",
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       protectedCallCount: 8,
       retryCount: 0,
       repairCount: 0,
@@ -316,7 +317,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       outcome: "STOPPED",
       stopCode,
       protectedCallCount,
-      cleanupCount: protectedCallCount === 0 ? 0 : 3,
+      cleanupCount: protectedCallCount === 0 ? 0 : MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
     expect(events.at(-1)).toBe("recover");
@@ -382,7 +383,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
         status: "ready",
         createdCount: 2,
         reusedCount: 1,
-        expectedCount: 3,
+        expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         ownerBound: true,
         version: 1,
       },
@@ -394,7 +395,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
         status: "clean",
         deletedCount: 2,
         residualCount: 1,
-        expectedCount: 3,
+        expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
         ownerBound: true,
         version: 1,
       },
@@ -420,7 +421,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       stopCode: "PROTECTED_CALL_FAILED",
       protectedCallCount: 2,
       retryCount: 0,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
     expect(events.filter((event) => event.startsWith("call:"))).toHaveLength(2);
@@ -494,7 +495,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       outcome: "STOPPED",
       stopCode: expectedStop,
       protectedCallCount: 1,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
     expect(JSON.stringify(ledger)).not.toContain(PRIVATE_SENTINEL);
@@ -511,7 +512,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       outcome: "STOPPED",
       stopCode: "RESULT_STATUS_REJECTED",
       protectedCallCount: 5,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
   });
@@ -553,7 +554,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       outcome: "STOPPED",
       stopCode: "A_DATA_PROOF_MISSING",
       protectedCallCount: 4,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
   });
@@ -567,7 +568,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       outcome: "STOPPED",
       stopCode: "RECOVERY_FAILED",
       protectedCallCount: 8,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "FAILED",
     });
     expect(events.filter((event) => event === "recover")).toHaveLength(1);
@@ -601,7 +602,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       fallbackCount: 0,
       providerCallCount: 0,
       modelCallCount: 0,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
   });
@@ -620,7 +621,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       outcome: "STOPPED",
       stopCode: "EFFECT_BUDGET_EXCEEDED",
       protectedCallCount: 8,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
   });
@@ -644,7 +645,7 @@ describe("runMcpSafeSummaryProjectionProof", () => {
       stopCode: "EFFECT_BUDGET_EXCEEDED",
       protectedCallCount: 8,
       modelCallCount: 1,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
     });
   });

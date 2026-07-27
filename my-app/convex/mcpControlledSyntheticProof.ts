@@ -2,6 +2,7 @@ import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { v, type GenericId } from "convex/values";
 import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../src/modules/local-mcp/mcpSafeSummaryProofMarker";
+import type { ApplicationPackageStorageRecordV1 } from "./lib/applicationPackages";
 
 const CONTROLLED_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
 const CONTROLLED_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
@@ -271,8 +272,11 @@ async function queryOwnedRow(
         query.eq("applicationPackageId", id),
       )
       .unique();
-    // Return an owner-mismatched row as a collision candidate. The exact
-    // fixture comparison below must fail closed before any write or delete.
+    // This global id lookup is intentional: it detects cross-owner collisions.
+    // Throw before the caller can insert or delete anything if ownership differs.
+    if (row && row.userId !== ownerProfileId) {
+      throw new Error("controlled_fixture_collision");
+    }
     return row ?? null;
   }
 
@@ -442,11 +446,14 @@ function buildResumeVariantPlanArtifact(
   };
 }
 
+// The production builder requires full artifact inputs and derives their hashes.
+// This proof fixture intentionally supplies stable metadata-only IDs directly;
+// its storage record still uses the canonical ApplicationPackageStorageRecordV1 shape.
 function buildApplicationPackage(
   ownerProfileId: string,
   ids: ControlledFixtureIds,
   now: number,
-): Record<string, unknown> {
+): ApplicationPackageStorageRecordV1 {
   const provenance = {
     applicationContextId: ids.contextId,
     resumeVariantArtifactId: ids.resumeVariantArtifactId,
@@ -532,22 +539,8 @@ function buildApplicationPackage(
           reviewItemIds: provenance.reviewItemIds,
           version: 1,
         },
-        {
-          id: `application-package-item:${packageItemScope}:warning:needs-review`,
-          kind: "warning",
-          status: "notice",
-          label: "Synthetic package needs review.",
-          note: "This controlled fixture is not a deliverable package.",
-          sourceFactIds: [],
-          allowedClaimIds: [],
-          evidenceMatchIds: [],
-          demandIds: [],
-          riskFlagIds: [],
-          reviewItemIds: [],
-          version: 1,
-        },
       ],
-      warnings: ["controlled_synthetic_package_needs_review"],
+      warnings: [],
       provenance,
       createdAt: now,
       updatedAt: now,

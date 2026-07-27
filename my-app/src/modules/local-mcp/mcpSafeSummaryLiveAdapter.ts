@@ -17,6 +17,7 @@ import {
   type McpSafeSummarySnapshotV8,
 } from "./mcpSafeSummaryDeltaProof";
 import {
+  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
   MCP_SAFE_SUMMARY_PROOF_TOOLS,
   type McpSafeSummaryProofToolName,
   type McpSafeSummaryProofIdentityRole,
@@ -382,7 +383,7 @@ async function runMcpSafeSummaryLiveAdapterV8(
       stopCode = "SEED_COUNT_MISMATCH";
       return finish();
     }
-    seedCount = 3;
+    seedCount = MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT;
 
     const postA = await callAllTools(input, "A", input.operatorCredentials.A, () => {
       protectedCallCount += 1;
@@ -426,7 +427,7 @@ async function runMcpSafeSummaryLiveAdapterV8(
       try {
         const result = await input.cleanupA();
         if (!isExpectedCleanup(result)) stopCode ??= "CLEANUP_COUNT_MISMATCH";
-        else cleanupCount = 3;
+        else cleanupCount = MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT;
       } catch {
         stopCode ??= "CLEANUP_FAILED";
       }
@@ -443,7 +444,10 @@ async function runMcpSafeSummaryLiveAdapterV8(
       stopCode ??= "EFFECT_OBSERVER_FAILED";
     }
     const sequenceCompleted = stopCode === undefined &&
-      protectedCallCount === 8 && seedCount === 3 && cleanupCount === 3 && recovery === "RECOVERED";
+      protectedCallCount === 8 &&
+      seedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+      cleanupCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+      recovery === "RECOVERED";
     const effectObservation = emptyEffectObservation();
     return Object.freeze({
       contractId: MCP_SAFE_SUMMARY_LIVE_ADAPTER_CONTRACT_ID,
@@ -723,13 +727,19 @@ function isToolsList(input: McpSafeSummaryLiveAdapterInputV8, value: unknown): b
 }
 
 function isExpectedSeed(value: unknown): boolean {
-  return isRecord(value) && value.status === "ready" && value.createdCount === 3 &&
-    value.reusedCount === 0 && value.expectedCount === 3 && value.ownerBound === true && value.version === 1;
+  return isRecord(value) && value.status === "ready" &&
+    value.createdCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+    value.reusedCount === 0 &&
+    value.expectedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+    value.ownerBound === true && value.version === 1;
 }
 
 function isExpectedCleanup(value: unknown): boolean {
-  return isRecord(value) && value.status === "clean" && value.deletedCount === 3 &&
-    value.residualCount === 0 && value.expectedCount === 3 && value.ownerBound === true && value.version === 1;
+  return isRecord(value) && value.status === "clean" &&
+    value.deletedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+    value.residualCount === 0 &&
+    value.expectedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
+    value.ownerBound === true && value.version === 1;
 }
 
 function sameIdentity(

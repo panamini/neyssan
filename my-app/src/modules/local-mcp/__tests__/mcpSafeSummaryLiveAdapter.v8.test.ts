@@ -26,7 +26,10 @@ import {
   validateMcpSafeSummaryPostSeedDeltasV8,
   type McpSafeSummarySnapshotV8,
 } from "../mcpSafeSummaryDeltaProof";
-import { MCP_SAFE_SUMMARY_PROOF_TOOLS } from "../mcpSafeSummaryProjectionProofHarness";
+import {
+  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+  MCP_SAFE_SUMMARY_PROOF_TOOLS,
+} from "../mcpSafeSummaryProjectionProofHarness";
 import type { McpSafeSummaryServerIdentityV1 } from "../mcpSafeSummaryServerSession";
 
 const IDENTITY_A = {
@@ -121,10 +124,18 @@ function fullSnapshot(overrides: Readonly<Record<string, Readonly<Record<string,
 
 function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
   return fullSnapshot({
+    "A.twoweeks.application_package.summarize": {
+      packages: 1,
+      artifacts: 2,
+      provenanceLinks: 2,
+      reviewItems: 1,
+    },
     "A.twoweeks.evidence_graph.summarize": {
       sourceDocuments: 1,
       candidateFacts: 1,
       approvedFacts: 1,
+      provenanceLinks: 2,
+      allowedClaims: 1,
     },
     "A.twoweeks.resume_variant_plan.summarize": {
       plans: 1,
@@ -136,8 +147,10 @@ function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
     },
     "A.twoweeks.review_cockpit.summarize": {
       reviewArtifacts: 1,
-      pendingReviews: 1,
-      approvalNeeded: 1,
+      applicationPackages: 1,
+      pendingReviews: 2,
+      missingReviewItems: 1,
+      approvalNeeded: 3,
     },
   });
 }
@@ -169,11 +182,25 @@ function deferred<T>(): Readonly<{
 }
 
 function validSeed() {
-  return { status: "ready", createdCount: 3, reusedCount: 0, expectedCount: 3, ownerBound: true, version: 1 };
+  return {
+    status: "ready",
+    createdCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    reusedCount: 0,
+    expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    ownerBound: true,
+    version: 1,
+  };
 }
 
 function validCleanup() {
-  return { status: "clean", deletedCount: 3, residualCount: 0, expectedCount: 3, ownerBound: true, version: 1 };
+  return {
+    status: "clean",
+    deletedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    residualCount: 0,
+    expectedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+    ownerBound: true,
+    version: 1,
+  };
 }
 
 function zeroEffects() {
@@ -352,11 +379,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
 
   it("requires two ephemeral operator bearers and executes exactly eight handler calls", async () => {
     const baseline = fullSnapshot();
-    const postSeed = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 1, candidateFacts: 1, approvedFacts: 1 },
-      "A.twoweeks.resume_variant_plan.summarize": { plans: 1, planItems: 1, claimBackedItems: 1, reviewNeededItems: 1, allowedClaims: 1, sourceFacts: 1 },
-      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1, pendingReviews: 1, approvalNeeded: 1 },
-    });
+    const postSeed = validPostSeedSnapshot();
     const input = inputFor(baseline, postSeed);
     const result = await buildMcpSafeSummaryLiveAdapterV8(input).run();
 
@@ -365,8 +388,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(result.proof.staticProof.kind).toBe("STATIC_ONLY");
     expect(result.proof.sequence).toMatchObject({
       protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "ACCEPTED",
@@ -718,7 +741,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       stopCode: "SEED_FAILED",
       protectedCallCount: 0,
       seedCount: 0,
-      cleanupCount: 3,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "REJECTED",
@@ -770,8 +793,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode: "PROTECTED_CALL_FAILED",
       protectedCallCount: 1,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
       postSeedDelta: "REJECTED",
@@ -816,7 +839,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode,
       protectedCallCount: 8,
-      seedCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       cleanupCount: 0,
       recovery: "RECOVERED",
       baseline: "ACCEPTED",
@@ -844,8 +867,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode: "RECOVERY_FAILED",
       protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       recovery: "FAILED",
       baseline: "ACCEPTED",
       postSeedDelta: "ACCEPTED",
@@ -882,11 +905,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
 
   it("fails closed when the separate effect ledger reports a forbidden effect", async () => {
     const baseline = fullSnapshot();
-    const postSeed = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 1, candidateFacts: 1, approvedFacts: 1 },
-      "A.twoweeks.resume_variant_plan.summarize": { plans: 1, planItems: 1, claimBackedItems: 1, reviewNeededItems: 1, allowedClaims: 1, sourceFacts: 1 },
-      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1, pendingReviews: 1, approvalNeeded: 1 },
-    });
+    const postSeed = validPostSeedSnapshot();
     const input = inputFor(baseline, postSeed);
     input.effectObservation = vi.fn(async () => ({
       retryCount: 0,
@@ -908,11 +927,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
 
   it("reports STOPPED when the final effect observation detects a forbidden effect", async () => {
     const baseline = fullSnapshot();
-    const postSeed = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": { sourceDocuments: 1, candidateFacts: 1, approvedFacts: 1 },
-      "A.twoweeks.resume_variant_plan.summarize": { plans: 1, planItems: 1, claimBackedItems: 1, reviewNeededItems: 1, allowedClaims: 1, sourceFacts: 1 },
-      "A.twoweeks.review_cockpit.summarize": { reviewArtifacts: 1, pendingReviews: 1, approvalNeeded: 1 },
-    });
+    const postSeed = validPostSeedSnapshot();
     const input = inputFor(baseline, postSeed);
     let observationCount = 0;
     input.effectObservation = vi.fn(async () => {
@@ -930,8 +945,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       outcome: "STOPPED",
       stopCode: "EFFECT_OBSERVER_FAILED",
       protectedCallCount: 8,
-      seedCount: 3,
-      cleanupCount: 3,
+      seedCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
+      cleanupCount: MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
       baseline: "ACCEPTED",
       postSeedDelta: "ACCEPTED",
     });

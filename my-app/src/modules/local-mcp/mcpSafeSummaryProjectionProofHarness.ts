@@ -12,6 +12,7 @@ export const MCP_SAFE_SUMMARY_PROOF_TOOLS = Object.freeze([
   "twoweeks.resume_variant_plan.summarize",
   "twoweeks.review_cockpit.summarize",
 ] as const);
+export const MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT = 4 as const;
 
 export type McpSafeSummaryProofToolName =
   (typeof MCP_SAFE_SUMMARY_PROOF_TOOLS)[number];
@@ -242,7 +243,7 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
       primaryStop = stop("SEED_COUNT_MISMATCH");
       return await finish();
     }
-    ledger.seedCount = 3;
+    ledger.seedCount = MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT;
 
     for (const toolName of MCP_SAFE_SUMMARY_PROOF_TOOLS) {
       if (!await protectedCall("A", toolName)) return await finish();
@@ -341,7 +342,7 @@ export async function runMcpSafeSummaryProjectionProof(input: Readonly<{
       try {
         const cleanupResult = await input.adapter.cleanupA();
         if (isExpectedCleanupResult(cleanupResult)) {
-          ledger.cleanupCount = 3;
+          ledger.cleanupCount = MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT;
         } else {
           primaryStop ??= stop("CLEANUP_COUNT_MISMATCH");
         }
@@ -514,9 +515,9 @@ function isExpectedSeedResult(value: unknown): boolean {
     "version",
   ]) &&
     value.status === "ready" &&
-    value.createdCount === 3 &&
+    value.createdCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
     value.reusedCount === 0 &&
-    value.expectedCount === 3 &&
+    value.expectedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
     value.ownerBound === true &&
     value.version === 1;
 }
@@ -531,9 +532,9 @@ function isExpectedCleanupResult(value: unknown): boolean {
     "version",
   ]) &&
     value.status === "clean" &&
-    value.deletedCount === 3 &&
+    value.deletedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
     value.residualCount === 0 &&
-    value.expectedCount === 3 &&
+    value.expectedCount === MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT &&
     value.ownerBound === true &&
     value.version === 1;
 }

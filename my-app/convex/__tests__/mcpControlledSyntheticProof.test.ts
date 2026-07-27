@@ -313,6 +313,9 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(tables.applicationPackages).toHaveLength(1);
     expect(tables.applicationPackages[0].status).toBe("needs_review");
     expect(tables.applicationPackages[0].userId).toBe(OWNER_A);
+    const packagePayload = tables.applicationPackages[0].package as Record<string, unknown>;
+    expect(packagePayload.warnings).toEqual([]);
+    expect(packagePayload.items).toHaveLength(2);
     expect(tables.applicationArtifacts[0].runId).toBe(RUN_ID_A);
     expect(JSON.stringify(result)).not.toContain(MARKER);
     expect(JSON.stringify(result)).not.toContain(OWNER_A);
