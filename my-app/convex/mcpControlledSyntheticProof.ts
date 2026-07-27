@@ -5,7 +5,7 @@ import { MCP_SAFE_SUMMARY_CONTROLLED_PROOF_MARKER_V5 } from "../src/modules/loca
 
 const CONTROLLED_RAIL_FLAG = "ENABLE_MCP_CONTROLLED_SYNTHETIC_RAIL";
 const CONTROLLED_RAIL_MODE = "MCP_CONTROLLED_SYNTHETIC_RAIL_MODE";
-const EXPECTED_FIXTURE_COUNT = 3;
+const EXPECTED_FIXTURE_COUNT = 4;
 const CONTROLLED_RUN_ID_PATTERN = /^mcp-safe-summary-run-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 export const MCP_SAFE_SUMMARY_CONTROLLED_PROOF_LEASE_TTL_MS = 30 * 60 * 1000;
 
@@ -164,7 +164,8 @@ export const runControlledSyntheticProofOperation = internalAction({
 type ControlledTableName =
   | "candidateSourceDocuments"
   | "candidateFacts"
-  | "applicationArtifacts";
+  | "applicationArtifacts"
+  | "applicationPackages";
 
 type ControlledFixtureIds = Readonly<{
   sourceHash: string;
@@ -175,6 +176,10 @@ type ControlledFixtureIds = Readonly<{
   planId: string;
   planItemId: string;
   claimId: string;
+  reviewItemId: string;
+  applicationPackageId: string;
+  resumeVariantArtifactId: string;
+  coverLetterArtifactId: string;
 }>;
 
 type StoredRow = Record<string, unknown> & {
@@ -235,6 +240,10 @@ async function buildOwnerBoundFixtureIds(
     planId: `resume-variant-plan:${sourceHash}`,
     planItemId: `resume-variant-plan-item:${sourceHash}`,
     claimId: `allowed-claim:${sourceHash}`,
+    reviewItemId: `review-item:${sourceHash}`,
+    applicationPackageId: `application-package:${sourceHash}`,
+    resumeVariantArtifactId: `resume-variant-artifact:${sourceHash}`,
+    coverLetterArtifactId: `cover-letter-artifact:${sourceHash}`,
   };
 }
 
@@ -255,13 +264,22 @@ async function queryOwnedRow(
   ownerProfileId: string,
   id: string,
 ): Promise<StoredRow | null> {
-  const indexName =
-    tableName === "applicationArtifacts" ? "by_user_id" : "by_user_id_id";
+  if (tableName === "applicationPackages") {
+    const row = await ctx.db
+      .query(tableName)
+      .withIndex("by_application_package_id", (query: any) =>
+        query.eq("applicationPackageId", id),
+      )
+      .unique();
+    // Return an owner-mismatched row as a collision candidate. The exact
+    // fixture comparison below must fail closed before any write or delete.
+    return row ?? null;
+  }
+
+  const indexName = tableName === "applicationArtifacts" ? "by_user_id" : "by_user_id_id";
   return await ctx.db
     .query(tableName)
-    .withIndex(indexName, (query: any) =>
-      query.eq("userId", ownerProfileId).eq("id", id),
-    )
+    .withIndex(indexName, (query: any) => query.eq("userId", ownerProfileId).eq("id", id))
     .unique();
 }
 
@@ -424,6 +442,123 @@ function buildResumeVariantPlanArtifact(
   };
 }
 
+function buildApplicationPackage(
+  ownerProfileId: string,
+  ids: ControlledFixtureIds,
+  now: number,
+): Record<string, unknown> {
+  const provenance = {
+    applicationContextId: ids.contextId,
+    resumeVariantArtifactId: ids.resumeVariantArtifactId,
+    coverLetterArtifactId: ids.coverLetterArtifactId,
+    sourceFactIds: [ids.candidateFactId],
+    allowedClaimIds: [ids.claimId],
+    evidenceMatchIds: [],
+    demandIds: [],
+    riskFlagIds: [],
+    reviewItemIds: [ids.reviewItemId],
+    version: 1,
+  };
+  const packageItemScope = ids.sourceHash;
+
+  return {
+    applicationPackageId: ids.applicationPackageId,
+    userId: ownerProfileId,
+    applicationContextId: ids.contextId,
+    status: "needs_review",
+    resumeVariantArtifactId: ids.resumeVariantArtifactId,
+    coverLetterArtifactId: ids.coverLetterArtifactId,
+    resumeVariantArtifactStatus: "draft",
+    coverLetterArtifactStatus: "needs_review",
+    sourceFactIds: provenance.sourceFactIds,
+    allowedClaimIds: provenance.allowedClaimIds,
+    evidenceMatchIds: provenance.evidenceMatchIds,
+    demandIds: provenance.demandIds,
+    riskFlagIds: provenance.riskFlagIds,
+    reviewItemIds: provenance.reviewItemIds,
+    packageHash: ids.sourceHash,
+    contentHash: `${ids.sourceHash}:content`,
+    package: {
+      id: ids.applicationPackageId,
+      userId: ownerProfileId,
+      applicationContextId: ids.contextId,
+      status: "needs_review",
+      artifacts: [
+        {
+          id: ids.resumeVariantArtifactId,
+          kind: "resume_variant_artifact",
+          contentHash: `${ids.sourceHash}:resume`,
+          status: "draft",
+          version: 1,
+        },
+        {
+          id: ids.coverLetterArtifactId,
+          kind: "cover_letter_artifact",
+          contentHash: `${ids.sourceHash}:cover-letter`,
+          status: "needs_review",
+          version: 1,
+        },
+      ],
+      items: [
+        {
+          id: `application-package-item:${packageItemScope}:resume-variant-artifact`,
+          kind: "resume_variant",
+          artifactId: ids.resumeVariantArtifactId,
+          artifactContentHash: `${ids.sourceHash}:resume`,
+          status: "needs_review",
+          label: "Synthetic resume metadata.",
+          note: "Synthetic metadata only; no document text is stored.",
+          sourceFactIds: provenance.sourceFactIds,
+          allowedClaimIds: provenance.allowedClaimIds,
+          evidenceMatchIds: provenance.evidenceMatchIds,
+          demandIds: provenance.demandIds,
+          riskFlagIds: provenance.riskFlagIds,
+          reviewItemIds: provenance.reviewItemIds,
+          version: 1,
+        },
+        {
+          id: `application-package-item:${packageItemScope}:cover-letter-artifact`,
+          kind: "cover_letter",
+          artifactId: ids.coverLetterArtifactId,
+          artifactContentHash: `${ids.sourceHash}:cover-letter`,
+          status: "needs_review",
+          label: "Synthetic cover-letter metadata.",
+          note: "Synthetic metadata only; no document text is stored.",
+          sourceFactIds: provenance.sourceFactIds,
+          allowedClaimIds: provenance.allowedClaimIds,
+          evidenceMatchIds: provenance.evidenceMatchIds,
+          demandIds: provenance.demandIds,
+          riskFlagIds: provenance.riskFlagIds,
+          reviewItemIds: provenance.reviewItemIds,
+          version: 1,
+        },
+        {
+          id: `application-package-item:${packageItemScope}:warning:needs-review`,
+          kind: "warning",
+          status: "notice",
+          label: "Synthetic package needs review.",
+          note: "This controlled fixture is not a deliverable package.",
+          sourceFactIds: [],
+          allowedClaimIds: [],
+          evidenceMatchIds: [],
+          demandIds: [],
+          riskFlagIds: [],
+          reviewItemIds: [],
+          version: 1,
+        },
+      ],
+      warnings: ["controlled_synthetic_package_needs_review"],
+      provenance,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    },
+    createdAt: now,
+    updatedAt: now,
+    version: 1,
+  };
+}
+
 function isExactControlledDocument(
   row: StoredRow,
   expectedDocument: Record<string, unknown>,
@@ -485,6 +620,7 @@ function buildFixtureSpecs(
   const sourceDocument = buildSourceDocument(ownerProfileId, ids, now);
   const candidateFact = buildCandidateFact(ownerProfileId, ids, now);
   const artifact = buildResumeVariantPlanArtifact(ownerProfileId, ids, now, runId);
+  const applicationPackage = buildApplicationPackage(ownerProfileId, ids, now);
   return [
     {
       tableName: "candidateSourceDocuments",
@@ -504,6 +640,12 @@ function buildFixtureSpecs(
       id: ids.artifactId,
       document: artifact,
       isControlled: (row) => isExactControlledDocument(row, artifact),
+    },
+    {
+      tableName: "applicationPackages",
+      id: ids.applicationPackageId,
+      document: applicationPackage,
+      isControlled: (row) => isExactControlledDocument(row, applicationPackage),
     },
   ];
 }
