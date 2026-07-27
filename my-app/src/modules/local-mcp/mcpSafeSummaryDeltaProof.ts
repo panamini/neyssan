@@ -131,6 +131,9 @@ const EVIDENCE_DELTA = Object.freeze({
 
 const APPLICATION_PACKAGE_DELTA = Object.freeze({
   packages: 1,
+} satisfies Readonly<Record<string, number>>);
+
+const APPLICATION_PACKAGE_EXACT_POST = Object.freeze({
   artifacts: 2,
   provenanceLinks: 2,
   reviewItems: 1,
@@ -288,6 +291,7 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
     applicationPackageBaseline,
     applicationPackagePost,
     APPLICATION_PACKAGE_DELTA,
+    APPLICATION_PACKAGE_EXACT_POST,
   );
   if (applicationPackageCountDiagnostic) {
     return failure("BASELINE_DRIFT", applicationPackageCountDiagnostic);
@@ -321,11 +325,22 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
       toolName: "twoweeks.evidence_graph.summarize",
     }));
   }
+  const evidenceStalenessDiagnostic = findEvidenceStalenessDiagnostic(
+    evidenceBaseline,
+    evidencePost,
+  );
+  if (evidenceStalenessDiagnostic) {
+    return failure("BASELINE_DRIFT", evidenceStalenessDiagnostic);
+  }
   const evidenceCountDiagnostic = findCountDeltaDiagnostic(
     "twoweeks.evidence_graph.summarize",
     evidenceBaseline,
     evidencePost,
     EVIDENCE_DELTA,
+    {
+      staleSources: evidencePost.staleSources,
+      warnings: evidencePost.warnings,
+    },
   );
   if (evidenceCountDiagnostic) {
     return failure("BASELINE_DRIFT", evidenceCountDiagnostic);
@@ -483,6 +498,46 @@ function findCountDeltaDiagnostic(
         actual,
       });
     }
+  }
+  return undefined;
+}
+
+function findEvidenceStalenessDiagnostic(
+  baseline: Readonly<Record<string, number>>,
+  postSeed: Readonly<Record<string, number>>,
+): McpSafeSummaryPostSeedDeltaDiagnosticV8 | undefined {
+  if (postSeed.staleSources < baseline.staleSources) {
+    return deltaDiagnostic({
+      check: "COUNT_DELTA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+      countKey: "staleSources",
+      expected: baseline.staleSources,
+      actual: postSeed.staleSources,
+    });
+  }
+  const maximumStaleSources = postSeed.sourceDocuments + postSeed.candidateFacts;
+  if (postSeed.staleSources > maximumStaleSources) {
+    return deltaDiagnostic({
+      check: "COUNT_DELTA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+      countKey: "staleSources",
+      expected: maximumStaleSources,
+      actual: postSeed.staleSources,
+    });
+  }
+  const staleSourceDelta = postSeed.staleSources - baseline.staleSources;
+  const expectedWarnings = baseline.warnings + staleSourceDelta;
+  if (postSeed.warnings !== expectedWarnings) {
+    return deltaDiagnostic({
+      check: "COUNT_DELTA",
+      role: "A",
+      toolName: "twoweeks.evidence_graph.summarize",
+      countKey: "warnings",
+      expected: expectedWarnings,
+      actual: postSeed.warnings,
+    });
   }
   return undefined;
 }

@@ -123,6 +123,8 @@ function fullSnapshot(overrides: Readonly<Record<string, Readonly<Record<string,
 }
 
 function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
+  // Minimal zero-baseline effects of the four controlled rows across each
+  // active summary. Latest-package fields use replacement, not additive, counts.
   return fullSnapshot({
     "A.twoweeks.application_package.summarize": {
       packages: 1,
@@ -464,6 +466,91 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(input.callToolsCall).not.toHaveBeenCalled();
   });
 
+  it("accepts latest-package replacement counts for a populated account A", () => {
+    const baseline = fullSnapshot({
+      "A.twoweeks.application_package.summarize": {
+        packages: 3,
+        artifacts: 8,
+        provenanceLinks: 7,
+        reviewItems: 6,
+        warnings: 4,
+        blockers: 1,
+      },
+    });
+    const expectedPostSeed = validPostSeedSnapshot();
+    const postSeed = replaceSummary(
+      expectedPostSeed,
+      "A",
+      "twoweeks.application_package.summarize",
+      snapshot("twoweeks.application_package.summarize", {
+        packages: 4,
+        artifacts: 2,
+        provenanceLinks: 2,
+        reviewItems: 1,
+        warnings: 0,
+        blockers: 0,
+      }),
+    );
+
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed)).toMatchObject({
+      accepted: true,
+    });
+  });
+
+  it("accepts bounded stale-source changes caused by advancing the latest package", () => {
+    const baseline = fullSnapshot({
+      "A.twoweeks.evidence_graph.summarize": {
+        sourceDocuments: 2,
+        candidateFacts: 1,
+        approvedFacts: 1,
+      },
+    });
+    const expectedPostSeed = validPostSeedSnapshot();
+    const postSeed = replaceSummary(
+      expectedPostSeed,
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      snapshot("twoweeks.evidence_graph.summarize", {
+        sourceDocuments: 3,
+        candidateFacts: 2,
+        approvedFacts: 2,
+        provenanceLinks: 2,
+        allowedClaims: 1,
+        staleSources: 3,
+        warnings: 3,
+      }),
+    );
+
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed)).toMatchObject({
+      accepted: true,
+    });
+
+    const warningMismatch = replaceSummary(
+      postSeed,
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      snapshot("twoweeks.evidence_graph.summarize", {
+        sourceDocuments: 3,
+        candidateFacts: 2,
+        approvedFacts: 2,
+        provenanceLinks: 2,
+        allowedClaims: 1,
+        staleSources: 3,
+        warnings: 2,
+      }),
+    );
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, warningMismatch)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "COUNT_DELTA",
+        countKey: "warnings",
+        expected: 3,
+        actual: 2,
+      },
+    });
+  });
+
   it("rejects absent deltas, saturation, and concurrent B drift", async () => {
     const baseline = fullSnapshot();
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, undefined)).toMatchObject({
@@ -538,13 +625,19 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       },
     });
 
-    const countMismatch = fullSnapshot({
-      "A.twoweeks.evidence_graph.summarize": {
+    const expectedPostSeed = validPostSeedSnapshot();
+    const countMismatch = replaceSummary(
+      expectedPostSeed,
+      "A",
+      "twoweeks.evidence_graph.summarize",
+      snapshot("twoweeks.evidence_graph.summarize", {
         sourceDocuments: 2,
         candidateFacts: 1,
         approvedFacts: 1,
-      },
-    });
+        provenanceLinks: 2,
+        allowedClaims: 1,
+      }),
+    );
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, countMismatch)).toMatchObject({
       accepted: false,
       reason: "BASELINE_DRIFT",

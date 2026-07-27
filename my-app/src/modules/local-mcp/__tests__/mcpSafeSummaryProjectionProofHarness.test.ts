@@ -242,6 +242,11 @@ function execute(
 }
 
 describe("runMcpSafeSummaryProjectionProof", () => {
+  it("exports a positive controlled fixture count literal", () => {
+    expect(Number.isInteger(MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT)).toBe(true);
+    expect(MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT).toBe(4);
+  });
+
   it("passes exactly one sanitized A→B→A rail", async () => {
     const { adapter, effectObserver, events } = makeAdapter();
     const result = await execute(adapter, effectObserver, [PRIVATE_SENTINEL]);

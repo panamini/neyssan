@@ -449,6 +449,8 @@ function buildResumeVariantPlanArtifact(
 // The production builder requires full artifact inputs and derives their hashes.
 // This proof fixture intentionally supplies stable metadata-only IDs directly;
 // its storage record still uses the canonical ApplicationPackageStorageRecordV1 shape.
+// The resume and cover-letter artifact refs are metadata-only: this proof does
+// not insert matching artifact rows, and summary readers must not dereference them.
 function buildApplicationPackage(
   ownerProfileId: string,
   ids: ControlledFixtureIds,

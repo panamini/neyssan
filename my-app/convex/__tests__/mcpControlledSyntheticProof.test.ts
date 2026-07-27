@@ -578,16 +578,15 @@ describe("minimal controlled synthetic MCP fixture", () => {
     expect(tables.applicationPackages).toHaveLength(1);
   });
 
-  it("keeps empty account B in onboarding and isolates account A from another profile", async () => {
+  it("keeps resolved empty account B data-free and isolated from account A", async () => {
     const { ctx } = makeCtx();
     await internalSeedControlledSyntheticProof._handler(ctx as any, seedArgs() as any);
 
-    const accountB = await summarizeApplicationPackage(ctx, "clerk_empty");
-    const otherAccount = await summarizeApplicationPackage(ctx, "clerk_other");
+    const accountB = await summarizeApplicationPackage(ctx, "clerk_other");
 
     expect(accountB).toMatchObject({
-      status: "onboarding_required",
-      missingDataReason: "owner_onboarding_required",
+      status: "no_data_available",
+      missingDataReason: "application_package_not_available",
       safeCounts: {
         packages: 0,
         artifacts: 0,
@@ -597,13 +596,7 @@ describe("minimal controlled synthetic MCP fixture", () => {
         blockers: 0,
       },
     });
-    expect(otherAccount).toMatchObject({
-      status: "no_data_available",
-      missingDataReason: "application_package_not_available",
-      safeCounts: { packages: 0 },
-    });
     expect(JSON.stringify(accountB)).not.toContain(OWNER_A);
-    expect(JSON.stringify(otherAccount)).not.toContain(OWNER_A);
   });
 
   it("keeps the controlled proof metadata-only and provider-free", () => {

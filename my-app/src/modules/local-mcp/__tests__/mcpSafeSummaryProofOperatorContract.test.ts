@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT,
   buildMcpSafeSummaryProofOperatorResponse,
   normalizeMcpSafeSummaryOperatorToken,
 } from "../mcpSafeSummaryProofOperatorContract";
+import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from "../mcpSafeSummaryProjectionProofHarness";
 import {
   formatMcpSafeSummaryFirstToolsCallDiagnostic,
   formatMcpSafeSummaryPostSeedDeltaDiagnostic,
