@@ -3758,7 +3758,7 @@ Private-beta MCP workflows:
   mcp-check           Validate required MCP key names and status without printing values.
   mcp-secret-sync     Refresh only the OAuth secret digest in root .env.local from the
                       linked Infisical EU project; never prints the raw secret.
-  mcp-smoke [--origin https://host]
+  ./run.sh mcp-smoke [--origin https://host]
                       Run public metadata, discovery, auth-challenge, and error checks.
                       Sends no credentials or private data and prints no response bodies.
 
