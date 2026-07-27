@@ -1392,14 +1392,34 @@ test("Vite startup refuses to move away from the validated port", () => {
 
 test("local-fast waits for Vite to become reachable before reporting success", () => {
   const source = readFileSync(sourceRunScript, "utf8");
+  const startParserSource = source.slice(
+    source.indexOf("start_parser() {"),
+    source.indexOf("remove_parser_container() {"),
+  );
 
+  assert.match(
+    startParserSource,
+    /if \[\[ "\$\{PARSER_NEEDS_START\}" -eq 1 \]\]; then[\s\S]*ensure_runtime_image_exists[\s\S]*remove_parser_container/u,
+  );
+  assert.match(
+    source,
+    /require_port_available "\$\{VITE_PORT\}" "Vite port \$\{VITE_PORT\}" \|\| return 1/u,
+  );
+  assert.match(
+    source,
+    /if ! VPID="\$\(start_vite "\$\{ACTIVE_ORIGIN\}" "\$\{CURL\}"\)"; then[\s\S]*if \[\[ "\$\{convex_started_here\}" == "1" \]\]; then\s+stop_convex "\$\{CPID\}"[\s\S]*if \[\[ "\$\{parser_started_here\}" == "1" \]\]; then\s+stop_parser[\s\S]*exit 1/u,
+  );
   assert.match(
     source,
     /wait_for_vite_ready\(\)[\s\S]*curl -fsS "http:\/\/127\.0\.0\.1:\$\{VITE_PORT\}\/"[\s\S]*if ! wait_for_vite_ready "\$\{VPID\}"; then/u,
   );
   assert.match(
     source,
-    /if ! wait_for_vite_ready "\$\{VPID\}"; then[\s\S]*stop_vite "\$\{VPID\}"[\s\S]*stop_convex "\$\{CPID\}"[\s\S]*stop_parser/u,
+    /if ! wait_for_vite_ready "\$\{VPID\}"; then[\s\S]*stop_vite "\$\{VPID\}"[\s\S]*if \[\[ "\$\{convex_started_here\}" == "1" \]\]; then\s+stop_convex "\$\{CPID\}"[\s\S]*if \[\[ "\$\{parser_started_here\}" == "1" \]\]; then\s+stop_parser/u,
+  );
+  assert.match(
+    source,
+    /if ! next_vite_pid="\$\(start_vite "\$\{ACTIVE_ORIGIN\}" "\$\{next_convex_url\}"\)"; then[\s\S]*wait_for_vite_ready "\$\{next_vite_pid\}"/u,
   );
 });
 
@@ -1641,7 +1661,7 @@ test("doctor local-fast accepts a missing image when a workspace parser is reusa
   assert.match(result.output, /parser runtime image is not required.*tracked parser is reusable/i);
 });
 
-test("doctor local-fast requires the image when tracked env changes restart the parser", (t) => {
+test("doctor local-fast prepares a missing image when tracked env changes restart the parser", (t) => {
   const fixture = createFixture(t);
   const stateDirectory = join(fixture.root, "tmp", "dev-stack");
   mkdirSync(stateDirectory, { recursive: true });
@@ -1673,9 +1693,12 @@ CONVEX_BINDING_HASH=stale-do-not-print
     FAKE_NODE_CONVEX_READY: "1",
   });
 
-  assertFailure(result);
+  assert.equal(result.status, 0, result.output);
   assert.match(result.output, /tracked local-fast stack will restart the parser/i);
-  assert.match(result.output, /parser runtime image is missing/i);
+  assert.match(
+    result.output,
+    /WARN - parser runtime image is missing; local-fast startup will build it with the configured builder/i,
+  );
   assert.doesNotMatch(result.output, /stale-do-not-print|8001|3210/u);
 });
 
@@ -1936,16 +1959,45 @@ for (const [label, env] of [
   });
 }
 
-test("doctor local-fast rejects a missing parser image", (t) => {
+test("doctor local-fast warns when startup can build a missing parser image", (t) => {
   const fixture = createFixture(t);
 
   const result = runDoctor(fixture, ["local-fast"], {
     FAKE_DOCKER_IMAGE: "missing",
   });
 
+  assert.equal(result.status, 0, result.output);
+  assert.match(
+    result.output,
+    /WARN - parser runtime image is missing; local-fast startup will build it with the configured builder/i,
+  );
+});
+
+test("doctor local-fast explains when startup will configure a missing buildx builder", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_BUILDER: "unavailable",
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(
+    result.output,
+    /WARN - parser runtime image is missing; local-fast startup will configure a builder and build it/i,
+  );
+});
+
+test("doctor local-fast rejects a missing parser image when buildx is unavailable", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_BUILDX: "unavailable",
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
   assertFailure(result);
-  assert.match(result.output, /parser runtime image is missing/i);
-  assert.doesNotMatch(result.output, /startup will build it/i);
+  assert.match(result.output, /parser runtime image is missing and cannot be prepared/i);
 });
 
 for (const dependency of ["vite", "convex"]) {
