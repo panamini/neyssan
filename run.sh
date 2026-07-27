@@ -7,6 +7,17 @@ if [[ "${CMD}" == "-ui" ]]; then
   set -- --ui "$@"
   CMD="up"
 fi
+if [[ "${CMD}" == "-h" || "${CMD}" == "--help" ]]; then
+  CMD="help"
+elif [[ "${CMD}" != "help" ]]; then
+  for arg in "$@"; do
+    if [[ "${arg}" == "-h" || "${arg}" == "--help" ]]; then
+      CMD="help"
+      set --
+      break
+    fi
+  done
+fi
 
 MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=0
 if [[ "$-" == *x* ]]; then
@@ -19,9 +30,18 @@ readonly MCP_SECRET_SYNC_XTRACE_WAS_ENABLED
 
 # Read-only diagnostics must neither source nor trace local configuration.
 READ_ONLY_COMMAND=0
-if [[ "${CMD}" == "doctor" || "${CMD}" == "mcp-smoke" ]]; then
-  READ_ONLY_COMMAND=1
-fi
+case "${CMD}" in
+  doctor|mcp-smoke|help)
+    READ_ONLY_COMMAND=1
+    ;;
+  mcp-private-beta|mcp-secret-sync|mcp-check|local-fast|local|local-convex|tunnel|parser-dev|reload-env|rebuild-docker|up|down|reset|status|logs|smoke|assert-ocr|probe-edge)
+    ;;
+  *)
+    # Invalid commands must fail without sourcing local configuration or
+    # creating runtime state.
+    READ_ONLY_COMMAND=1
+    ;;
+esac
 readonly READ_ONLY_COMMAND
 if [[ "${READ_ONLY_COMMAND}" == "1" && "$-" == *x* ]]; then
   set +x
@@ -2130,20 +2150,11 @@ target_image_id() {
 print_command_banner() {
   cat <<'EOF'
 
-Commands:
-  ./run.sh doctor [target]  read-only startup diagnostics for local-fast or mcp-private-beta
-  ./run.sh mcp-private-beta  reproducible private-beta MCP origin + tunnel
-  ./run.sh mcp-secret-sync   refresh the OAuth digest from Infisical without printing values
-  ./run.sh mcp-check         validate MCP runtime keys without printing values
-  ./run.sh tunnel          stable full workflow
-  ./run.sh local-fast      fast full-app parser development
-  ./run.sh parser-dev      parser-only hacking
-  ./run.sh reload-env      restart-only refresh after env changes
-  ./run.sh rebuild-docker  rebuild runtime / Docker stack
-  ./run.sh down            normal stop
-  ./run.sh reset           stronger cleanup
-  ./run.sh status          quick stack status
-  ./run.sh logs            parser logs
+Useful next commands:
+  ./run.sh status  inspect the tracked stack
+  ./run.sh logs    follow parser logs
+  ./run.sh down    stop resources owned by this worktree
+  ./run.sh help    show setup, recovery, and advanced commands
 EOF
 }
 
@@ -3699,53 +3710,109 @@ mcp_smoke() {
 
 help() {
   cat <<'EOF'
-usage:
-  ./run.sh doctor [local-fast|mcp-private-beta]
-  ./run.sh mcp-private-beta [--ocr auto|doctr|paddle|disabled]
-  ./run.sh mcp-secret-sync
-  ./run.sh mcp-check
-  ./run.sh mcp-smoke [--origin https://host]
-  ./run.sh local-fast [--ocr auto|doctr|paddle|disabled]
-  ./run.sh local [--ocr auto|doctr|paddle|disabled]
-  ./run.sh local-convex [--ocr auto|doctr|paddle|disabled]
-  ./run.sh tunnel [--ocr auto|doctr|paddle|disabled]
-  ./run.sh parser-dev [--ocr auto|doctr|paddle|disabled]
-  ./run.sh reload-env
-  ./run.sh rebuild-docker
-  ./run.sh down
-  ./run.sh reset
-  ./run.sh up [--ui] [--edge-origin | --local-origin] [--local-convex | --cloud-convex] [--ocr auto|doctr|paddle|disabled]
-  ./run.sh status
-  ./run.sh logs
-  ./run.sh smoke
-  ./run.sh assert-ocr FILE.pdf
-  ./run.sh probe-edge [FILE.pdf]     # uses CF_ACCESS_CLIENT_ID/SECRET if set
+Twoweeks local development orchestrator
 
-notes:
-- doctor = read-only, secret-free startup diagnostics. macOS and Linux are supported directly; Windows uses WSL2 with Docker Desktop integration.
-- mcp-private-beta = exact private-beta MCP origin on port 5196 with local Convex, image parser runtime, and the named Cloudflare tunnel.
-- mcp-secret-sync = retrieve the raw OAuth client secret from the linked Infisical EU project and atomically update only its digest in root .env.local.
-- mcp-check = fail-closed validation of canonical private-beta keys; it prints key names/status only, never values.
-- mcp-smoke = read-only public metadata/discovery/auth-challenge/error smoke; it sends no credentials or private data and never prints response bodies.
-- local-fast = recommended fast full-app parser workflow: local parser + local Convex + Vite + autoreload, with export/runtime deps preserved inside the container.
-- tunnel = stable validation mode on the validated image runtime.
-- local = local parser + export-capable image runtime + Vite pointed at http://127.0.0.1:8001.
-- local-convex = legacy alias for local-fast.
-- parser-dev = parser-only / advanced workspace-mounted parser with autoreload; fast Python iteration, not stable runtime validation.
-- reload-env = restart-only refresh for parser/Vite/local Convex/tunnel after env changes, without rebuilding the Docker image.
-- rebuild-docker = explicit rebuild for parser/export Docker runtime, then clean restart + readiness checks.
-- down stops only the processes/containers tracked as started by run.sh and keeps images/caches intact.
-- reset does down plus cleanup of orphaned containers carrying this worktree's ownership label, then clears tmp/dev-stack state and stale temp logs.
-- legacy or foreign processes and containers are never killed automatically; inspect them explicitly when doctor reports a conflict.
-- workspace mount mode is explicit-only via --workspace-mount and is not the default runtime.
-- FE origin defaults to PARSER_ORIGIN (edge). Use --local-origin to point FE to http://127.0.0.1:8001.
-- Use --local-convex when you want the app to talk to the local Convex backend managed by run.sh.
-- Without --local-convex, Convex stays on its configured env/default path (typically cloud), which preserves the existing Cloudflare tunnel flow.
-- In local-fast, both Vite and server-side structuredUpload resolve the local parser at http://127.0.0.1:8001, and export worker dependencies come from the container image instead of host node_modules.
-- MISTRAL is auto-enabled if MISTRAL_API_KEY is present (env or ~/.mistral_key).
-- OCR flag controls local parser engine: auto (default), doctr, paddle, disabled.
+Usage:
+  ./run.sh <command> [options]
+  ./run.sh help
+  ./run.sh --help
+  ./run.sh <command> --help
+
+First-time collaborator setup:
+  1. cp .env.example .env.local
+  2. Set CONVEX_TEAM and CONVEX_PROJECT in root .env.local.
+     These are shared project slugs, not secrets; ask a project owner for them.
+  3. cp my-app/.env.local.example my-app/.env.local
+     Set VITE_CLERK_PUBLISHABLE_KEY for signed-in app flows; it is client-visible,
+     not a server secret. Ask a project owner for the correct public key.
+  4. npm ci --prefix my-app
+  5. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
+  6. ./run.sh doctor local-fast
+  7. ./run.sh local-fast
+
+Recommended lifecycle:
+  doctor [local-fast]  Diagnose prerequisites without installing or starting anything.
+  local-fast          Start the recommended full development stack:
+                      local parser + local Convex + Vite + parser autoreload.
+  status              Show the tracked mode, processes, containers, ports, and readiness.
+  down                Stop only resources owned by this worktree; keep images and caches.
+
+Recovery and maintenance:
+  logs                Follow the local parser container logs.
+  reload-env          Restart the tracked stack after changing environment configuration.
+                      Does not rebuild the Docker image.
+  rebuild-docker      Rebuild the parser/export image after Dockerfile or runtime
+                      dependency changes, then restart and verify readiness.
+  reset               Run down, remove stale containers owned by this worktree, and
+                      clear local dev-stack state. Keeps images and dependency caches.
+
+Validation and specialist workflows:
+  tunnel              Run the stable image-based stack through the configured edge origin.
+  local               Run the image-based local parser + Vite; Convex uses its configured
+                      default, usually cloud. Prefer local-fast for full local development.
+  local-convex        Legacy alias for local-fast.
+  parser-dev          Run only the workspace-mounted parser with autoreload.
+                      Intended for advanced Python parser iteration.
+  smoke               Check the local parser /ready endpoint and format the response.
+  assert-ocr FILE.pdf Legacy diagnostic helper: print OCR fields for a local PDF.
+                      It reports parser output but does not enforce a quality threshold.
+  probe-edge [FILE]   Probe the configured edge parser; uses Cloudflare Access credentials
+                      only when CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are set.
+
+Private-beta MCP workflows:
+  doctor mcp-private-beta
+                      Diagnose the MCP startup contract without sourcing local env files
+                      or printing secret values. It may read them to validate the contract.
+  mcp-private-beta    Start the exact private-beta MCP stack on port 5196 with local
+                      Convex, the image parser runtime, and the named Cloudflare tunnel.
+  mcp-check           Validate required MCP key names and status without printing values.
+  mcp-secret-sync     Refresh only the OAuth secret digest in root .env.local from the
+                      linked Infisical EU project; never prints the raw secret.
+  ./run.sh mcp-smoke [--origin https://host]
+                      Run public metadata, discovery, auth-challenge, and error checks.
+                      Sends no credentials or private data and prints no response bodies.
+
+Common options:
+  --ocr MODE          Parser OCR engine: auto (default), doctr, paddle, or disabled.
+  --doctr             Shortcut for --ocr doctr.
+  --paddle            Shortcut for --ocr paddle.
+  --no-ocr            Shortcut for --ocr disabled.
+
+Advanced low-level command:
+  up [--ui] [--edge-origin|--local-origin]
+     [--local-convex|--cloud-convex]
+     [--image-runtime|--workspace-mount] [--parser-reload]
+     [--rebuild] [--ocr MODE]
+                      Compose a custom stack. Prefer the named workflows above.
+
+Configuration:
+  root .env.local     Canonical operator configuration used by run.sh.
+  my-app/.env.local   App/Vite-only configuration; do not duplicate operator settings here.
+  VITE_PORT           Optional Vite port; defaults to 5173 when unset. The provided
+                      root template sets 5196 for private-beta and local-fast honors it.
+  OPEN_BROWSER        Set to 0 to prevent automatic browser opening; the template sets 0.
+  PARSER_ORIGIN       Edge parser origin used by tunnel/image workflows.
+
+Troubleshooting order:
+  1. ./run.sh doctor local-fast
+  2. ./run.sh status
+  3. ./run.sh logs
+  4. ./run.sh reload-env       after configuration changes
+  5. ./run.sh rebuild-docker   after Docker/runtime dependency changes
+  6. ./run.sh reset            only for stale owned state
+
+Safety:
+  - run.sh is for local development only; it is not a production server entrypoint.
+  - help and doctor do not source local configuration or create runtime state.
+  - down/reset never kill arbitrary port ranges or foreign processes/containers.
+  - Real API keys and personal tokens must never be committed.
+
+Examples:
+  ./run.sh local-fast
+  ./run.sh local-fast --ocr auto
+  OPEN_BROWSER=0 ./run.sh local-fast
+  ./run.sh doctor mcp-private-beta
 EOF
-  print_command_banner
 }
 
 # Trap: ensure long-running stack commands do not leave Vite/Parser dangling.
@@ -3777,5 +3844,10 @@ case "${CMD}" in
   smoke) smoke;;
   assert-ocr) assert_ocr "$@";;
   probe-edge) probe_edge "${1:-}";;
-  help|*) help;;
+  help) help;;
+  *)
+    echo "[run] unknown command: ${CMD}" >&2
+    echo "[run] run './run.sh help' to see available commands." >&2
+    exit 2
+    ;;
 esac

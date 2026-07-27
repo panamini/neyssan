@@ -43,6 +43,7 @@ function findHostTool(name) {
 function linkHostTools(binDirectory) {
   for (const name of [
     "awk",
+    "cat",
     "cut",
     "dirname",
     "grep",
@@ -229,8 +230,8 @@ function removeDependencyFixture(root, name) {
   });
 }
 
-function runDoctor(fixture, args = [], env = {}) {
-  const result = spawnSync(bash, ["./run.sh", "doctor", ...args], {
+function runScript(fixture, args = [], env = {}) {
+  const result = spawnSync(bash, ["./run.sh", ...args], {
     cwd: fixture.root,
     encoding: "utf8",
     timeout: 10_000,
@@ -249,6 +250,10 @@ function runDoctor(fixture, args = [], env = {}) {
     output: `${result.stdout ?? ""}${result.stderr ?? ""}`,
     status: result.status,
   };
+}
+
+function runDoctor(fixture, args = [], env = {}) {
+  return runScript(fixture, ["doctor", ...args], env);
 }
 
 function assertFailure(result) {
@@ -327,6 +332,79 @@ test("doctor defaults to a successful, read-only local-fast check", (t) => {
       existsSync(join(fixture.root, directory)),
       false,
       `doctor created ${directory}`,
+    );
+  }
+});
+
+test("help gives a complete collaborator path without reading config or creating state", (t) => {
+  const fixture = createFixture(t);
+  const envBefore = readFileSync(fixture.envFile, "utf8");
+  writeFileSync(fixture.envFile, `${envBefore}false\n`, { mode: 0o600 });
+
+  const result = runScript(fixture, ["help"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Twoweeks local development orchestrator/);
+  assert.match(result.output, /First-time collaborator setup:/);
+  assert.match(result.output, /cp \.env\.example \.env\.local/);
+  assert.match(result.output, /npm ci --prefix my-app/);
+  assert.match(result.output, /\.\/run\.sh doctor local-fast/);
+  assert.match(result.output, /\.\/run\.sh local-fast/);
+  assert.match(result.output, /Recovery and maintenance:/);
+  assert.match(result.output, /Troubleshooting order:/);
+  assert.match(result.output, /run\.sh is for local development only/);
+  assert.match(result.output, /my-app\/\.env\.local\.example/);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY/);
+  assert.match(result.output, /does not enforce a quality threshold/);
+  assert.match(result.output, /may read them to validate the contract/);
+  for (const directory of generatedDirectories) {
+    assert.equal(
+      existsSync(join(fixture.root, directory)),
+      false,
+      `help created ${directory}`,
+    );
+  }
+});
+
+test("global and command help flags are safe aliases for help", (t) => {
+  const fixture = createFixture(t);
+  const envBefore = readFileSync(fixture.envFile, "utf8");
+  writeFileSync(fixture.envFile, `${envBefore}false\n`, { mode: 0o600 });
+
+  for (const args of [
+    ["--help"],
+    ["-h"],
+    ["local-fast", "--help"],
+    ["local-fast", "--ocr", "auto", "--help"],
+  ]) {
+    const result = runScript(fixture, args);
+    assert.equal(result.status, 0, `${args.join(" ")}\n${result.output}`);
+    assert.match(result.output, /Recommended lifecycle:/);
+  }
+  for (const directory of generatedDirectories) {
+    assert.equal(
+      existsSync(join(fixture.root, directory)),
+      false,
+      `help alias created ${directory}`,
+    );
+  }
+});
+
+test("an unknown command fails clearly without reading config or creating state", (t) => {
+  const fixture = createFixture(t);
+  const envBefore = readFileSync(fixture.envFile, "utf8");
+  writeFileSync(fixture.envFile, `${envBefore}false\n`, { mode: 0o600 });
+
+  const result = runScript(fixture, ["locla-fast"]);
+
+  assert.equal(result.status, 2, result.output);
+  assert.match(result.output, /unknown command: locla-fast/i);
+  assert.match(result.output, /\.\/run\.sh help/);
+  for (const directory of generatedDirectories) {
+    assert.equal(
+      existsSync(join(fixture.root, directory)),
+      false,
+      `unknown command created ${directory}`,
     );
   }
 });
