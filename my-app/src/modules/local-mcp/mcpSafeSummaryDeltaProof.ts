@@ -296,6 +296,16 @@ export function validateMcpSafeSummaryPostSeedDeltasV8(
   if (applicationPackageCountDiagnostic) {
     return failure("BASELINE_DRIFT", applicationPackageCountDiagnostic);
   }
+  if (!hasExpectedApplicationPackagePostState(
+    applicationPackagePostSummary,
+    applicationPackagePost.packages,
+  )) {
+    return failure("BASELINE_DRIFT", deltaDiagnostic({
+      check: "DERIVED_METADATA",
+      role: "A",
+      toolName: "twoweeks.application_package.summarize",
+    }));
+  }
 
   const evidenceBaselineSummary = baseline.A["twoweeks.evidence_graph.summarize"];
   const evidencePostSummary = postSeed.A["twoweeks.evidence_graph.summarize"];
@@ -542,6 +552,26 @@ function findEvidenceStalenessDiagnostic(
   return undefined;
 }
 
+function hasExpectedApplicationPackagePostState(
+  summary: Readonly<Record<string, unknown>>,
+  expectedPackageCount: number,
+): boolean {
+  const packageRef = summary.packageRef;
+  const safeCategories = summary.safeCategories;
+  return summary.status === "available" &&
+    !Object.prototype.hasOwnProperty.call(summary, "missingDataReason") &&
+    isPlainRecord(packageRef) &&
+    packageRef.status === "available" &&
+    packageRef.count === expectedPackageCount &&
+    isPlainRecord(safeCategories) &&
+    structurallyEqual(safeCategories, {
+      packageStatus: "needs_review",
+      resumeVariantArtifactStatus: "draft",
+      coverLetterArtifactStatus: "needs_review",
+      version: 1,
+    });
+}
+
 function hasInsufficientHeadroom(
   counts: Readonly<Record<string, number>>,
   positiveDelta: Readonly<Record<string, number>>,
@@ -574,9 +604,14 @@ function normalizeForPostSeedComparison(
   for (const key of metadata.topLevel) delete normalized[key];
   const reference = normalized[metadata.referenceKey];
   if (isPlainRecord(reference)) {
-    normalized[metadata.referenceKey] = Object.fromEntries(
+    const invariantReference = Object.fromEntries(
       Object.entries(reference).filter(([key]) => !metadata.reference.includes(key)),
     );
+    if (Object.keys(invariantReference).length === 0) {
+      delete normalized[metadata.referenceKey];
+    } else {
+      normalized[metadata.referenceKey] = invariantReference;
+    }
   }
   return normalized;
 }

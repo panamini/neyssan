@@ -125,7 +125,7 @@ function fullSnapshot(overrides: Readonly<Record<string, Readonly<Record<string,
 function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
   // Minimal zero-baseline effects of the four controlled rows across each
   // active summary. Latest-package fields use replacement, not additive, counts.
-  return fullSnapshot({
+  const counts = fullSnapshot({
     "A.twoweeks.application_package.summarize": {
       packages: 1,
       artifacts: 2,
@@ -155,6 +155,22 @@ function validPostSeedSnapshot(): McpSafeSummarySnapshotV8 {
       approvalNeeded: 3,
     },
   });
+  return replaceSummary(
+    counts,
+    "A",
+    "twoweeks.application_package.summarize",
+    {
+      ...counts.A["twoweeks.application_package.summarize"],
+      status: "available",
+      packageRef: { status: "available", count: 1 },
+      safeCategories: {
+        packageStatus: "needs_review",
+        resumeVariantArtifactStatus: "draft",
+        coverLetterArtifactStatus: "needs_review",
+        version: 1,
+      },
+    },
+  );
 }
 
 function replaceSummary(
@@ -482,18 +498,45 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       expectedPostSeed,
       "A",
       "twoweeks.application_package.summarize",
-      snapshot("twoweeks.application_package.summarize", {
-        packages: 4,
-        artifacts: 2,
-        provenanceLinks: 2,
-        reviewItems: 1,
-        warnings: 0,
-        blockers: 0,
-      }),
+      {
+        ...expectedPostSeed.A["twoweeks.application_package.summarize"],
+        safeCounts: snapshot("twoweeks.application_package.summarize", {
+          packages: 4,
+          artifacts: 2,
+          provenanceLinks: 2,
+          reviewItems: 1,
+          warnings: 0,
+          blockers: 0,
+        }).safeCounts,
+        packageRef: { status: "available", count: 4 },
+      },
     );
 
     expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, postSeed)).toMatchObject({
       accepted: true,
+    });
+
+    const wrongPackageState = replaceSummary(
+      postSeed,
+      "A",
+      "twoweeks.application_package.summarize",
+      {
+        ...postSeed.A["twoweeks.application_package.summarize"],
+        safeCategories: {
+          packageStatus: "ready_for_review",
+          resumeVariantArtifactStatus: "draft",
+          coverLetterArtifactStatus: "needs_review",
+          version: 1,
+        },
+      },
+    );
+    expect(validateMcpSafeSummaryPostSeedDeltasV8(baseline, wrongPackageState)).toMatchObject({
+      accepted: false,
+      reason: "BASELINE_DRIFT",
+      diagnostic: {
+        check: "DERIVED_METADATA",
+        toolName: "twoweeks.application_package.summarize",
+      },
     });
   });
 
