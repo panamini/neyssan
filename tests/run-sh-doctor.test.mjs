@@ -1392,10 +1392,14 @@ test("Vite startup refuses to move away from the validated port", () => {
 
 test("local-fast waits for Vite to become reachable before reporting success", () => {
   const source = readFileSync(sourceRunScript, "utf8");
+  const startParserSource = source.slice(
+    source.indexOf("start_parser() {"),
+    source.indexOf("remove_parser_container() {"),
+  );
 
   assert.match(
-    source,
-    /if \[\[ "\$\{RUNTIME_MODE\}" == "image" \]\]; then[\s\S]*else\n    ensure_runtime_image_exists/u,
+    startParserSource,
+    /if \[\[ "\$\{PARSER_NEEDS_START\}" -eq 1 \]\]; then[\s\S]*ensure_runtime_image_exists[\s\S]*remove_parser_container/u,
   );
   assert.match(
     source,
@@ -1403,7 +1407,7 @@ test("local-fast waits for Vite to become reachable before reporting success", (
   );
   assert.match(
     source,
-    /if ! VPID="\$\(start_vite "\$\{ACTIVE_ORIGIN\}" "\$\{CURL\}"\)"; then[\s\S]*stop_convex "\$\{CPID\}"[\s\S]*stop_parser[\s\S]*exit 1/u,
+    /if ! VPID="\$\(start_vite "\$\{ACTIVE_ORIGIN\}" "\$\{CURL\}"\)"; then[\s\S]*if \[\[ "\$\{convex_started_here\}" == "1" \]\]; then\s+stop_convex "\$\{CPID\}"[\s\S]*if \[\[ "\$\{parser_started_here\}" == "1" \]\]; then\s+stop_parser[\s\S]*exit 1/u,
   );
   assert.match(
     source,
@@ -1411,7 +1415,11 @@ test("local-fast waits for Vite to become reachable before reporting success", (
   );
   assert.match(
     source,
-    /if ! wait_for_vite_ready "\$\{VPID\}"; then[\s\S]*stop_vite "\$\{VPID\}"[\s\S]*stop_convex "\$\{CPID\}"[\s\S]*stop_parser/u,
+    /if ! wait_for_vite_ready "\$\{VPID\}"; then[\s\S]*stop_vite "\$\{VPID\}"[\s\S]*if \[\[ "\$\{convex_started_here\}" == "1" \]\]; then\s+stop_convex "\$\{CPID\}"[\s\S]*if \[\[ "\$\{parser_started_here\}" == "1" \]\]; then\s+stop_parser/u,
+  );
+  assert.match(
+    source,
+    /if ! next_vite_pid="\$\(start_vite "\$\{ACTIVE_ORIGIN\}" "\$\{next_convex_url\}"\)"; then[\s\S]*wait_for_vite_ready "\$\{next_vite_pid\}"/u,
   );
 });
 

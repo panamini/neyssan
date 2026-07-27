@@ -2590,23 +2590,27 @@ start_parser() {
   local OCR="${1:-auto}"           # auto|doctr|paddle|disabled
   local RUNTIME_MODE="${2:-${PARSER_RUNTIME_MODE}}"
   local RELOAD="${3:-0}"
+  local FORCE_RESTART="${4:-0}"
   local PLATFORM; PLATFORM="$(map_platform)"
   local PARSER_NEEDS_START=1
+  PARSER_STARTED_BY_INVOCATION_RESULT="0"
 
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
     require_owned_container "${PARSER_NAME}" "parser" || return 1
     local current_mode
     current_mode="$(parser_runtime_mode)"
-    if parser_container_matches_runtime "${RUNTIME_MODE}" && parser_container_owns_port; then
+    if [[ "${FORCE_RESTART}" != "1" ]] && parser_container_matches_runtime "${RUNTIME_MODE}" && parser_container_owns_port; then
       echo "[run] parser already running in ${current_mode} runtime: ${PARSER_NAME}"
       PARSER_NEEDS_START=0
     else
       echo "[run] replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}, want ${RUNTIME_MODE})"
-      docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
     fi
   fi
 
   if [[ "${PARSER_NEEDS_START}" -eq 1 ]]; then
+    # Image preparation belongs to the parser start transition. Keeping it here
+    # covers reloads while avoiding builds when a compatible parser is reused.
+    ensure_runtime_image_exists
     echo "[run] starting parser (${IMAGE_NAME}, runtime=${RUNTIME_MODE}, OCR=${OCR})"
     local -a envs=(
       -e MALLOC_ARENA_MAX=2
@@ -2660,6 +2664,7 @@ start_parser() {
         --host 0.0.0.0 --port 8001 --workers 1 --http h11 \
         --timeout-keep-alive 5 --timeout-graceful-shutdown 5 --limit-concurrency 64 >/dev/null
     fi
+    PARSER_STARTED_BY_INVOCATION_RESULT="1"
   fi
 
   # Wait for healthy
@@ -2849,6 +2854,7 @@ discover_local_convex_url() {
 start_convex() {
   CONVEX_PID_RESULT=""
   CONVEX_URL_RESULT=""
+  CONVEX_STARTED_BY_INVOCATION_RESULT="0"
 
   local convex_team=""
   local convex_project=""
@@ -2987,6 +2993,7 @@ child.unref();
       sync_local_convex_env
       CONVEX_PID_RESULT="${cpid}"
       CONVEX_URL_RESULT="${actual_url}"
+      CONVEX_STARTED_BY_INVOCATION_RESULT="1"
       return 0
     fi
     if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
@@ -2994,6 +3001,7 @@ child.unref();
       sync_local_convex_env
       CONVEX_PID_RESULT="${cpid}"
       CONVEX_URL_RESULT="${actual_url}"
+      CONVEX_STARTED_BY_INVOCATION_RESULT="1"
       return 0
     fi
     if ! kill -0 "${cpid}" >/dev/null 2>&1; then
@@ -3008,6 +3016,7 @@ child.unref();
         sync_local_convex_env
         CONVEX_PID_RESULT="${cpid}"
         CONVEX_URL_RESULT="${actual_url}"
+        CONVEX_STARTED_BY_INVOCATION_RESULT="1"
         return 0
       fi
     fi
@@ -3029,10 +3038,11 @@ start_vite() {
   local ORIGIN="${1:?origin required}"
   local CONVEX_URL="${2:-}"
   require_port_available "${VITE_PORT}" "Vite port ${VITE_PORT}" || return 1
-  : > "${VITE_LOG}"
+  : > "${VITE_LOG}" || return 1
   local vite_pid_file="${STATE_DIR}/vite.pid"
-  rm -f "${vite_pid_file}"
-  (
+  local vite_pid=""
+  rm -f "${vite_pid_file}" || return 1
+  if ! (
     cd "${ROOT_DIR}/my-app"
     export CONVEX_PARSER_URL="${ORIGIN}"
     export VITE_PARSER_URL="${ORIGIN}"
@@ -3076,9 +3086,17 @@ const child = spawn(cmd, args, {
 fs.writeFileSync(pidFile, String(child.pid));
 child.unref();
 ' "${vite_pid_file}" "${VITE_LOG}" "${vite_cmd[@]}"
-  )
-  cat "${vite_pid_file}"
+  ); then
+    rm -f "${vite_pid_file}"
+    return 1
+  fi
+  if ! vite_pid="$(cat "${vite_pid_file}" 2>/dev/null)" || ! [[ "${vite_pid}" =~ ^[0-9]+$ ]]; then
+    echo "[run] ERROR: Vite launcher did not record a valid PID" >&2
+    rm -f "${vite_pid_file}"
+    return 1
+  fi
   rm -f "${vite_pid_file}"
+  printf '%s\n' "${vite_pid}"
 }
 
 wait_for_vite_ready() {
@@ -3113,6 +3131,10 @@ reload_env_stack() {
   local next_vite_pid=""
   local next_convex_pid=""
   local next_convex_url=""
+  local parser_restarted_here="0"
+  local convex_restarted_here="0"
+  local tunnel_restarted_here="0"
+  local vite_restart_failed="0"
 
   read_state
   if [[ -z "${STACK_MODE:-}" ]]; then
@@ -3154,8 +3176,8 @@ reload_env_stack() {
   next_convex_url="${CONVEX_URL:-}"
 
   if [[ "${env_changed}" == "true" && "${PARSER_STARTED:-0}" == "1" ]]; then
-    stop_parser
-    start_parser "${PARSER_OCR:-$(parser_ocr_mode)}" "${PARSER_RUNTIME_MODE:-image}" "${PARSER_RELOAD:-0}"
+    start_parser "${PARSER_OCR:-$(parser_ocr_mode)}" "${PARSER_RUNTIME_MODE:-image}" "${PARSER_RELOAD:-0}" "1"
+    parser_restarted_here="${PARSER_STARTED_BY_INVOCATION_RESULT:-0}"
   fi
 
   if [[ "${local_binding_changed}" == "true" ]]; then
@@ -3163,6 +3185,7 @@ reload_env_stack() {
     start_convex
     next_convex_pid="${CONVEX_PID_RESULT:-}"
     next_convex_url="${CONVEX_URL_RESULT:-}"
+    convex_restarted_here="${CONVEX_STARTED_BY_INVOCATION_RESULT:-0}"
   elif [[ "${env_changed}" == "true" && "${CONVEX_MODE:-cloud}" == "local" ]]; then
     sync_local_convex_env
   fi
@@ -3170,20 +3193,56 @@ reload_env_stack() {
   if [[ "${env_changed}" == "true" && "${TUNNEL_STARTED:-0}" == "1" ]]; then
     stop_tunnel
     start_tunnel
+    tunnel_restarted_here="1"
   fi
 
   if [[ "${UI_STARTED:-0}" == "1" && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" ) ]]; then
     stop_vite "${VITE_PID:-}"
     OPEN_BROWSER="0"
     if [[ "${CONVEX_MODE:-cloud}" == "local" ]]; then
-      next_vite_pid="$(start_vite "${ACTIVE_ORIGIN}" "${next_convex_url}")"
+      if ! next_vite_pid="$(start_vite "${ACTIVE_ORIGIN}" "${next_convex_url}")"; then
+        vite_restart_failed="1"
+      fi
     else
-      next_vite_pid="$(start_vite "${ACTIVE_ORIGIN}")"
+      if ! next_vite_pid="$(start_vite "${ACTIVE_ORIGIN}")"; then
+        vite_restart_failed="1"
+      fi
     fi
     OPEN_BROWSER="${current_open_browser}"
-    sleep 2
-    if ! kill -0 "${next_vite_pid}" >/dev/null 2>&1; then
+    if [[ "${vite_restart_failed}" != "1" ]] && ! wait_for_vite_ready "${next_vite_pid}"; then
+      vite_restart_failed="1"
+    fi
+    if [[ "${vite_restart_failed}" == "1" ]]; then
       echo "[run] ERROR: Vite failed to restart during env reload (see ${VITE_LOG})" >&2
+      stop_vite "${next_vite_pid}" || true
+      if [[ "${convex_restarted_here}" == "1" ]]; then
+        stop_convex "${next_convex_pid}" || true
+        next_convex_pid=""
+        next_convex_url=""
+      fi
+      if [[ "${parser_restarted_here}" == "1" ]]; then
+        stop_parser || true
+        PARSER_STARTED="0"
+      fi
+      if [[ "${tunnel_restarted_here}" == "1" ]]; then
+        stop_tunnel || true
+        TUNNEL_STARTED="0"
+      fi
+      write_state \
+        "" \
+        "${PARSER_STARTED:-0}" \
+        "${next_convex_pid}" \
+        "${next_convex_url}" \
+        "${TUNNEL_STARTED:-0}" \
+        "${STACK_MODE}" \
+        "${ACTIVE_ORIGIN}" \
+        "${PARSER_RUNTIME_MODE}" \
+        "${PARSER_RELOAD:-0}" \
+        "${PARSER_OCR:-auto}" \
+        "${CONVEX_MODE:-cloud}" \
+        "0" \
+        "${ENV_HASH:-}" \
+        "${CONVEX_BINDING_HASH:-}"
       exit 1
     fi
   fi
@@ -3365,14 +3424,9 @@ up() {
     return 0
   fi
 
-  if [[ "${RUNTIME_MODE}" == "image" ]]; then
-    if [[ "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
-      build_runtime_image
-    else
-      ensure_runtime_image_exists
-    fi
-  else
-    ensure_runtime_image_exists
+  if [[ "${RUNTIME_MODE}" == "image" && "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
+    build_runtime_image
+  elif [[ "${RUNTIME_MODE}" != "image" ]]; then
     if [[ "${START_UI}" -eq 1 && "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${PARSER_RELOAD}" == "1" ]]; then
       echo "[run] local-fast: workspace parser runtime with autoreload enabled"
     else
@@ -3381,38 +3435,52 @@ up() {
   fi
 
   # Start local parser (even if FE points to edge; useful for local testing)
+  local parser_started_here="0"
   start_parser "${OCR}" "${RUNTIME_MODE}" "${PARSER_RELOAD}"
+  parser_started_here="${PARSER_STARTED_BY_INVOCATION_RESULT:-0}"
 
   # Optionally start Vite
   local VPID=""
   local CPID=""
   local CURL=""
+  local convex_started_here="0"
   if [[ "${START_UI}" -eq 1 ]]; then
     if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
       start_convex
       CPID="${CONVEX_PID_RESULT:-}"
       CURL="${CONVEX_URL_RESULT:-}"
+      convex_started_here="${CONVEX_STARTED_BY_INVOCATION_RESULT:-0}"
     fi
     echo "[run] starting Vite → ${ACTIVE_ORIGIN}"
     if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
       if ! VPID="$(start_vite "${ACTIVE_ORIGIN}" "${CURL}")"; then
         echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
-        stop_convex "${CPID}" || true
-        stop_parser || true
+        if [[ "${convex_started_here}" == "1" ]]; then
+          stop_convex "${CPID}" || true
+        fi
+        if [[ "${parser_started_here}" == "1" ]]; then
+          stop_parser || true
+        fi
         exit 1
       fi
     else
       if ! VPID="$(start_vite "${ACTIVE_ORIGIN}")"; then
         echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
-        stop_parser || true
+        if [[ "${parser_started_here}" == "1" ]]; then
+          stop_parser || true
+        fi
         exit 1
       fi
     fi
     if ! wait_for_vite_ready "${VPID}"; then
       echo "[run] ERROR: Vite did not become reachable (see ${VITE_LOG})" >&2
       stop_vite "${VPID}" || true
-      stop_convex "${CPID}" || true
-      stop_parser || true
+      if [[ "${convex_started_here}" == "1" ]]; then
+        stop_convex "${CPID}" || true
+      fi
+      if [[ "${parser_started_here}" == "1" ]]; then
+        stop_parser || true
+      fi
       exit 1
     fi
   fi
@@ -3551,7 +3619,6 @@ parser_dev_stack() {
     return 0
   fi
 
-  ensure_runtime_image_exists
   start_parser "${OCR}" "workspace" "1"
   write_current_state "" "1" "" "" "0" "parser-dev" "" "workspace" "1" "${OCR}" "cloud" "0"
   echo "----------------- Parser Dev ----------------"
