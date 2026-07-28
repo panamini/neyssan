@@ -10,10 +10,21 @@ From a fresh clone:
 ```bash
 cp .env.example .env.local
 # Fill CONVEX_TEAM and CONVEX_PROJECT with the shared non-secret project slugs.
-infisical login --domain=https://eu.infisical.com
-# Sign in with the GitHub account connected to the Twoweeks Infisical project.
 npm ci --prefix my-app
+./run.sh bootstrap
 ```
+
+`bootstrap` is idempotent. It reuses a valid local override or an existing
+Infisical session. If neither exists, it opens the one-time Infisical browser
+login, retries the same scoped read, and then runs `doctor local-fast`. It does
+not start or stop the stack, source local shell configuration, install packages,
+or create runtime state. Browser login requires an interactive terminal. A local
+non-TTY wrapper may explicitly use `./run.sh bootstrap --allow-browser-login`,
+but CI always fails closed unless it provides `INFISICAL_TOKEN`.
+
+Repository access and Infisical access are separate. A collaborator must be
+granted read access to the Twoweeks Infisical project even if their code was
+delivered before their GitHub invitation was ready.
 
 The Clerk publishable key is browser-visible rather than a server secret, but
 it is environment-specific. When no usable local value is configured,
@@ -32,6 +43,10 @@ cp my-app/.env.local.example my-app/.env.local
 An exported value or supported local environment value takes precedence, so
 Infisical is not contacted when an override is already usable. Never paste a
 real value into a tracked file, issue, test, or PR.
+
+`local-fast` never opens an authentication window. If access has not been
+prepared, it fails with separate guidance for collaborators (`./run.sh
+bootstrap`) and headless environments (`INFISICAL_TOKEN`).
 
 Start the local Docker engine before continuing:
 
@@ -69,10 +84,43 @@ The existing `./run.sh mcp-secret-sync` command is scoped to the private-beta
 OAuth client-secret digest. The Clerk bootstrap is separate and does not change
 that command's precedence or derivation behavior.
 
+## Headless servers, CI, and Docker
+
+Machine authentication stays outside the application image. Do not put an
+Infisical token, Universal Auth client secret, or environment file in a
+Dockerfile, build argument, image layer, or repository.
+
+For a generic headless development host:
+
+1. Create a read-only Infisical Machine Identity scoped to the required
+   project, environment, path, and secret.
+2. Let the host secret store, an Infisical Agent, or an init process exchange
+   that workload identity for a short-lived access token.
+3. Provide the token only to the `run.sh` process:
+
+```bash
+INFISICAL_TOKEN="<short-lived machine token>" ./run.sh bootstrap
+INFISICAL_TOKEN="<short-lived machine token>" ./run.sh local-fast
+```
+
+These commands are examples of the environment contract, not a recommendation
+to paste a real token into shell history. Configure the variable through the
+hosting platform's secret injection mechanism.
+
+For GitHub Actions, prefer an Infisical Machine Identity with GitHub OIDC. The
+workflow receives a short-lived token without storing a permanent Infisical
+client secret in GitHub.
+
+The parser Docker container does not need the Clerk publishable key. Vite does:
+for a production frontend build, inject `VITE_CLERK_PUBLISHABLE_KEY` into the
+build job before `vite build`. The publishable value becomes part of the browser
+bundle by design, while the Infisical authentication credential remains outside
+the image and build output.
+
 `run.sh` is development-only. Production servers must receive the same
 Infisical variable through a machine identity and their deployment
-environment/configuration; they must not run the local development stack to
-obtain it.
+environment/configuration. They must not run the local development stack to
+obtain production configuration.
 
 ## Daily local commands
 

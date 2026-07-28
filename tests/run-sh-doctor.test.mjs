@@ -174,8 +174,36 @@ exec ${JSON.stringify(process.execPath)} "\$@"
     join(binDirectory, "infisical"),
     `#!/bin/sh
 if test -n "\${FAKE_INFISICAL_CALL_LOG:-}"; then printf '%s\\n' "$*" >> "\${FAKE_INFISICAL_CALL_LOG}"; fi
+if test "\${1:-}" = login && test "\${2:-}" = status; then
+  test "\${FAKE_INFISICAL_LOGIN_STATUS:-unauthenticated}" = authenticated
+  exit
+fi
+if test "\${1:-}" = login; then
+  case "\${FAKE_INFISICAL_LOGIN_MODE:-success}" in
+    success)
+      if test -n "\${FAKE_INFISICAL_LOGIN_MARKER:-}"; then
+        : > "\${FAKE_INFISICAL_LOGIN_MARKER}"
+      fi
+      exit 0
+      ;;
+    *)
+      printf '%s\\n' 'provider-login-output-must-not-leak'
+      printf '%s\\n' 'provider-login-error-must-not-leak' >&2
+      exit 1
+      ;;
+  esac
+fi
 case "\${FAKE_INFISICAL_MODE:-success}" in
   success) printf '%s\\n' "\${FAKE_INFISICAL_VALUE:-pk_test_doctor_fixture_infisical}" ;;
+  requires-login)
+    test -n "\${FAKE_INFISICAL_LOGIN_MARKER:-}" && test -f "\${FAKE_INFISICAL_LOGIN_MARKER}" \
+      && printf '%s\\n' "\${FAKE_INFISICAL_VALUE:-pk_test_doctor_fixture_infisical}"
+    ;;
+  token-required)
+    test -n "\${INFISICAL_TOKEN:-}" \
+      && test "\${INFISICAL_TOKEN}" = "\${FAKE_INFISICAL_EXPECTED_TOKEN:-}" \
+      && printf '%s\\n' "\${FAKE_INFISICAL_VALUE:-pk_test_doctor_fixture_infisical}"
+    ;;
   login-failure)
     printf '%s\\n' 'provider-login-output-must-not-leak'
     printf '%s\\n' 'provider-login-error-must-not-leak' >&2
@@ -297,6 +325,10 @@ function runScript(fixture, args = [], env = {}) {
 
 function runDoctor(fixture, args = [], env = {}) {
   return runScript(fixture, ["doctor", ...args], env);
+}
+
+function runBootstrap(fixture, env = {}, args = []) {
+  return runScript(fixture, ["bootstrap", ...args], env);
 }
 
 function assertFailure(result) {
@@ -451,7 +483,8 @@ test("doctor local-fast fails actionably when the Infisical CLI is absent", (t) 
   const result = runDoctor(fixture, ["local-fast"]);
 
   assertFailure(result);
-  assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/i);
+  assert.match(result.output, /\.\/run\.sh bootstrap/i);
+  assert.match(result.output, /INFISICAL_TOKEN/i);
   assert.match(result.output, /ignored my-app\/\.env\.local/i);
 });
 
@@ -470,7 +503,8 @@ test("doctor local-fast suppresses Infisical failures and unusable values", (t) 
     });
 
     assertFailure(result);
-    assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/i);
+    assert.match(result.output, /\.\/run\.sh bootstrap/i);
+    assert.match(result.output, /INFISICAL_TOKEN/i);
     assert.match(result.output, /ignored my-app\/\.env\.local/i);
     assert.doesNotMatch(result.output, /provider-(?:login|permission)/i);
     assert.doesNotMatch(result.output, /not-a-clerk-key-provider-value/i);
@@ -491,7 +525,8 @@ test("doctor local-fast rejects invalid Infisical project metadata without a pro
   });
 
   assertFailure(result);
-  assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/i);
+  assert.match(result.output, /\.\/run\.sh bootstrap/i);
+  assert.match(result.output, /INFISICAL_TOKEN/i);
   assert.equal(existsSync(callLog), false, "invalid metadata must block before Infisical");
 });
 
@@ -524,6 +559,211 @@ set -x
   );
 });
 
+test("bootstrap is idempotent when a valid local Clerk override already exists", (t) => {
+  const fixture = createFixture(t);
+  const bindingBefore = readFileSync(fixture.envFile, "utf8");
+  const appEnvBefore = readFileSync(fixture.appEnvFile, "utf8");
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = runBootstrap(fixture, { FAKE_INFISICAL_CALL_LOG: callLog });
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.output, /already available; no Infisical login needed/i);
+    assert.doesNotMatch(result.output, /pk_test_doctor_fixture_public/u);
+  }
+
+  assert.equal(existsSync(callLog), false, "local override must bypass Infisical");
+  assert.equal(readFileSync(fixture.envFile, "utf8"), bindingBefore);
+  assert.equal(readFileSync(fixture.appEnvFile, "utf8"), appEnvBefore);
+  for (const directory of generatedDirectories) {
+    assert.equal(
+      existsSync(join(fixture.root, directory)),
+      false,
+      `bootstrap created ${directory}`,
+    );
+  }
+});
+
+test("bootstrap reuses an existing Infisical session without a login call", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const retrievedValue = "pk_test_bootstrap_existing_session_fixture";
+
+  const result = runBootstrap(fixture, {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_VALUE: retrievedValue,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /existing Infisical session is ready/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(retrievedValue)));
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /^secrets get VITE_CLERK_PUBLISHABLE_KEY /u);
+});
+
+test("bootstrap performs one browser login when needed and reuses it on retry", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const loginMarker = join(fixture.root, "infisical-login-session");
+  const retrievedValue = "pk_test_bootstrap_browser_login_fixture";
+  const environment = {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_LOGIN_MARKER: loginMarker,
+    FAKE_INFISICAL_MODE: "requires-login",
+    FAKE_INFISICAL_VALUE: retrievedValue,
+  };
+
+  const first = runBootstrap(fixture, environment, ["--allow-browser-login"]);
+  const second = runBootstrap(fixture, environment, ["--allow-browser-login"]);
+
+  assert.equal(first.status, 0, first.output);
+  assert.equal(second.status, 0, second.output);
+  assert.match(first.output, /opening Infisical login/i);
+  assert.match(first.output, /Infisical access is ready/i);
+  assert.match(second.output, /existing Infisical session is ready/i);
+  for (const output of [first.output, second.output]) {
+    assert.doesNotMatch(output, new RegExp(escapeRegExp(retrievedValue)));
+  }
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(
+    calls.filter((call) => /^login --domain=/u.test(call)).length,
+    1,
+    calls.join("\n"),
+  );
+  assert.equal(
+    calls.filter((call) => /^login status /u.test(call)).length,
+    1,
+    calls.join("\n"),
+  );
+});
+
+test("bootstrap does not reopen login for an authenticated account without project access", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runBootstrap(
+    fixture,
+    {
+      FAKE_INFISICAL_CALL_LOG: callLog,
+      FAKE_INFISICAL_LOGIN_STATUS: "authenticated",
+      FAKE_INFISICAL_MODE: "permission-failure",
+    },
+    ["--allow-browser-login"],
+  );
+
+  assertFailure(result);
+  assert.match(result.output, /ask a project owner for read access/i);
+  assert.doesNotMatch(result.output, /provider-permission/i);
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.filter((call) => /^login --domain=/u.test(call)).length, 0);
+  assert.equal(calls.filter((call) => /^login status /u.test(call)).length, 1);
+});
+
+test("bootstrap fails closed without a token when no interactive terminal is available", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runBootstrap(fixture, {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_MODE: "requires-login",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /non-interactive bootstrap requires a scoped INFISICAL_TOKEN/i);
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.filter((call) => /^login/u.test(call)).length, 0);
+});
+
+test("bootstrap never permits browser login in CI even with the local non-TTY override", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runBootstrap(
+    fixture,
+    {
+      CI: "1",
+      FAKE_INFISICAL_CALL_LOG: callLog,
+      FAKE_INFISICAL_MODE: "requires-login",
+    },
+    ["--allow-browser-login"],
+  );
+
+  assertFailure(result);
+  assert.match(result.output, /non-interactive bootstrap requires a scoped INFISICAL_TOKEN/i);
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.filter((call) => /^login/u.test(call)).length, 0);
+});
+
+test("bootstrap consumes a headless INFISICAL_TOKEN without opening login", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const token = "headless-machine-token-must-not-print";
+  const retrievedValue = "pk_test_bootstrap_headless_token_fixture";
+
+  const result = runBootstrap(fixture, {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_EXPECTED_TOKEN: token,
+    FAKE_INFISICAL_MODE: "token-required",
+    FAKE_INFISICAL_VALUE: retrievedValue,
+    INFISICAL_TOKEN: token,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /headless Infisical authentication/i);
+  assert.doesNotMatch(
+    result.output,
+    new RegExp(`${escapeRegExp(token)}|${escapeRegExp(retrievedValue)}`),
+  );
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /^secrets get VITE_CLERK_PUBLISHABLE_KEY /u);
+});
+
+test("bootstrap fails closed for a rejected headless token without interactive login", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const token = "rejected-headless-machine-token-must-not-print";
+
+  const result = runBootstrap(fixture, {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_EXPECTED_TOKEN: "different-token",
+    FAKE_INFISICAL_MODE: "token-required",
+    INFISICAL_TOKEN: token,
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /refresh the scoped INFISICAL_TOKEN/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(token)));
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.filter((call) => /^login/u.test(call)).length, 0);
+});
+
+test("local-fast never opens an interactive login when Infisical access is missing", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runScript(fixture, ["local-fast"], {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_MODE: "login-failure",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /\.\/run\.sh bootstrap/i);
+  assert.match(result.output, /INFISICAL_TOKEN/i);
+  assert.doesNotMatch(result.output, /provider-login/i);
+  const calls = readFileSync(callLog, "utf8").trim().split("\n");
+  assert.equal(calls.filter((call) => /^login/u.test(call)).length, 0);
+});
+
 test("help gives a complete collaborator path without reading config or creating state", (t) => {
   const fixture = createFixture(t);
   const envBefore = readFileSync(fixture.envFile, "utf8");
@@ -541,7 +781,17 @@ test("help gives a complete collaborator path without reading config or creating
   assert.match(result.output, /Recovery and maintenance:/);
   assert.match(result.output, /Troubleshooting order:/);
   assert.match(result.output, /run\.sh is for local development only/);
-  assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/);
+  assert.match(result.output, /\.\/run\.sh bootstrap/);
+  assert.match(result.output, /INFISICAL_TOKEN/);
+  assert.match(result.output, /outside Docker images/i);
+  assert.match(result.output, /Infisical authentication:/);
+  assert.match(result.output, /short-lived INFISICAL_TOKEN/i);
+  assert.match(result.output, /Browser login requires a terminal/i);
+  assert.match(result.output, /CI always fails closed/i);
+  assert.match(result.output, /--allow-browser-login/i);
+  assert.match(result.output, /parser container does not consume the Clerk publishable key/i);
+  assert.match(result.output, /Inject VITE_CLERK_PUBLISHABLE_KEY into the frontend build job/i);
+  assert.match(result.output, /local-fast\s+Never opens an authentication window/i);
   assert.match(result.output, /my-app\/\.env\.local\.example/);
   assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY/);
   assert.match(result.output, /does not enforce a quality threshold/);
@@ -1647,7 +1897,7 @@ test("doctor installs a non-mutating signal trap", () => {
 
   assert.match(
     source,
-    /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \]\]; then\s+trap 'exit 130' INT TERM/u,
+    /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \|\| "\$\{CONFIG_ONLY_COMMAND\}" == "1" \]\]; then\s+trap 'exit 130' INT TERM/u,
   );
 });
 
