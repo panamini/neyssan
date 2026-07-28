@@ -1,22 +1,53 @@
 import React from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
+  createMcpSafeSummaryProofSessionId,
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OPERATOR_TOKEN_PATH,
+  normalizeMcpSafeSummaryProofSessionId,
   type McpSafeSummaryProofOperatorRole,
 } from "../modules/local-mcp/mcpSafeSummaryProofOperatorContract";
+import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from
+  "../modules/local-mcp/mcpSafeSummaryProjectionProofHarness";
 
 type OperatorResponse = Readonly<Record<string, unknown>>;
 
 export function McpSafeSummaryProofOperatorPage(): JSX.Element {
   const { getToken } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [status, setStatus] = React.useState("Prêt à envoyer le bearer éphémère.");
   const role = readRole(location.search);
+  const [generatedProofSessionId] = React.useState(createMcpSafeSummaryProofSessionId);
+  const providedProofSessionId = readProofSessionId(location.search);
+  const proofSessionId = providedProofSessionId ??
+    (role === "A" ? generatedProofSessionId : undefined);
+  const operatorBHref = role === "A" && proofSessionId
+    ? buildOperatorHref(location.pathname, location.search, "B", proofSessionId)
+    : undefined;
+
+  React.useEffect(() => {
+    if (role !== "A" || providedProofSessionId || !proofSessionId) return;
+    void navigate(
+      buildOperatorHref(location.pathname, location.search, "A", proofSessionId),
+      { replace: true },
+    );
+  }, [
+    location.pathname,
+    location.search,
+    navigate,
+    proofSessionId,
+    providedProofSessionId,
+    role,
+  ]);
 
   const submit = React.useCallback(async () => {
     if (!role) {
       setStatus("Rôle manquant : utilisez ?role=A ou ?role=B.");
+      return;
+    }
+    if (!proofSessionId) {
+      setStatus("Session de preuve manquante.");
       return;
     }
     setStatus(`Vérification de l’opérateur ${role}…`);
@@ -30,14 +61,14 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
         method: "POST",
         credentials: "omit",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ role, token }),
+        body: JSON.stringify({ role, token, sessionId: proofSessionId }),
       });
       const payload = await response.json() as OperatorResponse;
       setStatus(formatOperatorResponse(payload, response.status));
     } catch {
       setStatus("Échec du pont opérateur.");
     }
-  }, [getToken, role]);
+  }, [getToken, proofSessionId, role]);
 
   if (!import.meta.env.DEV) {
     return <main>Unavailable.</main>;
@@ -47,7 +78,12 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
     <main style={{ maxWidth: 640, margin: "4rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
       <h1>MCP safe-summary — opérateur {role ?? "?"}</h1>
       <p>{status}</p>
-      <button type="button" onClick={() => void submit()} disabled={!role}>
+      {operatorBHref ? (
+        <p>
+          <a href={operatorBHref}>Ouvrir ou copier le lien opérateur B</a>
+        </p>
+      ) : null}
+      <button type="button" onClick={() => void submit()} disabled={!role || !proofSessionId}>
         Envoyer la preuve éphémère
       </button>
     </main>
@@ -77,7 +113,7 @@ function formatOperatorResponse(payload: OperatorResponse, httpStatus: number): 
   const staticProof = proof && isRecord(proof.staticProof) ? readString(proof.staticProof.kind) : undefined;
   const firstCall = formatMcpSafeSummaryFirstToolsCallDiagnostic(sequence.firstToolsCallDiagnostic);
   const deltaDiagnostic = formatMcpSafeSummaryPostSeedDeltaDiagnostic(sequence.postSeedDiagnostic);
-  return `${status}${reason} · completed=${completed} · sequenceCompleted=${sequenceCompleted} · protected=${protectedCalls ?? "?"}/8 · seed=${seedCount ?? "?"}/3 · cleanup=${cleanupCount ?? "?"}/3 · recovery=${recovery ?? "?"} · baseline=${baseline ?? "?"} · delta=${postSeedDelta ?? "?"} · static=${staticProof ?? "?"}${firstCall ? ` · firstCall=${firstCall}` : ""}${deltaDiagnostic ? ` · deltaDiagnostic=${deltaDiagnostic}` : ""}`;
+  return `${status}${reason} · completed=${completed} · sequenceCompleted=${sequenceCompleted} · protected=${protectedCalls ?? "?"}/8 · seed=${seedCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT} · cleanup=${cleanupCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT} · recovery=${recovery ?? "?"} · baseline=${baseline ?? "?"} · delta=${postSeedDelta ?? "?"} · static=${staticProof ?? "?"}${firstCall ? ` · firstCall=${firstCall}` : ""}${deltaDiagnostic ? ` · deltaDiagnostic=${deltaDiagnostic}` : ""}`;
 }
 
 export function formatMcpSafeSummaryFirstToolsCallDiagnostic(value: unknown): string | undefined {
@@ -220,4 +256,22 @@ function readString(value: unknown): string | undefined {
 function readRole(search: string): McpSafeSummaryProofOperatorRole | undefined {
   const role = new URLSearchParams(search).get("role");
   return role === "A" || role === "B" ? role : undefined;
+}
+
+function readProofSessionId(search: string): string | undefined {
+  return normalizeMcpSafeSummaryProofSessionId(
+    new URLSearchParams(search).get("proofSession"),
+  );
+}
+
+function buildOperatorHref(
+  pathname: string,
+  search: string,
+  role: McpSafeSummaryProofOperatorRole,
+  proofSessionId: string,
+): string {
+  const params = new URLSearchParams(search);
+  params.set("role", role);
+  params.set("proofSession", proofSessionId);
+  return `${pathname}?${params.toString()}`;
 }

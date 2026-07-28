@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildMcpSafeSummaryProofOperatorResponse,
+  createMcpSafeSummaryProofSessionId,
   normalizeMcpSafeSummaryOperatorToken,
+  normalizeMcpSafeSummaryProofSessionId,
 } from "../mcpSafeSummaryProofOperatorContract";
 import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from "../mcpSafeSummaryProjectionProofHarness";
 import {
@@ -22,6 +26,21 @@ describe("mcp safe-summary operator credential transport", () => {
     expect(normalizeMcpSafeSummaryOperatorToken(`${TOKEN} extra`)).toBeUndefined();
     expect(normalizeMcpSafeSummaryOperatorToken(`${"a".repeat(8193)}`)).toBeUndefined();
     expect(normalizeMcpSafeSummaryOperatorToken(undefined)).toBeUndefined();
+  });
+
+  it("accepts only bounded URL-safe proof session identifiers", () => {
+    expect(normalizeMcpSafeSummaryProofSessionId("proof_session_20260728")).toBe(
+      "proof_session_20260728",
+    );
+    expect(normalizeMcpSafeSummaryProofSessionId("short")).toBeUndefined();
+    expect(normalizeMcpSafeSummaryProofSessionId("proof session 20260728")).toBeUndefined();
+    expect(normalizeMcpSafeSummaryProofSessionId("a".repeat(129))).toBeUndefined();
+  });
+
+  it("creates a valid session identifier for the role-A handoff link", () => {
+    expect(normalizeMcpSafeSummaryProofSessionId(
+      createMcpSafeSummaryProofSessionId(),
+    )).toMatch(/^[a-f0-9]{32}$/u);
   });
 
   it("keeps the sanitized sequence available at the response root and under proof", () => {
@@ -65,6 +84,22 @@ describe("mcp safe-summary operator credential transport", () => {
     expect(result.proof).toMatchObject({ sequence });
     expect(result.sequence).toEqual(sequence);
     expect(result.safeForModel).toBe(true);
+  });
+
+  it("renders the current controlled fixture count for seed and cleanup", () => {
+    const pageSource = readFileSync(
+      resolve(process.cwd(), "src/pages/McpSafeSummaryProofOperatorPage.tsx"),
+      "utf8",
+    );
+    expect(pageSource).toContain(
+      'seed=${seedCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT}',
+    );
+    expect(pageSource).toContain(
+      'cleanup=${cleanupCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT}',
+    );
+    expect(pageSource).toContain("Ouvrir ou copier le lien opérateur B");
+    expect(pageSource).toContain('params.set("proofSession", proofSessionId)');
+    expect(pageSource).toContain("{ replace: true }");
   });
 
   it("renders only the bounded first-call classification fields", () => {

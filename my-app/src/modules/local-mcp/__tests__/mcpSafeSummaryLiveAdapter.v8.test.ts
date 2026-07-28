@@ -343,6 +343,29 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(runnerPath).not.toContain("identityByAccessTokenDigest.set(hashSubject(credential), identity)");
   });
 
+  it("authorizes the controlled proof from any two authenticated distinct operators", () => {
+    const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
+    const submissionAuthPath = viteSource.slice(
+      viteSource.indexOf("async function readAuthorizedControlledProofOperatorIdentityKey"),
+      viteSource.indexOf("async function buildProductionMcpSafeSummaryLiveAdapterRunner"),
+    );
+    const runnerPath = viteSource.slice(
+      viteSource.indexOf("async function buildProductionMcpSafeSummaryLiveAdapterRunner"),
+      viteSource.indexOf("function sameLiveAdapterIdentity"),
+    );
+
+    expect(submissionAuthPath).toContain("isValidControlledProofAuthenticatedIdentity(identity)");
+    expect(submissionAuthPath).toContain("${identity.issuer}\\u0000${identity.subject}");
+    expect(submissionAuthPath).not.toContain("readControlledProofOwnerConfig");
+    expect(submissionAuthPath).not.toContain("readPrivateBetaSubjectDigestEnv");
+    expect(runnerPath).toContain("sameLiveAdapterIdentity(identityA, identityB)");
+    expect(runnerPath).toContain("allowedSubjectDigests: Object.freeze([");
+    expect(runnerPath).toContain("hashSubject(identityA.subject)");
+    expect(runnerPath).toContain("hashSubject(identityB.subject)");
+    expect(runnerPath).toContain("config: proofConfig");
+    expect(runnerPath).not.toContain("readControlledProofOwnerConfig");
+  });
+
   it("classifies only allowlisted first-call fields and drops free text and sensitive values", () => {
     const sensitive = "raw-bearer-or-private-identity-sentinel";
     const routeDiagnostic = classifyMcpSafeSummaryToolsCallResponseV8({
