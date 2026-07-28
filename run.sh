@@ -30,9 +30,13 @@ readonly MCP_SECRET_SYNC_XTRACE_WAS_ENABLED
 
 # Read-only diagnostics must neither source nor trace local configuration.
 READ_ONLY_COMMAND=0
+CONFIG_ONLY_COMMAND=0
 case "${CMD}" in
   doctor|mcp-smoke|help)
     READ_ONLY_COMMAND=1
+    ;;
+  bootstrap)
+    CONFIG_ONLY_COMMAND=1
     ;;
   mcp-private-beta|mcp-secret-sync|mcp-check|local-fast|local|local-convex|tunnel|parser-dev|reload-env|rebuild-docker|up|down|reset|status|logs|smoke|assert-ocr|probe-edge)
     ;;
@@ -43,6 +47,7 @@ case "${CMD}" in
     ;;
 esac
 readonly READ_ONLY_COMMAND
+readonly CONFIG_ONLY_COMMAND
 if [[ "${READ_ONLY_COMMAND}" == "1" && "$-" == *x* ]]; then
   set +x
 fi
@@ -50,8 +55,9 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
-# Load overrides
-if [[ "${READ_ONLY_COMMAND}" != "1" ]]; then
+# Load overrides only for commands that start or mutate the development stack.
+# Bootstrap validates configuration without executing local shell files.
+if [[ "${READ_ONLY_COMMAND}" != "1" && "${CONFIG_ONLY_COMMAND}" != "1" ]]; then
   if [[ -f "${ROOT_DIR}/.env" ]]; then set -a; source "${ROOT_DIR}/.env"; set +a; fi
   if [[ -f "${ROOT_DIR}/.env.local" ]]; then set -a; source "${ROOT_DIR}/.env.local"; set +a; fi
   if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.env"; set +a; fi
@@ -100,15 +106,18 @@ INFISICAL_MCP_DOMAIN="https://eu.infisical.com"
 INFISICAL_MCP_ENVIRONMENT="dev"
 INFISICAL_MCP_SECRET_PATH="/"
 INFISICAL_MCP_SECRET_KEY="MCP_OAUTH_PRODUCTION_CLIENT_SECRET"
+INFISICAL_CLERK_PROJECT_CONFIG_FILE="${ROOT_DIR}/.infisical.json"
+INFISICAL_CLERK_SECRET_PATH="/"
+INFISICAL_CLERK_SECRET_KEY="VITE_CLERK_PUBLISHABLE_KEY"
 
-if [[ "${READ_ONLY_COMMAND}" != "1" ]]; then
+if [[ "${READ_ONLY_COMMAND}" != "1" && "${CONFIG_ONLY_COMMAND}" != "1" ]]; then
   mkdir -p "${STATE_DIR}" "${LOG_DIR}"
   mkdir -p "${CONVEX_TMPDIR}"
   mkdir -p "${CACHE_DIR}" "${DOCKER_STATE_DIR}"
 fi
 
 # Auto-load Mistral key from file if not set
-if [[ "${READ_ONLY_COMMAND}" != "1" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
+if [[ "${READ_ONLY_COMMAND}" != "1" && "${CONFIG_ONLY_COMMAND}" != "1" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
   MISTRAL_API_KEY="$(<"${HOME}/.mistral_key")"
   MISTRAL_API_KEY="${MISTRAL_API_KEY//$'\r'/}"
   MISTRAL_API_KEY="${MISTRAL_API_KEY//$'\n'/}"
@@ -116,6 +125,234 @@ if [[ "${READ_ONLY_COMMAND}" != "1" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/
 fi
 
 # ===== Helpers =====
+clerk_publishable_key_is_valid() {
+  local value="${1:-}"
+  [[ ${#value} -ge 16 && ${#value} -le 1024 ]] || return 1
+  [[ "${value}" != *$'\n'* && "${value}" != *$'\r'* ]] || return 1
+  [[ "${value}" =~ ^pk_(test|live)_[A-Za-z0-9_+/=-]+$ ]]
+}
+
+local_fast_app_env_has_valid_clerk_key() {
+  unset INFISICAL_TOKEN
+  node - "${ROOT_DIR}/my-app/.env.local" <<'NODE' >/dev/null 2>&1
+const fs = require("node:fs");
+const envPath = process.argv[2];
+if (!fs.existsSync(envPath)) process.exit(1);
+const source = fs.readFileSync(envPath, "utf8").replace(/\r\n?/gu, "\n");
+let resolved;
+for (const line of source.split("\n")) {
+  const match = line.match(/^\s*(?:export[ \t]+)?VITE_CLERK_PUBLISHABLE_KEY=([\s\S]*)$/u);
+  if (!match) continue;
+  let raw = match[1].trim();
+  const quotedWithComment = raw.match(/^(?:"[^"]*"|'[^']*')[ \t]+#.*$/u);
+  if (quotedWithComment) raw = quotedWithComment[0].replace(/[ \t]+#.*$/u, "");
+  if (
+    (raw.startsWith('"') && raw.endsWith('"'))
+    || (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    raw = raw.slice(1, -1);
+  } else {
+    raw = raw.replace(/[ \t]+#.*$/u, "").trim();
+    if (/\s|[\\;$`|&<>()]/u.test(raw)) process.exit(1);
+  }
+  resolved = raw;
+}
+process.exit(
+  typeof resolved === "string"
+  && resolved.length >= 16
+  && resolved.length <= 1024
+  && /^pk_(?:test|live)_[A-Za-z0-9_+/=-]+$/u.test(resolved)
+    ? 0
+    : 1,
+);
+NODE
+}
+
+load_local_fast_clerk_key_from_infisical() {
+  local infisical_token="${1:-${INFISICAL_TOKEN:-}}"
+  local metadata=""
+  local project_id=""
+  local environment=""
+  local domain=""
+  local retrieved=""
+  local infisical_status=0
+
+  unset INFISICAL_TOKEN
+  if [[ -n "${CI:-}" && -z "${infisical_token}" ]]; then
+    return 1
+  fi
+  command -v infisical >/dev/null 2>&1 || return 1
+  command -v node >/dev/null 2>&1 || return 1
+  if ! metadata="$(node - "${INFISICAL_CLERK_PROJECT_CONFIG_FILE}" <<'NODE' 2>/dev/null
+const fs = require("node:fs");
+const configPath = process.argv[2];
+const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+if (
+  !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(config.workspaceId)
+  || config.defaultEnvironment !== "dev"
+  || config.domain !== "https://eu.infisical.com"
+) {
+  process.exit(1);
+}
+process.stdout.write(`${config.workspaceId}\t${config.defaultEnvironment}\t${config.domain}`);
+NODE
+  )"; then
+    return 1
+  fi
+  IFS=$'\t' read -r project_id environment domain <<< "${metadata}"
+  [[ -n "${project_id}" && "${environment}" == "dev" && "${domain}" == "https://eu.infisical.com" ]] || return 1
+
+  retrieved="$(
+    if [[ -n "${infisical_token}" ]]; then
+      INFISICAL_TOKEN="${infisical_token}"
+      export INFISICAL_TOKEN
+    else
+      unset INFISICAL_TOKEN
+    fi
+    infisical secrets get "${INFISICAL_CLERK_SECRET_KEY}" \
+      --projectId="${project_id}" \
+      --env="${environment}" \
+      --path="${INFISICAL_CLERK_SECRET_PATH}" \
+      --domain="${domain}" \
+      --plain \
+      --silent \
+      --telemetry=false \
+      --expand=false \
+      --include-imports=false \
+      --secret-overriding=false 2>/dev/null
+  )" || infisical_status=$?
+  unset infisical_token
+  if [[ "${infisical_status}" != "0" ]]; then
+    unset retrieved
+    return 1
+  fi
+  if ! clerk_publishable_key_is_valid "${retrieved}"; then
+    unset retrieved
+    return 1
+  fi
+  VITE_CLERK_PUBLISHABLE_KEY="${retrieved}"
+  export VITE_CLERK_PUBLISHABLE_KEY
+  unset retrieved
+}
+
+local_fast_clerk_guidance() {
+  echo "VITE_CLERK_PUBLISHABLE_KEY is unavailable; collaborators should run: ./run.sh bootstrap; headless environments must export INFISICAL_TOKEN; a local override may use the ignored my-app/.env.local" >&2
+}
+
+ensure_local_fast_clerk_publishable_key() {
+  local infisical_token=""
+  # A sourced local env file can re-enable xtrace after the startup guard.
+  # Disable it before expanding either a local or retrieved browser key.
+  if [[ "$-" == *x* ]]; then
+    set +x
+  fi
+  infisical_token="${1:-${INFISICAL_TOKEN:-}}"
+  unset INFISICAL_TOKEN
+  if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}"; then
+    unset infisical_token
+    return 0
+  fi
+  if [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] \
+    && local_fast_app_env_has_valid_clerk_key; then
+    unset infisical_token
+    return 0
+  fi
+  if load_local_fast_clerk_key_from_infisical "${infisical_token}"; then
+    unset infisical_token
+    return 0
+  fi
+  unset infisical_token
+  echo -n "[run] ERROR: " >&2
+  local_fast_clerk_guidance
+  return 1
+}
+
+bootstrap() {
+  local allow_browser_login=0
+  local infisical_token="${INFISICAL_TOKEN:-}"
+  local login_status=1
+
+  case "${1:-}" in
+    "")
+      ;;
+    --allow-browser-login)
+      allow_browser_login=1
+      shift
+      ;;
+    *)
+      echo "[run] ERROR: usage: ./run.sh bootstrap [--allow-browser-login]" >&2
+      return 1
+      ;;
+  esac
+  if [[ "$#" -gt 0 ]]; then
+    echo "[run] ERROR: usage: ./run.sh bootstrap [--allow-browser-login]" >&2
+    return 1
+  fi
+  if [[ "$-" == *x* ]]; then
+    set +x
+  fi
+  unset INFISICAL_TOKEN
+  if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}" \
+    || { [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] && local_fast_app_env_has_valid_clerk_key; }; then
+    ensure_local_fast_clerk_publishable_key "${infisical_token}"
+    unset infisical_token
+    echo "[run] bootstrap: Clerk configuration is already available; no Infisical login needed"
+    doctor local-fast
+    return
+  fi
+  if ! command -v infisical >/dev/null 2>&1; then
+    echo "[run] ERROR: Infisical CLI is required; install it, then rerun ./run.sh bootstrap" >&2
+    return 1
+  fi
+  if [[ -n "${infisical_token}" ]]; then
+    if ! load_local_fast_clerk_key_from_infisical "${infisical_token}"; then
+      unset infisical_token
+      echo "[run] ERROR: headless Infisical authentication failed; refresh the scoped INFISICAL_TOKEN and retry" >&2
+      return 1
+    fi
+    unset infisical_token
+    echo "[run] bootstrap: Clerk configuration loaded from headless Infisical authentication"
+    doctor local-fast
+    return
+  fi
+  if [[ -n "${CI:-}" ]]; then
+    echo "[run] ERROR: non-interactive bootstrap requires a scoped INFISICAL_TOKEN; cached Infisical sessions are disabled in CI" >&2
+    return 1
+  fi
+  if load_local_fast_clerk_key_from_infisical; then
+    echo "[run] bootstrap: existing Infisical session is ready"
+    doctor local-fast
+    return
+  fi
+  if [[ "${allow_browser_login}" != "1" ]] && { [[ ! -t 0 ]] || [[ ! -t 1 ]]; }; then
+    echo "[run] ERROR: non-interactive bootstrap requires a scoped INFISICAL_TOKEN; browser login is disabled" >&2
+    return 1
+  fi
+  if infisical login status \
+    --domain="${INFISICAL_MCP_DOMAIN}" \
+    --silent \
+    --telemetry=false >/dev/null 2>&1; then
+    login_status=0
+  fi
+  if [[ "${login_status}" == "0" ]]; then
+    echo "[run] ERROR: the active Infisical account cannot read the Twoweeks dev Clerk configuration; ask a project owner for read access" >&2
+    return 1
+  fi
+  echo "[run] bootstrap: opening Infisical login for the Twoweeks project"
+  if ! infisical login \
+    --domain="${INFISICAL_MCP_DOMAIN}" \
+    --telemetry=false >/dev/null 2>&1; then
+    echo "[run] ERROR: Infisical login did not complete; rerun ./run.sh bootstrap" >&2
+    return 1
+  fi
+  if ! load_local_fast_clerk_key_from_infisical; then
+    echo "[run] ERROR: login succeeded but the account cannot read the Twoweeks dev Clerk configuration; ask a project owner for read access" >&2
+    return 1
+  fi
+  echo "[run] bootstrap: Infisical access is ready"
+  doctor local-fast
+}
+
 map_platform() {
   case "$(uname -m)" in
     x86_64|amd64) echo "linux/amd64" ;;
@@ -954,7 +1191,7 @@ const allowed = [
   "LOCAL_CONVEX_STARTUP_TIMEOUT",
 ];
 if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
-else allowed.push("VITE_PORT");
+else allowed.push("VITE_PORT", "VITE_CLERK_PUBLISHABLE_KEY");
 const environment = { ...process.env, ROOT_DIR: rootDir };
 const resolved = new Map(allowed.map((key) => [key, environment[key] || ""]));
 
@@ -1085,8 +1322,22 @@ function parseValue(raw) {
 
 const invalid = new Set();
 const fatal = new Set();
+const appLocalEnvPath = path.join(rootDir, "my-app", ".env.local");
+const envPaths = [
+  path.join(rootDir, ".env"),
+  path.join(rootDir, ".env.local"),
+  path.join(rootDir, "my-app", ".env"),
+];
+if (target === "local-fast") envPaths.push(appLocalEnvPath);
 
-for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
+for (const envPath of envPaths) {
+  const isAppLocalEnv = envPath === appLocalEnvPath;
+  if (
+    isAppLocalEnv
+    && Object.prototype.hasOwnProperty.call(environment, "VITE_CLERK_PUBLISHABLE_KEY")
+  ) {
+    continue;
+  }
   if (!fs.existsSync(envPath)) continue;
   let source = "";
   try {
@@ -1094,6 +1345,7 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
   } catch {
     process.exit(1);
   }
+  if (isAppLocalEnv) source = source.replace(/\r\n?/gu, "\n");
   const statements = logicalStatements(source);
   if (statements === null) process.exit(1);
   for (const statement of statements) {
@@ -1102,7 +1354,7 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
       const [key, rawValue] = [match[1], match[2]];
       const value = parseValue(rawValue);
       if (value !== null) environment[key] = value;
-      if (!allowed.includes(key)) continue;
+      if (!allowed.includes(key) || (isAppLocalEnv && key !== "VITE_CLERK_PUBLISHABLE_KEY")) continue;
       if (value === null) {
         invalid.add(key);
         fatal.add(key);
@@ -1113,7 +1365,11 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
       continue;
     }
     const malformed = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]+=/u);
-    if (malformed && allowed.includes(malformed[1])) {
+    if (
+      malformed
+      && allowed.includes(malformed[1])
+      && (!isAppLocalEnv || malformed[1] === "VITE_CLERK_PUBLISHABLE_KEY")
+    ) {
       invalid.add(malformed[1]);
       fatal.add(malformed[1]);
     }
@@ -1193,6 +1449,7 @@ NODE
           CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="${decoded}" ;;
           LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="${decoded}" ;;
           LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="${decoded}" ;;
+          VITE_CLERK_PUBLISHABLE_KEY) DOCTOR_VITE_CLERK_PUBLISHABLE_KEY="${decoded}" ;;
         esac
         ;;
       EMPTY)
@@ -1216,6 +1473,7 @@ NODE
           CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="" ;;
           LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="" ;;
           LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="180" ;;
+          VITE_CLERK_PUBLISHABLE_KEY) DOCTOR_VITE_CLERK_PUBLISHABLE_KEY="" ;;
         esac
         ;;
       ERROR)
@@ -1225,6 +1483,8 @@ NODE
           doctor_fail "IMAGE_NAME must be a valid Docker image reference"
         elif [[ "${key}" == "PARSER_NAME" || "${key}" == "CLOUDFLARED_NAME" ]]; then
           doctor_fail "${key} must be a valid Docker container name"
+        elif [[ "${key}" == "VITE_CLERK_PUBLISHABLE_KEY" ]]; then
+          DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID=1
         else
           doctor_fail "dotenv override for ${key} is not a supported literal"
         fi
@@ -1232,6 +1492,23 @@ NODE
     esac
   done <<< "${parsed}"
   return 0
+}
+
+doctor_check_local_fast_clerk_configuration() {
+  local infisical_token="${1:-}"
+  if [[ "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID:-0}" != "1" ]] \
+    && clerk_publishable_key_is_valid "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY:-}"; then
+    unset infisical_token
+    doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is configured for the local app"
+    return 0
+  fi
+  if load_local_fast_clerk_key_from_infisical "${infisical_token}"; then
+    unset infisical_token
+    doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is available from Infisical for in-memory use"
+    return 0
+  fi
+  unset infisical_token
+  doctor_fail "$(local_fast_clerk_guidance 2>&1)"
 }
 
 doctor_check_runtime_path() {
@@ -1810,11 +2087,13 @@ NODE
 doctor() {
   local target="${1:-local-fast}"
   local original_home="${HOME:-}"
+  local doctor_infisical_token="${INFISICAL_TOKEN:-}"
   local resolved_convex_cloud_port=""
   local resolved_convex_site_port=""
   local resolved_convex_url=""
   local convex_reusable=0
   local parser_reusable=0
+  unset INFISICAL_TOKEN
   if [[ "${target}" != "local-fast" && "${target}" != "mcp-private-beta" ]]; then
     echo "usage: ./run.sh doctor [local-fast|mcp-private-beta]" >&2
     return 2
@@ -1823,6 +2102,8 @@ doctor() {
   DOCTOR_FAILURES=0
   DOCTOR_WARNINGS=0
   DOCTOR_NODE_READY=0
+  DOCTOR_VITE_CLERK_PUBLISHABLE_KEY=""
+  DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID=0
 
   echo "[run] doctor: checking ${target} (values are not printed)"
   doctor_check_platform
@@ -1845,6 +2126,10 @@ doctor() {
     DOCTOR_NODE_READY=1
     doctor_check_startup_env_literals || true
     doctor_load_runtime_overrides "${target}" || true
+    if [[ "${target}" == "local-fast" ]]; then
+      doctor_check_local_fast_clerk_configuration "${doctor_infisical_token}"
+      unset doctor_infisical_token
+    fi
   fi
   resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
   resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT}"
@@ -3138,6 +3423,7 @@ reload_env_stack() {
   local env_changed="false"
   local binding_changed="false"
   local local_binding_changed="false"
+  local clerk_refresh_needed="false"
   local current_open_browser="${OPEN_BROWSER:-1}"
   local next_vite_pid=""
   local next_convex_pid=""
@@ -3176,8 +3462,14 @@ reload_env_stack() {
   if [[ "${binding_changed}" == "true" && "${CONVEX_MODE:-cloud}" == "local" ]]; then
     local_binding_changed="true"
   fi
+  if [[ ( "${STACK_MODE}" == "local-fast" || "${STACK_MODE}" == "local-convex" ) \
+    && "${UI_STARTED:-0}" == "1" ]]; then
+    ensure_local_fast_clerk_publishable_key
+    clerk_refresh_needed="true"
+  fi
 
-  if [[ "${env_changed}" != "true" && "${binding_changed}" != "true" ]]; then
+  if [[ "${env_changed}" != "true" && "${binding_changed}" != "true" \
+    && "${clerk_refresh_needed}" != "true" ]]; then
     echo "[run] reload-env: no env changes detected"
     return 0
   fi
@@ -3207,7 +3499,9 @@ reload_env_stack() {
     tunnel_restarted_here="1"
   fi
 
-  if [[ "${UI_STARTED:-0}" == "1" && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" ) ]]; then
+  if [[ "${UI_STARTED:-0}" == "1" \
+    && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" \
+      || "${clerk_refresh_needed}" == "true" ) ]]; then
     stop_vite "${VITE_PID:-}"
     OPEN_BROWSER="0"
     if [[ "${CONVEX_MODE:-cloud}" == "local" ]]; then
@@ -3421,6 +3715,9 @@ up() {
   fi
   if [[ -n "${STACK_MODE_OVERRIDE:-}" ]]; then
     TARGET_STACK_MODE="${STACK_MODE_OVERRIDE}"
+  fi
+  if [[ "${TARGET_STACK_MODE}" == "local-fast" || "${TARGET_STACK_MODE}" == "local-convex" ]]; then
+    ensure_local_fast_clerk_publishable_key
   fi
 
   if handle_existing_stack_request \
@@ -3654,6 +3951,9 @@ rebuild_docker_stack() {
   elif [[ -n "${VITE_PID:-}" ]]; then
     restart_mode="local"
   fi
+  if [[ "${restart_mode}" == "local-fast" || "${restart_mode}" == "local-convex" ]]; then
+    ensure_local_fast_clerk_publishable_key
+  fi
 
   echo "[run] rebuild-docker: rebuilding parser/runtime image"
   down >/dev/null 2>&1 || true
@@ -3722,27 +4022,48 @@ First-time collaborator setup:
   1. cp .env.example .env.local
   2. Set CONVEX_TEAM and CONVEX_PROJECT in root .env.local.
      These are shared project slugs, not secrets; ask a project owner for them.
-  3. cp my-app/.env.local.example my-app/.env.local
-     Set VITE_CLERK_PUBLISHABLE_KEY for signed-in app flows; it is client-visible,
-     not a server secret. Ask a project owner for the correct public key.
-  4. npm ci --prefix my-app
-  5. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
+  3. npm ci --prefix my-app
+  4. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
+  5. ./run.sh bootstrap
+     Reuses an existing Infisical session or opens the one-time browser login.
+     Git repository access and Infisical project access are granted separately.
+     For an override, copy my-app/.env.local.example to the ignored
+     my-app/.env.local and set VITE_CLERK_PUBLISHABLE_KEY there.
   6. ./run.sh doctor local-fast
   7. ./run.sh local-fast
 
 Recommended lifecycle:
+  bootstrap [--allow-browser-login]
+                      Idempotently prepare collaborator Infisical access, then run doctor.
+                      Browser login requires a terminal; local non-TTY wrappers must opt in.
+                      CI always fails closed unless it provides INFISICAL_TOKEN.
   doctor [local-fast]  Diagnose prerequisites without installing or starting anything.
   local-fast          Start the recommended full development stack:
                       local parser + local Convex + Vite + parser autoreload.
   status              Show the tracked mode, processes, containers, ports, and readiness.
   down                Stop only resources owned by this worktree; keep images and caches.
 
+Infisical authentication:
+  Collaborator         Run ./run.sh bootstrap once. It reuses a valid local key or
+                       session; otherwise an interactive terminal opens browser login.
+  Local non-TTY        Pass --allow-browser-login only when deliberately completing
+                       the browser flow; this flag never overrides CI fail-closed behavior.
+  Headless/CI          Inject a short-lived INFISICAL_TOKEN from the host, CI provider,
+                       Infisical Agent, or init process before bootstrap/local-fast.
+                       CI ignores cached sessions; the token is cleared after the scoped read.
+  Docker               Keep machine credentials and tokens outside every image and layer.
+                       The parser container does not consume the Clerk publishable key.
+  Production Vite      Inject VITE_CLERK_PUBLISHABLE_KEY into the frontend build job.
+  local-fast           Never opens an authentication window; missing access fails closed.
+
 Recovery and maintenance:
   logs                Follow the local parser container logs.
   reload-env          Restart the tracked stack after changing environment configuration.
                       Does not rebuild the Docker image.
+                      For local-fast, always reacquires Clerk configuration and refreshes Vite.
   rebuild-docker      Rebuild the parser/export image after Dockerfile or runtime
                       dependency changes, then restart and verify readiness.
+                      Local-fast restarts validate Clerk configuration before teardown.
   reset               Run down, remove stale containers owned by this worktree, and
                       clear local dev-stack state. Keeps images and dependency caches.
 
@@ -3803,7 +4124,8 @@ Troubleshooting order:
 
 Safety:
   - run.sh is for local development only; it is not a production server entrypoint.
-  - help and doctor do not source local configuration or create runtime state.
+  - help, doctor, and bootstrap do not source local configuration or create runtime state.
+  - machine credentials and INFISICAL_TOKEN must be injected outside Docker images.
   - down/reset never kill arbitrary port ranges or foreign processes/containers.
   - Real API keys and personal tokens must never be committed.
 
@@ -3816,14 +4138,15 @@ EOF
 }
 
 # Trap: ensure long-running stack commands do not leave Vite/Parser dangling.
-# Doctor is read-only, so interruption must never tear down an existing stack.
-if [[ "${READ_ONLY_COMMAND}" == "1" ]]; then
+# Diagnostic/configuration commands must never tear down an existing stack.
+if [[ "${READ_ONLY_COMMAND}" == "1" || "${CONFIG_ONLY_COMMAND}" == "1" ]]; then
   trap 'exit 130' INT TERM
 else
   trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
 fi
 
 case "${CMD}" in
+  bootstrap) bootstrap "$@";;
   doctor) doctor "$@";;
   mcp-private-beta) mcp_private_beta_stack "$@";;
   mcp-secret-sync) mcp_secret_sync;;

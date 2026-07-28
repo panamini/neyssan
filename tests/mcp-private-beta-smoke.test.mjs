@@ -618,7 +618,10 @@ test("run.sh exposes mcp-smoke as a read-only dispatch", async () => {
   const source = await readFile(RUN_SH, "utf8");
   assert.match(source, /mcp_smoke\(\) \{\s+node "\$\{ROOT_DIR\}\/scripts\/mcp-private-beta-smoke\.mjs" "\$@"\s+\}/u);
   assert.match(source, /\.\/run\.sh mcp-smoke \[--origin https:\/\/host\]/u);
-  assert.match(source, /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \]\]; then/u);
+  assert.match(
+    source,
+    /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \|\| "\$\{CONFIG_ONLY_COMMAND\}" == "1" \]\]; then/u,
+  );
   assert.match(source, /mcp-smoke\) mcp_smoke "\$@";;/u);
 });
 
