@@ -170,6 +170,28 @@ function buildDirectClaimPlanFixture(personalizationContext = directContext) {
   return { factGraph, jobDemandGraph, rankedEvidencePack, claimPlan, brief };
 }
 
+function buildFreeProseFixture(args?: {
+  conversionMetric?: string;
+  additionalCandidateSentence?: string;
+}) {
+  const conversionMetric = args?.conversionMetric ?? "11%";
+  const factualSentences = {
+    conversion:
+      `At Orbit, I improved signup conversion by ${conversionMetric} after iterative UI experiments, giving product teams a clearer view of what moved users to act.`,
+    migration:
+      "I also led a design system migration used across 4 product squads, which required keeping shared interface work consistent across teams.",
+    dashboards:
+      "I built experimentation dashboards used by product and growth teams, so the same evidence could guide both delivery and iteration.",
+  };
+  const letter = [
+    `I am interested in the Senior Frontend Engineer role because strong interface work depends on connecting delivery to clear product decisions. ${factualSentences.conversion}`,
+    `That work made experimentation a practical input to product decisions rather than a reporting exercise. ${factualSentences.migration}${args?.additionalCandidateSentence ? ` ${args.additionalCandidateSentence}` : ""}`,
+    `${factualSentences.dashboards} I would bring that same focus to React and TypeScript delivery where design systems and experimentation reinforce one another, while keeping reusable foundations tied to measurable product outcomes and clearer delivery decisions.`,
+  ].join("\n\n");
+
+  return { factualSentences, letter };
+}
+
 function buildDirectPremiumWriterOutputFixture(bodyParts: {
   opening: string;
   proofBlock: string;
@@ -4150,19 +4172,7 @@ describe("premium cover letter generation and rendering", () => {
     const dashboardFactId = factGraph.facts.find((fact) =>
       fact.text.includes("Built experimentation dashboards"),
     )!.id;
-    const factualSentences = {
-      conversion:
-        "At Orbit, I improved signup conversion by 11% after iterative UI experiments, giving product teams a clearer view of what moved users to act.",
-      migration:
-        "I also led a design system migration used across 4 product squads, which required keeping shared interface work consistent across teams.",
-      dashboards:
-        "I built experimentation dashboards used by product and growth teams, so the same evidence could guide both delivery and iteration.",
-    };
-    const letter = [
-      `I am interested in the Senior Frontend Engineer role because strong interface work depends on connecting delivery to clear product decisions. ${factualSentences.conversion}`,
-      `That work made experimentation a practical input to product decisions rather than a reporting exercise. ${factualSentences.migration}`,
-      `${factualSentences.dashboards} I would bring that same focus to React and TypeScript delivery where design systems and experimentation reinforce one another.`,
-    ].join("\n\n");
+    const { factualSentences, letter } = buildFreeProseFixture();
     let calls = 0;
     let capturedPrompt = "";
     let capturedSchema: Record<string, unknown> | undefined;
@@ -8935,5 +8945,185 @@ describe("premium cover letter generation and rendering", () => {
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
 
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
+  });
+});
+
+describe("premium free-prose Codex review regressions", () => {
+  it("rejects an uncited factual candidate sentence in an otherwise cited letter", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const migrationFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Led a design system migration"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const { factualSentences, letter } = buildFreeProseFixture({
+      additionalCandidateSentence:
+        "I also led customer onboarding at Fabricated Labs.",
+    });
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter,
+        evidenceSpans: [
+          { quote: factualSentences.conversion, factIds: [conversionFactId] },
+          { quote: factualSentences.migration, factIds: [migrationFactId] },
+          { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(result).toBeNull();
+    expect(failures.flatMap((failure) => failure.issues ?? [])).toContain(
+      "free_prose_candidate_claim_uncovered",
+    );
+  });
+
+  it("rejects a structurally valid free-prose letter below 130 words", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const factualSentence =
+      "I improved signup conversion by 11% after iterative UI experiments.";
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter: [
+          "I work where interface delivery and product decisions meet.",
+          factualSentence,
+          "That result gave the team a clearer basis for iteration.",
+          "I would bring the same discipline to this role.",
+        ].join(" "),
+        evidenceSpans: [
+          { quote: factualSentence, factIds: [conversionFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(result).toBeNull();
+    expect(failures.flatMap((failure) => failure.issues ?? [])).toContain(
+      "free_prose_letter_too_short",
+    );
+  });
+
+  it("keeps Qwen on the structured contract when free prose is enabled", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    let capturedPrompt = "";
+    let capturedSchema: Record<string, unknown> | undefined;
+    const writerOutput = buildDirectPremiumWriterOutputFixture({
+      opening:
+        "I improved signup conversion by 11% after iterative UI experiments.",
+      proofBlock:
+        "I led a design system migration used across 4 product squads.",
+      employerValueBlock:
+        "I built experimentation dashboards used by product and growth teams.",
+      closeLine:
+        "I would welcome the opportunity to bring this experience to the role.",
+    });
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      writer: async ({ prompt, schema }) => {
+        capturedPrompt = prompt;
+        capturedSchema = schema;
+        return writerOutput;
+      },
+    });
+
+    expect(result).not.toBeNull();
+    expect(capturedPrompt).toContain("bodyParts");
+    expect(capturedPrompt).not.toContain("letter and evidenceSpans");
+    expect(capturedSchema).toEqual(PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA);
+  });
+
+  it("keeps decimal percentages intact while deriving the sidecar", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const decimalContext = {
+      ...directContext,
+      recentExperience: [
+        {
+          ...directContext.recentExperience[0],
+          highlights: [
+            "Improved signup conversion by 3.5% after iterative UI experiments.",
+            directContext.recentExperience[0].highlights[1],
+          ],
+        },
+      ],
+    };
+    const factGraph = buildPremiumFactGraphV1({
+      personalizationContext: decimalContext,
+      jobDescription: directJob.jobDescription,
+    });
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 3.5%"),
+    )!.id;
+    const migrationFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Led a design system migration"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const { factualSentences, letter } = buildFreeProseFixture({
+      conversionMetric: "3.5%",
+    });
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: decimalContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter,
+        evidenceSpans: [
+          { quote: factualSentences.conversion, factIds: [conversionFactId] },
+          { quote: factualSentences.migration, factIds: [migrationFactId] },
+          { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(failures).toEqual([]);
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain("3.5%");
+    expect(result?.content).not.toContain("3. 5%");
   });
 });

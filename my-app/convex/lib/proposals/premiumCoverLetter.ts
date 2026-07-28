@@ -1105,6 +1105,10 @@ const PREMIUM_FREE_PROSE_WRITER_OUTPUT_V1_SCHEMA = z
   })
   .strict();
 
+const PREMIUM_FREE_PROSE_MIN_WORDS = 130;
+const PREMIUM_FREE_PROSE_CANDIDATE_ASSERTION_PATTERN =
+  /\b(?:I\s+(?:(?:also|previously|recently)\s+)?(?:achieved|built|coordinated|created|delivered|designed|developed|drove|earned|grew|had|have|implemented|improved|increased|launched|led|maintained|managed|owned|reduced|served|supported|trained|worked|was)|my\s+(?:background|career|experience|role|track record|work)\s+(?:covered|focused|included|involved|spanned|was))\b/iu;
+
 function buildPremiumFreeProseWriterOutputV1JsonSchema(
   claimPlan: ClaimPlanV1,
 ): Record<string, unknown> {
@@ -1629,7 +1633,7 @@ function ensureSentenceEnding(value: string): string {
 
 function splitSentences(value: string): string[] {
   const matches = compactWhitespace(value).match(
-    /[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
+    /(?:(?:\d+\.\d+)|[^.!?\n])+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
   );
   if (!matches) return [];
   return matches.map((sentence) => compactWhitespace(sentence)).filter(Boolean);
@@ -3376,10 +3380,12 @@ export function buildPremiumCoverLetterPrompt(args: {
   writerModel?: string;
   freeProseSidecar?: boolean;
 }): string {
-  const freeProseSidecar =
+  const freeProseSidecarRequested =
     args.freeProseSidecar ??
     (args.brief.contextClass !== "no_cv" &&
       isCoverLetterFreeProseSidecarV1Enabled());
+  const freeProseSidecar =
+    freeProseSidecarRequested && args.writerProvider !== "qwen";
   if (freeProseSidecar && args.brief.contextClass !== "no_cv") {
     return buildPremiumFreeProseCoverLetterPrompt(args);
   }
@@ -4140,6 +4146,56 @@ function hasUnsupportedPremiumFreeProseNumericClaim(args: {
   );
 }
 
+function countPremiumFreeProseWords(value: string): number {
+  const compact = compactWhitespace(value);
+  return compact ? compact.split(/\s+/u).length : 0;
+}
+
+function premiumFreeProseSentenceMakesCandidateClaim(args: {
+  sentence: string;
+  candidateFacts: FactNodeV1[];
+}): boolean {
+  if (PREMIUM_FREE_PROSE_CANDIDATE_ASSERTION_PATTERN.test(args.sentence)) {
+    return true;
+  }
+  const normalizedSentence = normalizeProposalConstraintText(args.sentence);
+  return args.candidateFacts.some((fact) => {
+    const normalizedFact = normalizeProposalConstraintText(fact.text);
+    return (
+      normalizedFact.length >= 24 &&
+      (normalizedSentence.includes(normalizedFact) ||
+        normalizedFact.includes(normalizedSentence))
+    );
+  });
+}
+
+function hasUncoveredPremiumFreeProseCandidateClaim(args: {
+  letter: string;
+  evidenceSpans: PremiumFreeProseEvidenceSpanV1[];
+  factGraph: FactGraphV1;
+}): boolean {
+  const normalizedEvidenceQuotes = args.evidenceSpans.map((span) =>
+    normalizeProposalConstraintText(span.quote),
+  );
+  const candidateFacts = args.factGraph.facts.filter(
+    (fact) => fact.source === "cv",
+  );
+  return splitSentences(args.letter).some((sentence) => {
+    if (
+      !premiumFreeProseSentenceMakesCandidateClaim({
+        sentence,
+        candidateFacts,
+      })
+    ) {
+      return false;
+    }
+    const normalizedSentence = normalizeProposalConstraintText(sentence);
+    return !normalizedEvidenceQuotes.some(
+      (quote) => quote.length > 0 && quote.includes(normalizedSentence),
+    );
+  });
+}
+
 function validatePremiumFreeProseEvidenceSpans(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
@@ -4158,7 +4214,17 @@ function validatePremiumFreeProseEvidenceSpans(args: {
     ...(!letter || !derivePremiumFreeProseBodyPartTexts(letter)
       ? ["free_prose_letter_structure"]
       : []),
+    ...(countPremiumFreeProseWords(letter) < PREMIUM_FREE_PROSE_MIN_WORDS
+      ? ["free_prose_letter_too_short"]
+      : []),
     ...(evidenceSpans.length === 0 ? ["free_prose_evidence_missing"] : []),
+    ...(hasUncoveredPremiumFreeProseCandidateClaim({
+      letter,
+      evidenceSpans,
+      factGraph: args.factGraph,
+    })
+      ? ["free_prose_candidate_claim_uncovered"]
+      : []),
     ...evidenceSpans.flatMap((span) =>
       validatePremiumFreeProseEvidenceSpan({
         span,
@@ -7876,7 +7942,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     targetEmployer,
   });
   const freeProseSidecar =
-    contextClass !== "no_cv" && isCoverLetterFreeProseSidecarV1Enabled();
+    contextClass !== "no_cv" &&
+    args.writerProvider !== "qwen" &&
+    isCoverLetterFreeProseSidecarV1Enabled();
   const prompt = buildPremiumCoverLetterPrompt({
     brief,
     generationControlsBlock: args.generationControlsBlock,
