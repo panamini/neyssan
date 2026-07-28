@@ -9176,7 +9176,21 @@ describe("premium free-prose follow-up review regressions", () => {
     );
   });
 
-  it("accepts translated evidence when the requested output language differs", async () => {
+  it("keeps the free-prose sidecar disabled when translated grounding is unavailable", () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { brief } = buildDirectClaimPlanFixture();
+    const prompt = buildPremiumCoverLetterPrompt({
+      brief: { ...brief, language: "French", outputLanguage: "French" },
+      writerProvider: "openai",
+      freeProseSidecar: true,
+    });
+
+    expect(prompt).toContain("PremiumWriterOutputV1");
+    expect(prompt).toContain("bodyParts");
+    expect(prompt).not.toContain("Return only one JSON object with letter and evidenceSpans.");
+  });
+
+  it("does not pool numeric provenance across free-prose evidence spans", async () => {
     vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
     const { factGraph } = buildDirectClaimPlanFixture();
     const conversionFactId = factGraph.facts.find((fact) =>
@@ -9188,26 +9202,17 @@ describe("premium free-prose follow-up review regressions", () => {
     const dashboardFactId = factGraph.facts.find((fact) =>
       fact.text.includes("Built experimentation dashboards"),
     )!.id;
-    const { factualSentences: englishSentences, letter: englishLetter } =
-      buildFreeProseFixture();
-    const translatedSentences = {
-      conversion:
-        "Chez Orbit, j'ai amélioré la conversion des inscriptions après des expérimentations d'interface itératives, donnant aux équipes produit une vision plus claire des leviers d'action.",
-      migration:
-        "J'ai aussi piloté une migration de design system utilisée par quatre équipes produit, ce qui a maintenu la cohérence des interfaces partagées.",
-      dashboards:
-        "J'ai construit des tableaux de bord d'expérimentation utilisés par les équipes produit et croissance, afin que les mêmes éléments guident la livraison et l'itération.",
-    };
-    const letter = englishLetter
-      .replace(englishSentences.conversion, translatedSentences.conversion)
-      .replace(englishSentences.migration, translatedSentences.migration)
-      .replace(englishSentences.dashboards, translatedSentences.dashboards);
+    const { factualSentences, letter } = buildFreeProseFixture({
+      additionalCandidateSentence: "I managed 4 teams in another role.",
+    });
+    const unsupportedNumericSentence =
+      "I managed 4 teams in another role.";
     const failures: PremiumCoverLetterFailureTrace[] = [];
 
     const result = await attemptPremiumCoverLetterGeneration({
       personalizationContext: directContext,
       voicePreset: "signature",
-      outputLanguage: "French",
+      outputLanguage: "English",
       jobTitle: directJob.jobTitle,
       jobDescription: directJob.jobDescription,
       candidateName: "Alex Martin",
@@ -9216,16 +9221,22 @@ describe("premium free-prose follow-up review regressions", () => {
       writer: async () => ({
         letter,
         evidenceSpans: [
-          { quote: translatedSentences.conversion, factIds: [conversionFactId] },
-          { quote: translatedSentences.migration, factIds: [migrationFactId] },
-          { quote: translatedSentences.dashboards, factIds: [dashboardFactId] },
+          { quote: factualSentences.conversion, factIds: [conversionFactId] },
+          { quote: factualSentences.migration, factIds: [migrationFactId] },
+          {
+            quote: unsupportedNumericSentence,
+            factIds: [dashboardFactId],
+          },
+          { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
         ],
       }),
       onFailure: (failure) => failures.push(failure),
     });
 
-    expect(failures).toEqual([]);
-    expect(result).not.toBeNull();
+    expect(result).toBeNull();
+    expect(failures.flatMap((failure) => failure.issues ?? [])).toContain(
+      "free_prose_unsupported_numeric_claim",
+    );
   });
 
   it("rejects free-prose output above 210 words or outside the three-to-four paragraph contract", async () => {

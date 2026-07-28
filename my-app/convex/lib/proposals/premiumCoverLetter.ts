@@ -3398,7 +3398,9 @@ export function buildPremiumCoverLetterPrompt(args: {
     (args.brief.contextClass !== "no_cv" &&
       isCoverLetterFreeProseSidecarV1Enabled());
   const freeProseSidecar =
-    freeProseSidecarRequested && args.writerProvider !== "qwen";
+    freeProseSidecarRequested &&
+    args.writerProvider !== "qwen" &&
+    getDeterministicCopyLanguage(args.brief.language) === "en";
   if (freeProseSidecar && args.brief.contextClass !== "no_cv") {
     return buildPremiumFreeProseCoverLetterPrompt(args);
   }
@@ -4079,7 +4081,6 @@ function validatePremiumFreeProseEvidenceFact(args: {
   quote: string;
   allowedFactIds: ReadonlySet<string>;
   factById: ReadonlyMap<string, FactNodeV1>;
-  allowTranslatedEvidence: boolean;
 }): string[] {
   const fact = args.factById.get(args.factId);
   if (!fact || fact.source !== "cv") {
@@ -4090,7 +4091,6 @@ function validatePremiumFreeProseEvidenceFact(args: {
     issues.push("free_prose_fact_not_planned");
   }
   if (
-    !args.allowTranslatedEvidence &&
     !premiumTextSupportsCandidateFact({
       generatedText: args.quote,
       fact: {
@@ -4112,7 +4112,6 @@ function validatePremiumFreeProseEvidenceSpan(args: {
   bodyParts: CoverLetterBodyParts;
   allowedFactIds: ReadonlySet<string>;
   factById: ReadonlyMap<string, FactNodeV1>;
-  allowTranslatedEvidence: boolean;
 }): string[] {
   const normalizedQuote = normalizeProposalConstraintText(args.span.quote);
   if (!normalizedQuote || !args.normalizedLetter.includes(normalizedQuote)) {
@@ -4138,7 +4137,6 @@ function validatePremiumFreeProseEvidenceSpan(args: {
         quote: args.span.quote,
         allowedFactIds: args.allowedFactIds,
         factById: args.factById,
-        allowTranslatedEvidence: args.allowTranslatedEvidence,
       }),
     ),
   ];
@@ -4146,23 +4144,52 @@ function validatePremiumFreeProseEvidenceSpan(args: {
 
 function hasUnsupportedPremiumFreeProseNumericClaim(args: {
   writerOutput: PremiumWriterOutputV1;
-  claimPlan: ClaimPlanV1;
   numericEvidenceProjection: PremiumCoverLetterNumericEvidenceProjection;
   allowMeasurementTranslation: boolean;
 }): boolean {
   const evidenceSpans = args.writerOutput.evidenceSpans ?? [];
-  return (
-    matchPremiumCoverLetterNumericEvidence({
+  const visibleText = compactWhitespace(args.writerOutput.letter ?? "");
+  const allOccurrences = matchPremiumCoverLetterNumericEvidence({
+    projection: args.numericEvidenceProjection,
+    visibleText,
+    section: "opening",
+    factIds: [],
+    demandIds: [],
+    claimIds: [],
+    allowMeasurementTranslation: args.allowMeasurementTranslation,
+  });
+  const authorizedRanges = new Set<string>();
+
+  for (const span of evidenceSpans) {
+    const quote = compactWhitespace(span.quote);
+    if (!quote) continue;
+    const spanMatches = matchPremiumCoverLetterNumericEvidence({
       projection: args.numericEvidenceProjection,
-      visibleText: compactWhitespace(args.writerOutput.letter ?? ""),
+      visibleText: quote,
       section: "opening",
-      factIds: dedupeStrings(evidenceSpans.flatMap((span) => span.factIds)),
-      demandIds: dedupeStrings(
-        args.claimPlan.claims.flatMap((claim) => claim.demandIds),
-      ),
-      claimIds: args.claimPlan.claims.map((claim) => claim.id),
+      factIds: span.factIds,
+      demandIds: [],
+      claimIds: [],
       allowMeasurementTranslation: args.allowMeasurementTranslation,
-    }).unsupported.length > 0
+    });
+    let quoteStart = visibleText.indexOf(quote);
+    while (quoteStart >= 0) {
+      for (const match of spanMatches.matches) {
+        const start = quoteStart + match.visibleSpan.start;
+        const end = quoteStart + match.visibleSpan.end;
+        if (end <= quoteStart + quote.length) {
+          authorizedRanges.add(`${start}:${end}`);
+        }
+      }
+      quoteStart = visibleText.indexOf(quote, quoteStart + 1);
+    }
+  }
+
+  return allOccurrences.unsupported.some(
+    (occurrence) =>
+      !authorizedRanges.has(
+        `${occurrence.visibleSpan.start}:${occurrence.visibleSpan.end}`,
+      ),
   );
 }
 
@@ -4281,7 +4308,6 @@ function validatePremiumFreeProseEvidenceSpans(args: {
         bodyParts,
         allowedFactIds,
         factById,
-        allowTranslatedEvidence: args.claimPlan.language !== "English",
       }),
     ),
     ...(hasUnsupportedPremiumFreeProseNumericClaim(args)
@@ -8054,6 +8080,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   });
   const freeProseSidecar =
     contextClass !== "no_cv" &&
+    getDeterministicCopyLanguage(brief.language) === "en" &&
     args.writerProvider !== "qwen" &&
     isCoverLetterFreeProseSidecarV1Enabled();
   const prompt = buildPremiumCoverLetterPrompt({
