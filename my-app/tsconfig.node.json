@@ -60,6 +60,7 @@
     "src/modules/local-mcp/mcpSafeSummaryProjectionProofHarness.ts",
     "src/modules/local-mcp/mcpSafeSummaryProofMarker.ts",
     "src/modules/local-mcp/mcpSafeSummaryProofOperatorContract.ts",
+    "src/modules/local-mcp/mcpSafeSummaryProofSessionCoordinator.ts",
     "src/modules/local-mcp/mcpSafeSummaryServerSession.ts",
     "src/modules/local-mcp/mcpSafeSummaryStaticProof.ts",
     "src/modules/local-mcp/mcpStytchBearerVerifierBoundary.ts",

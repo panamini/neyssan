@@ -346,7 +346,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
   it("authorizes the controlled proof from any two authenticated distinct operators", () => {
     const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
     const submissionAuthPath = viteSource.slice(
-      viteSource.indexOf("async function isAuthorizedControlledProofOperatorSubmission"),
+      viteSource.indexOf("async function readAuthorizedControlledProofOperatorIdentityKey"),
       viteSource.indexOf("async function buildProductionMcpSafeSummaryLiveAdapterRunner"),
     );
     const runnerPath = viteSource.slice(
@@ -354,7 +354,8 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
       viteSource.indexOf("function sameLiveAdapterIdentity"),
     );
 
-    expect(submissionAuthPath).toContain("return identity !== undefined");
+    expect(submissionAuthPath).toContain("isValidControlledProofAuthenticatedIdentity(identity)");
+    expect(submissionAuthPath).toContain("${identity.issuer}\\u0000${identity.subject}");
     expect(submissionAuthPath).not.toContain("readControlledProofOwnerConfig");
     expect(submissionAuthPath).not.toContain("readPrivateBetaSubjectDigestEnv");
     expect(runnerPath).toContain("sameLiveAdapterIdentity(identityA, identityB)");
@@ -363,27 +364,6 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(runnerPath).toContain("hashSubject(identityB.subject)");
     expect(runnerPath).toContain("config: proofConfig");
     expect(runnerPath).not.toContain("readControlledProofOwnerConfig");
-  });
-
-  it("partitions pending operator credentials by shared proof session", () => {
-    const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
-    const operatorRoutePath = viteSource.slice(
-      viteSource.indexOf("async function respondToControlledSummaryProofOperatorTokenRoute"),
-      viteSource.indexOf("function parseOperatorCredentialSubmission"),
-    );
-
-    expect(operatorRoutePath).toContain(
-      "pendingSessions.get(submitted.sessionId)",
-    );
-    expect(operatorRoutePath).toContain(
-      "pendingSessions.set(submitted.sessionId",
-    );
-    expect(operatorRoutePath).toContain(
-      "pendingSessions.delete(submitted.sessionId)",
-    );
-    expect(operatorRoutePath).toContain(
-      "MCP_SAFE_SUMMARY_MAX_PENDING_OPERATOR_SESSIONS",
-    );
   });
 
   it("classifies only allowlisted first-call fields and drops free text and sensitive values", () => {

@@ -87,6 +87,10 @@ import {
   type McpSafeSummaryProofOperatorRole,
 } from "./src/modules/local-mcp/mcpSafeSummaryProofOperatorContract";
 import {
+  createMcpSafeSummaryProofSessionCoordinator,
+  type McpSafeSummaryProofSessionCoordinator,
+} from "./src/modules/local-mcp/mcpSafeSummaryProofSessionCoordinator";
+import {
   MCP_SAFE_SUMMARY_PROOF_TOOLS,
   type McpSafeSummaryProofIdentityRole,
   type McpSafeSummaryProofToolName,
@@ -156,8 +160,6 @@ const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
 const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
 const MCP_SAFE_SUMMARY_OPERATOR_TOKEN_MAX_REQUEST_BYTES = 8_192;
-const MCP_SAFE_SUMMARY_OPERATOR_TOKEN_TTL_MS = 60_000;
-const MCP_SAFE_SUMMARY_MAX_PENDING_OPERATOR_SESSIONS = 8;
 const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const PRIVATE_BETA_SUBJECT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const INVALID_CLIENT_SECRET_POST_POLICY = Object.freeze({
@@ -289,7 +291,8 @@ export function createLocalMcpDevEndpointPlugin(
     (controlledSummaryProofActivation !== undefined && controlledSummaryProofRunner !== undefined) ||
     controlledSummaryProofLiveActivation !== undefined;
   if (!endpointEnabled && !oauthAuthorizationEnabled && !productionOAuthAuthorizationEnabled && !controlledSummaryProofEnabled) return undefined;
-  const controlledSummaryProofFlight: ControlledSummaryProofFlightState = {};
+  const controlledSummaryProofCoordinator =
+    createMcpSafeSummaryProofSessionCoordinator();
   const fixtureDemoEnabled = endpointEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
   const authPolicyEnabled = endpointEnabled && fixtureDemoEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
   const authConfigInput = authPolicyEnabled ? readLocalMcpDevAuthConfigInput(env) : undefined;
@@ -344,7 +347,7 @@ export function createLocalMcpDevEndpointPlugin(
       env,
       controlledSummaryProofEnabled,
       controlledSummaryProofRunner,
-      controlledSummaryProofFlight,
+      controlledSummaryProofCoordinator,
       controlledSummaryProofOperatorOwnerA,
     );
   };
@@ -374,7 +377,7 @@ function handleLocalMcpDevMiddlewareRequest(
   env: Readonly<Record<string, string | undefined>>,
   controlledSummaryProofEnabled: boolean,
   controlledSummaryProofRunner: McpSafeSummaryControlledProofRunnerV1 | undefined,
-  controlledSummaryProofFlight: ControlledSummaryProofFlightState,
+  controlledSummaryProofCoordinator: McpSafeSummaryProofSessionCoordinator,
   controlledSummaryProofOperatorOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
@@ -384,7 +387,7 @@ function handleLocalMcpDevMiddlewareRequest(
         req,
         res,
         bodyText,
-        controlledSummaryProofFlight,
+        controlledSummaryProofCoordinator,
         env,
         productionOAuthAuthorizationConfig,
         productionOAuthAuthorizationDependencies,
@@ -405,7 +408,7 @@ function handleLocalMcpDevMiddlewareRequest(
       req,
       res,
       controlledSummaryProofRunner,
-      controlledSummaryProofFlight,
+      controlledSummaryProofCoordinator,
       productionOAuthAuthorizationDependencies.readAuthenticatedOwnerIdentity,
       controlledSummaryProofOperatorOwnerA,
     ).catch(() => {
@@ -492,19 +495,11 @@ function handleLocalMcpDevMiddlewareRequest(
   next();
 }
 
-type ControlledSummaryProofFlightState = {
-  inFlight?: Promise<void>;
-  pendingOperatorSessions?: Map<string, Readonly<{
-    credentials: Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
-    timer: ReturnType<typeof setTimeout>;
-  }>>;
-};
-
 async function respondToControlledSummaryProofOperatorTokenRoute(
   req: IncomingMessage,
   res: ServerResponse,
   bodyText: string,
-  flight: ControlledSummaryProofFlightState,
+  coordinator: McpSafeSummaryProofSessionCoordinator,
   env: Readonly<Record<string, string | undefined>>,
   config: McpOAuthProductionRouteAdapterConfigV1,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
@@ -519,7 +514,7 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
-  if (flight.inFlight) {
+  if (coordinator.snapshot().activeRun) {
     sendLocalMcpJson(res, 409, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
@@ -540,7 +535,12 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
-  if (!(await isAuthorizedControlledProofOperatorSubmission(submitted.token, dependencies))) {
+  const operatorIdentityKey =
+    await readAuthorizedControlledProofOperatorIdentityKey(
+      submitted.token,
+      dependencies,
+    );
+  if (!operatorIdentityKey) {
     sendLocalMcpJson(res, 403, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
@@ -550,12 +550,23 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
-  const pendingSessions = flight.pendingOperatorSessions ?? new Map();
-  const pendingSession = pendingSessions.get(submitted.sessionId);
-  if (
-    !pendingSession &&
-    pendingSessions.size >= MCP_SAFE_SUMMARY_MAX_PENDING_OPERATOR_SESSIONS
-  ) {
+  const registration = coordinator.registerAuthenticated(
+    submitted.sessionId,
+    submitted.role,
+    submitted.token,
+    operatorIdentityKey,
+  );
+  if (registration.kind === "busy") {
+    sendLocalMcpJson(res, 409, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "proof_run_already_in_progress",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
+  if (registration.kind === "capacity") {
     sendLocalMcpJson(res, 429, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
@@ -565,8 +576,11 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
-  const pending = pendingSession?.credentials ?? {};
-  if (pending[submitted.role]) {
+  if (
+    registration.kind === "duplicate_role" ||
+    registration.kind === "duplicate_token" ||
+    registration.kind === "duplicate_identity"
+  ) {
     sendLocalMcpJson(res, 409, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
@@ -576,23 +590,7 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
-  const next = { ...pending, [submitted.role]: submitted.token } as Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
-  if (!next.A || !next.B) {
-    if (pendingSession) clearTimeout(pendingSession.timer);
-    let timer: ReturnType<typeof setTimeout>;
-    timer = setTimeout(() => {
-      const current = flight.pendingOperatorSessions?.get(submitted.sessionId);
-      if (current?.timer !== timer) return;
-      flight.pendingOperatorSessions?.delete(submitted.sessionId);
-      if (flight.pendingOperatorSessions?.size === 0) {
-        flight.pendingOperatorSessions = undefined;
-      }
-    }, MCP_SAFE_SUMMARY_OPERATOR_TOKEN_TTL_MS);
-    pendingSessions.set(submitted.sessionId, Object.freeze({
-      credentials: next,
-      timer,
-    }));
-    flight.pendingOperatorSessions = pendingSessions;
+  if (registration.kind === "waiting") {
     sendLocalMcpJson(res, 202, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "waiting_for_other_operator",
@@ -602,14 +600,9 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     return;
   }
 
-  if (pendingSession) clearTimeout(pendingSession.timer);
-  pendingSessions.delete(submitted.sessionId);
-  if (pendingSessions.size === 0) {
-    flight.pendingOperatorSessions = undefined;
-  }
-  const credentials: McpSafeSummaryLiveAdapterOperatorCredentialV8 = Object.freeze({ A: next.A, B: next.B });
-  let runPromise: Promise<void>;
-  runPromise = Promise.resolve().then(async () => {
+  const credentials: McpSafeSummaryLiveAdapterOperatorCredentialV8 =
+    registration.credentials;
+  try {
     const runner = await buildProductionMcpSafeSummaryLiveAdapterRunner(
       env,
       config,
@@ -626,23 +619,19 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
       });
       return;
     }
-    try {
-      const result = await runner.run();
-      sendLocalMcpJson(res, 200, buildMcpSafeSummaryProofOperatorResponse(result));
-    } catch {
-      sendLocalMcpJson(res, 500, {
-        kind: "mcp_safe_summary_controlled_proof_operator_response",
-        status: "blocked",
-        reason: "proof_runner_failed",
-        safeForModel: true,
-        version: 1,
-      });
-    }
-  }).finally(() => {
-    if (flight.inFlight === runPromise) flight.inFlight = undefined;
-  });
-  flight.inFlight = runPromise;
-  await runPromise;
+    const result = await runner.run();
+    sendLocalMcpJson(res, 200, buildMcpSafeSummaryProofOperatorResponse(result));
+  } catch {
+    sendLocalMcpJson(res, 500, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "proof_runner_failed",
+      safeForModel: true,
+      version: 1,
+    });
+  } finally {
+    registration.lease.release();
+  }
 }
 
 function parseOperatorCredentialSubmission(bodyText: string):
@@ -665,12 +654,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function isAuthorizedControlledProofOperatorSubmission(
+async function readAuthorizedControlledProofOperatorIdentityKey(
   credential: string,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
-): Promise<boolean> {
+): Promise<string | undefined> {
   const readAuthenticatedOwnerIdentity = dependencies.readAuthenticatedOwnerIdentity;
-  if (!readAuthenticatedOwnerIdentity) return false;
+  if (!readAuthenticatedOwnerIdentity) return undefined;
   let identity: McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined;
   try {
     identity = await readAuthenticatedOwnerIdentity({
@@ -680,9 +669,11 @@ async function isAuthorizedControlledProofOperatorSubmission(
       headers: { authorization: `Bearer ${credential}` },
     });
   } catch {
-    return false;
+    return undefined;
   }
-  return identity !== undefined;
+  return isValidControlledProofAuthenticatedIdentity(identity)
+    ? `${identity.issuer}\u0000${identity.subject}`
+    : undefined;
 }
 
 async function buildProductionMcpSafeSummaryLiveAdapterRunner(
@@ -876,7 +867,7 @@ async function respondToControlledSummaryProofOperatorRoute(
   req: IncomingMessage,
   res: ServerResponse,
   runner: McpSafeSummaryControlledProofRunnerV1 | undefined,
-  flight: ControlledSummaryProofFlightState,
+  coordinator: McpSafeSummaryProofSessionCoordinator,
   readAuthenticatedOwnerIdentity: McpOAuthProductionRouteAdapterDependenciesV1["readAuthenticatedOwnerIdentity"],
   expectedOwnerA: Readonly<{ subject: string; issuer: string }> | undefined,
 ): Promise<void> {
@@ -890,7 +881,7 @@ async function respondToControlledSummaryProofOperatorRoute(
     });
     return;
   }
-  if (flight.inFlight) {
+  if (coordinator.snapshot().activeRun) {
     sendLocalMcpJson(res, 409, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
@@ -900,49 +891,55 @@ async function respondToControlledSummaryProofOperatorRoute(
     });
     return;
   }
-  let runPromise: Promise<void>;
-  runPromise = Promise.resolve().then(async () => {
-    if (!await isControlledSummaryProofOperatorAuthorized(
-      req,
-      readAuthenticatedOwnerIdentity,
-      expectedOwnerA,
-    )) {
-      sendLocalMcpJson(res, 401, {
-        kind: "mcp_safe_summary_controlled_proof_operator_response",
-        status: "blocked",
-        reason: "operator_owner_not_authenticated_as_a",
-        safeForModel: true,
-        version: 1,
-      });
-      return;
-    }
-    try {
-      const result = await runner.run();
-      sendLocalMcpJson(res, 200, {
-        kind: "mcp_safe_summary_controlled_proof_operator_response",
-        status: result.completed ? "completed" : "stopped",
-        contractId: result.contractId,
-        contractVersion: result.contractVersion,
-        completed: result.completed,
-        liveCalls: result.liveCalls,
-        proof: result.proof,
-        safeForModel: true,
-        version: 1,
-      });
-    } catch {
-      sendLocalMcpJson(res, 500, {
-        kind: "mcp_safe_summary_controlled_proof_operator_response",
-        status: "blocked",
-        reason: "proof_runner_failed",
-        safeForModel: true,
-        version: 1,
-      });
-    }
-  }).finally(() => {
-    if (flight.inFlight === runPromise) flight.inFlight = undefined;
-  });
-  flight.inFlight = runPromise;
-  await runPromise;
+  if (!await isControlledSummaryProofOperatorAuthorized(
+    req,
+    readAuthenticatedOwnerIdentity,
+    expectedOwnerA,
+  )) {
+    sendLocalMcpJson(res, 401, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "operator_owner_not_authenticated_as_a",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
+  const acquisition = coordinator.tryAcquireRun();
+  if (acquisition.kind === "busy") {
+    sendLocalMcpJson(res, 409, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "proof_run_already_in_progress",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
+  try {
+    const result = await runner.run();
+    sendLocalMcpJson(res, 200, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: result.completed ? "completed" : "stopped",
+      contractId: result.contractId,
+      contractVersion: result.contractVersion,
+      completed: result.completed,
+      liveCalls: result.liveCalls,
+      proof: result.proof,
+      safeForModel: true,
+      version: 1,
+    });
+  } catch {
+    sendLocalMcpJson(res, 500, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "proof_runner_failed",
+      safeForModel: true,
+      version: 1,
+    });
+  } finally {
+    acquisition.lease.release();
+  }
 }
 
 async function isControlledSummaryProofOperatorAuthorized(
