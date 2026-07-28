@@ -144,6 +144,8 @@ for (const line of source.split("\n")) {
   const match = line.match(/^\s*(?:export[ \t]+)?VITE_CLERK_PUBLISHABLE_KEY=([\s\S]*)$/u);
   if (!match) continue;
   let raw = match[1].trim();
+  const quotedWithComment = raw.match(/^(?:"[^"]*"|'[^']*')[ \t]+#.*$/u);
+  if (quotedWithComment) raw = quotedWithComment[0].replace(/[ \t]+#.*$/u, "");
   if (
     (raw.startsWith('"') && raw.endsWith('"'))
     || (raw.startsWith("'") && raw.endsWith("'"))

@@ -689,12 +689,12 @@ test("bootstrap is idempotent when a valid local Clerk override already exists",
   }
 });
 
-test("bootstrap accepts a Vite-compatible CRLF Clerk override", (t) => {
+test("bootstrap accepts a Vite-compatible quoted CRLF Clerk override", (t) => {
   const fixture = createFixture(t);
   const callLog = join(fixture.root, "infisical-calls.log");
   writeFileSync(
     fixture.appEnvFile,
-    "VITE_CLERK_PUBLISHABLE_KEY=pk_test_bootstrap_crlf_fixture\r\n",
+    'VITE_CLERK_PUBLISHABLE_KEY="pk_test_bootstrap_crlf_fixture" # local override\r\n',
   );
 
   const result = runBootstrap(fixture, { FAKE_INFISICAL_CALL_LOG: callLog });
