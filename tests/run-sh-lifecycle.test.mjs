@@ -47,8 +47,21 @@ function createFixture(t) {
   mkdirSync(binDirectory);
   mkdirSync(join(root, "my-app"));
   copyFileSync(sourceRunScript, join(root, "run.sh"));
+  copyFileSync(join(repoRoot, ".infisical.json"), join(root, ".infisical.json"));
   chmodSync(join(root, "run.sh"), 0o755);
 
+  writeExecutable(
+    join(binDirectory, "infisical"),
+    `#!/bin/sh
+if test -n "\${FAKE_INFISICAL_CALL_LOG:-}"; then printf '%s\n' "$*" >> "\${FAKE_INFISICAL_CALL_LOG}"; fi
+if test "\${1:-}" = secrets && test "\${2:-}" = get; then
+  test "\${FAKE_INFISICAL_MODE:-success}" = success || exit 1
+  printf '%s\n' "\${FAKE_INFISICAL_VALUE:-pk_test_lifecycle_reload_fixture}"
+  exit 0
+fi
+exit 1
+`,
+  );
   writeExecutable(
     join(binDirectory, "docker"),
     `#!/bin/sh
@@ -423,6 +436,8 @@ test("env reload prepares a missing parser image before replacing the tracked pa
 test("env reload Vite failure cleans only restarted resources and records convergent state", async (t) => {
   const fixture = createFixture(t);
   const expectedOwner = ownerId(fixture.root);
+  const infisicalCallLog = join(fixture.root, "infisical.log");
+  const clerkValue = "pk_test_reload_env_clerk_fixture";
   const vite = startSleeper(t);
   writeFileSync(fixture.dockerContainerFile, "running\n");
   const stateFile = writeState(fixture.root, {
@@ -437,6 +452,8 @@ test("env reload Vite failure cleans only restarted resources and records conver
     FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
     FAKE_DOCKER_OWNER: expectedOwner,
     FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_INFISICAL_CALL_LOG: infisicalCallLog,
+    FAKE_INFISICAL_VALUE: clerkValue,
     FAKE_LSOF_BUSY: "1",
     FAKE_PS_COMMAND: `twoweeks-run-sh-${expectedOwner.slice(0, 16)}:vite`,
   });
@@ -444,12 +461,51 @@ test("env reload Vite failure cleans only restarted resources and records conver
 
   assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`);
   assert.match(`${result.stdout}${result.stderr}`, /Vite failed to restart during env reload/i);
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(clerkValue));
+  assert.match(
+    readFileSync(infisicalCallLog, "utf8"),
+    /^secrets get VITE_CLERK_PUBLISHABLE_KEY /mu,
+  );
   assert.equal(processIsAlive(vite.pid), false);
   assert.equal(existsSync(fixture.dockerContainerFile), false);
   const state = readFileSync(stateFile, "utf8");
   assert.match(state, /^VITE_PID=$/mu);
   assert.match(state, /^PARSER_STARTED=0$/mu);
   assert.match(state, /^UI_STARTED=0$/mu);
+});
+
+test("local-fast env reload keeps Vite running when Clerk configuration cannot be reacquired", (t) => {
+  const fixture = createFixture(t);
+  const expectedOwner = ownerId(fixture.root);
+  const infisicalCallLog = join(fixture.root, "infisical.log");
+  const vite = startSleeper(t);
+  writeFileSync(fixture.dockerContainerFile, "running\n");
+  const stateFile = writeState(fixture.root, {
+    VITE_PID: String(vite.pid),
+    PARSER_STARTED: "1",
+    STACK_MODE: "local-fast",
+    UI_STARTED: "1",
+    ENV_HASH: "stale-env-hash",
+  });
+
+  const result = runCommand(fixture, "reload-env", {
+    FAKE_DOCKER_OWNER: expectedOwner,
+    FAKE_INFISICAL_CALL_LOG: infisicalCallLog,
+    FAKE_INFISICAL_MODE: "failure",
+    FAKE_LSOF_BUSY: "1",
+    FAKE_PS_COMMAND: `twoweeks-run-sh-${expectedOwner.slice(0, 16)}:vite`,
+  });
+
+  assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(`${result.stdout}${result.stderr}`, /VITE_CLERK_PUBLISHABLE_KEY is unavailable/i);
+  assert.equal(processIsAlive(vite.pid), true);
+  assert.equal(existsSync(fixture.dockerContainerFile), true);
+  assert.equal(readFileSync(fixture.dockerContainerFile, "utf8"), "running\n");
+  assert.match(readFileSync(stateFile, "utf8"), new RegExp(`^VITE_PID=${vite.pid}$`, "mu"));
+  assert.match(
+    readFileSync(infisicalCallLog, "utf8"),
+    /^secrets get VITE_CLERK_PUBLISHABLE_KEY /mu,
+  );
 });
 
 test("run.sh exposes no global process-kill recovery path", () => {

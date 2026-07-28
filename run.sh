@@ -3426,6 +3426,10 @@ reload_env_stack() {
     echo "[run] reload-env: no env changes detected"
     return 0
   fi
+  if [[ "${STACK_MODE}" == "local-fast" && "${UI_STARTED:-0}" == "1" \
+    && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" ) ]]; then
+    ensure_local_fast_clerk_publishable_key
+  fi
 
   next_vite_pid="${VITE_PID:-}"
   next_convex_pid="${CONVEX_PID:-}"
@@ -4005,6 +4009,7 @@ Recovery and maintenance:
   logs                Follow the local parser container logs.
   reload-env          Restart the tracked stack after changing environment configuration.
                       Does not rebuild the Docker image.
+                      For local-fast, reacquires Clerk configuration before stopping Vite.
   rebuild-docker      Rebuild the parser/export image after Dockerfile or runtime
                       dependency changes, then restart and verify readiness.
   reset               Run down, remove stale containers owned by this worktree, and
