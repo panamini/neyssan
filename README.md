@@ -10,16 +10,28 @@ From a fresh clone:
 ```bash
 cp .env.example .env.local
 # Fill CONVEX_TEAM and CONVEX_PROJECT with the shared non-secret project slugs.
-cp my-app/.env.local.example my-app/.env.local
-# Ask a project owner for the correct public Clerk publishable key through the
-# established private team channel, then set VITE_CLERK_PUBLISHABLE_KEY.
+infisical login --domain=https://eu.infisical.com
+# Sign in with the GitHub account connected to the Twoweeks Infisical project.
 npm ci --prefix my-app
 ```
 
 The Clerk publishable key is browser-visible rather than a server secret, but
-it is environment-specific. Use the established team channel so the local app
-connects to the intended Clerk instance; never paste a real key into a tracked
-file, issue, test, or PR.
+it is environment-specific. When no usable local value is configured,
+`./run.sh doctor local-fast` and `./run.sh local-fast` retrieve only
+`VITE_CLERK_PUBLISHABLE_KEY` from the Infisical `dev` root and export it to the
+child process in memory. The value is not written to an environment file or
+printed.
+
+To override the shared value locally, create the ignored app environment file:
+
+```bash
+cp my-app/.env.local.example my-app/.env.local
+# Set VITE_CLERK_PUBLISHABLE_KEY to the intended Clerk instance.
+```
+
+An exported value or supported local environment value takes precedence, so
+Infisical is not contacted when an override is already usable. Never paste a
+real value into a tracked file, issue, test, or PR.
 
 Start the local Docker engine before continuing:
 
@@ -54,8 +66,13 @@ The root `.env.local` is the canonical operator configuration. Keep
 `my-app/.env.local.example`.
 
 The existing `./run.sh mcp-secret-sync` command is scoped to the private-beta
-OAuth client-secret digest. It does not populate `my-app/.env.local` or retrieve
-the Clerk publishable key.
+OAuth client-secret digest. The Clerk bootstrap is separate and does not change
+that command's precedence or derivation behavior.
+
+`run.sh` is development-only. Production servers must receive the same
+Infisical variable through a machine identity and their deployment
+environment/configuration; they must not run the local development stack to
+obtain it.
 
 ## Daily local commands
 

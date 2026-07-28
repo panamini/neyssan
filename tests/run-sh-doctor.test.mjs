@@ -48,6 +48,7 @@ function linkHostTools(binDirectory) {
     "dirname",
     "grep",
     "head",
+    "mkdir",
     "seq",
     "shasum",
     "stat",
@@ -169,6 +170,29 @@ exec ${JSON.stringify(process.execPath)} "\$@"
     join(binDirectory, "ps"),
     '#!/bin/sh\nprintf "%s\\n" "twoweeks-run-sh-${FAKE_PS_OWNER:-foreign-owner}:doctor-fixture"\n',
   );
+  writeExecutable(
+    join(binDirectory, "infisical"),
+    `#!/bin/sh
+if test -n "\${FAKE_INFISICAL_CALL_LOG:-}"; then printf '%s\\n' "$*" >> "\${FAKE_INFISICAL_CALL_LOG}"; fi
+case "\${FAKE_INFISICAL_MODE:-success}" in
+  success) printf '%s\\n' "\${FAKE_INFISICAL_VALUE:-pk_test_doctor_fixture_infisical}" ;;
+  login-failure)
+    printf '%s\\n' 'provider-login-output-must-not-leak'
+    printf '%s\\n' 'provider-login-error-must-not-leak' >&2
+    exit 1
+    ;;
+  permission-failure)
+    printf '%s\\n' 'provider-permission-output-must-not-leak'
+    printf '%s\\n' 'provider-permission-error-must-not-leak' >&2
+    exit 1
+    ;;
+  missing) exit 0 ;;
+  blank) printf '\\n' ;;
+  invalid) printf '%s\\n' 'not-a-clerk-key-provider-value-must-not-leak' ;;
+  *) exit 1 ;;
+esac
+`,
+  );
 
   writeFileSync(join(root, "cv_parser_service", "Dockerfile"), "FROM scratch\n");
   writeFileSync(
@@ -201,11 +225,25 @@ exec ${JSON.stringify(process.execPath)} "\$@"
   const appEnvFile = join(appDirectory, ".env.local");
   writeFileSync(
     appEnvFile,
-    "VITE_CLERK_PUBLISHABLE_KEY=doctor-fixture-public-key\n",
+    "VITE_CLERK_PUBLISHABLE_KEY=pk_test_doctor_fixture_public\n",
+  );
+  const infisicalConfigFile = join(root, ".infisical.json");
+  writeFileSync(
+    infisicalConfigFile,
+    `${JSON.stringify(
+      {
+        workspaceId: "11111111-1111-4111-8111-111111111111",
+        defaultEnvironment: "dev",
+        gitBranchToEnvironmentMapping: null,
+        domain: "https://eu.infisical.com",
+      },
+      null,
+      2,
+    )}\n`,
   );
 
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  return { root, binDirectory, envFile, appEnvFile };
+  return { root, binDirectory, envFile, appEnvFile, infisicalConfigFile };
 }
 
 function installDependencyFixture(root, name) {
@@ -327,13 +365,15 @@ test("doctor defaults to a successful, read-only local-fast check", (t) => {
   const fixture = createFixture(t);
   const bindingBefore = readFileSync(fixture.envFile, "utf8");
   const appEnvBefore = readFileSync(fixture.appEnvFile, "utf8");
+  const callLog = join(fixture.root, "infisical-calls.log");
 
-  const result = runDoctor(fixture);
+  const result = runDoctor(fixture, [], { FAKE_INFISICAL_CALL_LOG: callLog });
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /local-fast/i);
   assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is configured/i);
-  assert.doesNotMatch(result.output, /doctor-fixture-public-key/);
+  assert.doesNotMatch(result.output, /pk_test_doctor_fixture_public/);
+  assert.equal(existsSync(callLog), false, "local app key must bypass Infisical");
   assert.equal(readFileSync(fixture.envFile, "utf8"), bindingBefore);
   assert.equal(readFileSync(fixture.appEnvFile, "utf8"), appEnvBefore);
   for (const directory of generatedDirectories) {
@@ -345,29 +385,143 @@ test("doctor defaults to a successful, read-only local-fast check", (t) => {
   }
 });
 
-test("doctor local-fast blocks when the Clerk publishable key is missing", (t) => {
+test("doctor local-fast uses an exported Clerk key without calling Infisical", (t) => {
   const fixture = createFixture(t);
   rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const exportedValue = "pk_test_doctor_fixture_exported";
 
-  const result = runDoctor(fixture, ["local-fast"]);
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    VITE_CLERK_PUBLISHABLE_KEY: exportedValue,
+  });
 
-  assertFailure(result);
-  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is missing or blank/i);
-  assert.match(
-    result.output,
-    /cp my-app\/\.env\.local\.example my-app\/\.env\.local/i,
-  );
-  assert.match(result.output, /ask a project owner/i);
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is configured/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(exportedValue)));
+  assert.equal(existsSync(callLog), false, "exported key must bypass Infisical");
 });
 
-test("doctor local-fast blocks when the Clerk publishable key is blank", (t) => {
+test("doctor local-fast retrieves only the Clerk key from Infisical in memory", (t) => {
   const fixture = createFixture(t);
-  writeFileSync(fixture.appEnvFile, "VITE_CLERK_PUBLISHABLE_KEY=\n");
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const retrievedValue = "pk_test_doctor_fixture_retrieved";
+  const rootEnvBefore = readFileSync(fixture.envFile, "utf8");
+  const configBefore = readFileSync(fixture.infisicalConfigFile, "utf8");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_VALUE: retrievedValue,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /available from Infisical for in-memory use/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(retrievedValue)));
+  assert.equal(existsSync(fixture.appEnvFile), false);
+  assert.equal(readFileSync(fixture.envFile, "utf8"), rootEnvBefore);
+  assert.equal(readFileSync(fixture.infisicalConfigFile, "utf8"), configBefore);
+  for (const directory of generatedDirectories) {
+    assert.equal(
+      existsSync(join(fixture.root, directory)),
+      false,
+      `doctor wrote runtime state to ${directory}`,
+    );
+  }
+  const calls = readFileSync(callLog, "utf8");
+  assert.match(calls, /^secrets get VITE_CLERK_PUBLISHABLE_KEY /);
+  assert.match(calls, /--projectId=11111111-1111-4111-8111-111111111111/);
+  assert.match(calls, /--env=dev/);
+  assert.match(calls, /--path=\//);
+  assert.match(calls, /--domain=https:\/\/eu\.infisical\.com/);
+  assert.match(calls, /--plain/);
+  assert.match(calls, /--silent/);
+  assert.match(calls, /--telemetry=false/);
+  assert.match(calls, /--expand=false/);
+  assert.match(calls, /--include-imports=false/);
+  assert.match(calls, /--secret-overriding=false/);
+  assert.doesNotMatch(calls, new RegExp(escapeRegExp(retrievedValue)));
+});
+
+test("doctor local-fast fails actionably when the Infisical CLI is absent", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  rmSync(join(fixture.binDirectory, "infisical"));
 
   const result = runDoctor(fixture, ["local-fast"]);
 
   assertFailure(result);
-  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is missing or blank/i);
+  assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/i);
+  assert.match(result.output, /ignored my-app\/\.env\.local/i);
+});
+
+test("doctor local-fast suppresses Infisical failures and unusable values", (t) => {
+  for (const mode of [
+    "login-failure",
+    "permission-failure",
+    "missing",
+    "blank",
+    "invalid",
+  ]) {
+    const fixture = createFixture(t);
+    rmSync(fixture.appEnvFile);
+    const result = runDoctor(fixture, ["local-fast"], {
+      FAKE_INFISICAL_MODE: mode,
+    });
+
+    assertFailure(result);
+    assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/i);
+    assert.match(result.output, /ignored my-app\/\.env\.local/i);
+    assert.doesNotMatch(result.output, /provider-(?:login|permission)/i);
+    assert.doesNotMatch(result.output, /not-a-clerk-key-provider-value/i);
+  }
+});
+
+test("doctor local-fast rejects invalid Infisical project metadata without a provider call", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  writeFileSync(
+    fixture.infisicalConfigFile,
+    '{"workspaceId":"wrong","defaultEnvironment":"prod","domain":"https://example.invalid"}\n',
+  );
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/i);
+  assert.equal(existsSync(callLog), false, "invalid metadata must block before Infisical");
+});
+
+test("local-fast disables xtrace before expanding a retrieved Clerk key", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team
+CONVEX_PROJECT=doctor-fixture-project
+PARSER_RUNTIME_MODE=invalid
+set -x
+`,
+    { mode: 0o600 },
+  );
+  const retrievedValue = "pk_test_local_fast_xtrace_fixture";
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runScript(fixture, ["local-fast"], {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_VALUE: retrievedValue,
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /\+ set \+x/);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(retrievedValue)));
+  assert.match(
+    readFileSync(callLog, "utf8"),
+    /^secrets get VITE_CLERK_PUBLISHABLE_KEY /,
+  );
 });
 
 test("help gives a complete collaborator path without reading config or creating state", (t) => {
@@ -387,6 +541,7 @@ test("help gives a complete collaborator path without reading config or creating
   assert.match(result.output, /Recovery and maintenance:/);
   assert.match(result.output, /Troubleshooting order:/);
   assert.match(result.output, /run\.sh is for local development only/);
+  assert.match(result.output, /infisical login --domain=https:\/\/eu\.infisical\.com/);
   assert.match(result.output, /my-app\/\.env\.local\.example/);
   assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY/);
   assert.match(result.output, /does not enforce a quality threshold/);

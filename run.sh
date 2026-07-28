@@ -100,6 +100,9 @@ INFISICAL_MCP_DOMAIN="https://eu.infisical.com"
 INFISICAL_MCP_ENVIRONMENT="dev"
 INFISICAL_MCP_SECRET_PATH="/"
 INFISICAL_MCP_SECRET_KEY="MCP_OAUTH_PRODUCTION_CLIENT_SECRET"
+INFISICAL_CLERK_PROJECT_CONFIG_FILE="${ROOT_DIR}/.infisical.json"
+INFISICAL_CLERK_SECRET_PATH="/"
+INFISICAL_CLERK_SECRET_KEY="VITE_CLERK_PUBLISHABLE_KEY"
 
 if [[ "${READ_ONLY_COMMAND}" != "1" ]]; then
   mkdir -p "${STATE_DIR}" "${LOG_DIR}"
@@ -116,6 +119,125 @@ if [[ "${READ_ONLY_COMMAND}" != "1" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/
 fi
 
 # ===== Helpers =====
+clerk_publishable_key_is_valid() {
+  local value="${1:-}"
+  [[ ${#value} -ge 16 && ${#value} -le 1024 ]] || return 1
+  [[ "${value}" != *$'\n'* && "${value}" != *$'\r'* ]] || return 1
+  [[ "${value}" =~ ^pk_(test|live)_[A-Za-z0-9_+/=-]+$ ]]
+}
+
+local_fast_app_env_has_valid_clerk_key() {
+  node - "${ROOT_DIR}/my-app/.env.local" <<'NODE' >/dev/null 2>&1
+const fs = require("node:fs");
+const envPath = process.argv[2];
+if (!fs.existsSync(envPath)) process.exit(1);
+const source = fs.readFileSync(envPath, "utf8");
+if (source.includes("\r")) process.exit(1);
+let resolved;
+for (const line of source.split("\n")) {
+  const match = line.match(/^\s*(?:export[ \t]+)?VITE_CLERK_PUBLISHABLE_KEY=([\s\S]*)$/u);
+  if (!match) continue;
+  let raw = match[1].trim();
+  if (
+    (raw.startsWith('"') && raw.endsWith('"'))
+    || (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    raw = raw.slice(1, -1);
+  } else {
+    raw = raw.replace(/[ \t]+#.*$/u, "").trim();
+    if (/\s|[\\;$`|&<>()]/u.test(raw)) process.exit(1);
+  }
+  resolved = raw;
+}
+process.exit(
+  typeof resolved === "string"
+  && resolved.length >= 16
+  && resolved.length <= 1024
+  && /^pk_(?:test|live)_[A-Za-z0-9_+/=-]+$/u.test(resolved)
+    ? 0
+    : 1,
+);
+NODE
+}
+
+load_local_fast_clerk_key_from_infisical() {
+  local metadata=""
+  local project_id=""
+  local environment=""
+  local domain=""
+  local retrieved=""
+
+  command -v infisical >/dev/null 2>&1 || return 1
+  command -v node >/dev/null 2>&1 || return 1
+  if ! metadata="$(node - "${INFISICAL_CLERK_PROJECT_CONFIG_FILE}" <<'NODE' 2>/dev/null
+const fs = require("node:fs");
+const configPath = process.argv[2];
+const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+if (
+  !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(config.workspaceId)
+  || config.defaultEnvironment !== "dev"
+  || config.domain !== "https://eu.infisical.com"
+) {
+  process.exit(1);
+}
+process.stdout.write(`${config.workspaceId}\t${config.defaultEnvironment}\t${config.domain}`);
+NODE
+  )"; then
+    return 1
+  fi
+  IFS=$'\t' read -r project_id environment domain <<< "${metadata}"
+  [[ -n "${project_id}" && "${environment}" == "dev" && "${domain}" == "https://eu.infisical.com" ]] || return 1
+
+  if ! retrieved="$(
+    infisical secrets get "${INFISICAL_CLERK_SECRET_KEY}" \
+      --projectId="${project_id}" \
+      --env="${environment}" \
+      --path="${INFISICAL_CLERK_SECRET_PATH}" \
+      --domain="${domain}" \
+      --plain \
+      --silent \
+      --telemetry=false \
+      --expand=false \
+      --include-imports=false \
+      --secret-overriding=false 2>/dev/null
+  )"; then
+    unset retrieved
+    return 1
+  fi
+  if ! clerk_publishable_key_is_valid "${retrieved}"; then
+    unset retrieved
+    return 1
+  fi
+  VITE_CLERK_PUBLISHABLE_KEY="${retrieved}"
+  export VITE_CLERK_PUBLISHABLE_KEY
+  unset retrieved
+}
+
+local_fast_clerk_guidance() {
+  echo "VITE_CLERK_PUBLISHABLE_KEY is unavailable from local configuration and Infisical; run: infisical login --domain=https://eu.infisical.com, or configure the ignored my-app/.env.local" >&2
+}
+
+ensure_local_fast_clerk_publishable_key() {
+  # A sourced local env file can re-enable xtrace after the startup guard.
+  # Disable it before expanding either a local or retrieved browser key.
+  if [[ "$-" == *x* ]]; then
+    set +x
+  fi
+  if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}"; then
+    return 0
+  fi
+  if [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] \
+    && local_fast_app_env_has_valid_clerk_key; then
+    return 0
+  fi
+  if load_local_fast_clerk_key_from_infisical; then
+    return 0
+  fi
+  echo -n "[run] ERROR: " >&2
+  local_fast_clerk_guidance
+  return 1
+}
+
 map_platform() {
   case "$(uname -m)" in
     x86_64|amd64) echo "linux/amd64" ;;
@@ -1247,7 +1369,6 @@ NODE
           doctor_fail "${key} must be a valid Docker container name"
         elif [[ "${key}" == "VITE_CLERK_PUBLISHABLE_KEY" ]]; then
           DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID=1
-          doctor_fail "VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment"
         else
           doctor_fail "dotenv override for ${key} is not a supported literal"
         fi
@@ -1258,14 +1379,16 @@ NODE
 }
 
 doctor_check_local_fast_clerk_configuration() {
-  if [[ "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID:-0}" == "1" ]]; then
-    return 0
-  fi
-  if [[ -n "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY:-}" ]]; then
+  if [[ "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID:-0}" != "1" ]] \
+    && clerk_publishable_key_is_valid "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY:-}"; then
     doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is configured for the local app"
     return 0
   fi
-  doctor_fail "VITE_CLERK_PUBLISHABLE_KEY is missing or blank; run: cp my-app/.env.local.example my-app/.env.local, then ask a project owner for the correct public key through the established private team channel"
+  if load_local_fast_clerk_key_from_infisical; then
+    doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is available from Infisical for in-memory use"
+    return 0
+  fi
+  doctor_fail "$(local_fast_clerk_guidance 2>&1)"
 }
 
 doctor_check_runtime_path() {
@@ -3626,6 +3749,7 @@ local_convex_stack() {
 }
 
 local_fast_stack() {
+  ensure_local_fast_clerk_publishable_key
   up --ui --local-origin --local-convex --workspace-mount --parser-reload "$@"
 }
 
@@ -3761,9 +3885,11 @@ First-time collaborator setup:
   1. cp .env.example .env.local
   2. Set CONVEX_TEAM and CONVEX_PROJECT in root .env.local.
      These are shared project slugs, not secrets; ask a project owner for them.
-  3. cp my-app/.env.local.example my-app/.env.local
-     Set VITE_CLERK_PUBLISHABLE_KEY for signed-in app flows; it is client-visible,
-     not a server secret. Ask a project owner for the correct public key.
+  3. infisical login --domain=https://eu.infisical.com
+     Sign in with the GitHub account connected to the Twoweeks Infisical project.
+     local-fast retrieves the public Clerk key in memory when no usable local
+     override exists. For an override, copy my-app/.env.local.example to the
+     ignored my-app/.env.local and set VITE_CLERK_PUBLISHABLE_KEY there.
   4. npm ci --prefix my-app
   5. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
   6. ./run.sh doctor local-fast
