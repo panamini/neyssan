@@ -172,6 +172,7 @@ load_local_fast_clerk_key_from_infisical() {
   local environment=""
   local domain=""
   local retrieved=""
+  local infisical_status=0
 
   command -v infisical >/dev/null 2>&1 || return 1
   command -v node >/dev/null 2>&1 || return 1
@@ -194,7 +195,7 @@ NODE
   IFS=$'\t' read -r project_id environment domain <<< "${metadata}"
   [[ -n "${project_id}" && "${environment}" == "dev" && "${domain}" == "https://eu.infisical.com" ]] || return 1
 
-  if ! retrieved="$(
+  retrieved="$(
     infisical secrets get "${INFISICAL_CLERK_SECRET_KEY}" \
       --projectId="${project_id}" \
       --env="${environment}" \
@@ -206,7 +207,9 @@ NODE
       --expand=false \
       --include-imports=false \
       --secret-overriding=false 2>/dev/null
-  )"; then
+  )" || infisical_status=$?
+  unset INFISICAL_TOKEN
+  if [[ "${infisical_status}" != "0" ]]; then
     unset retrieved
     return 1
   fi
@@ -230,10 +233,12 @@ ensure_local_fast_clerk_publishable_key() {
     set +x
   fi
   if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}"; then
+    unset INFISICAL_TOKEN
     return 0
   fi
   if [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] \
     && local_fast_app_env_has_valid_clerk_key; then
+    unset INFISICAL_TOKEN
     return 0
   fi
   if load_local_fast_clerk_key_from_infisical; then
@@ -269,6 +274,7 @@ bootstrap() {
   fi
   if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}" \
     || { [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] && local_fast_app_env_has_valid_clerk_key; }; then
+    ensure_local_fast_clerk_publishable_key
     echo "[run] bootstrap: Clerk configuration is already available; no Infisical login needed"
     doctor local-fast
     return
@@ -286,13 +292,16 @@ bootstrap() {
     doctor local-fast
     return
   fi
+  if [[ -n "${CI:-}" ]]; then
+    echo "[run] ERROR: non-interactive bootstrap requires a scoped INFISICAL_TOKEN; cached Infisical sessions are disabled in CI" >&2
+    return 1
+  fi
   if load_local_fast_clerk_key_from_infisical; then
     echo "[run] bootstrap: existing Infisical session is ready"
     doctor local-fast
     return
   fi
-  if [[ -n "${CI:-}" ]] \
-    || { [[ "${allow_browser_login}" != "1" ]] && { [[ ! -t 0 ]] || [[ ! -t 1 ]]; }; }; then
+  if [[ "${allow_browser_login}" != "1" ]] && { [[ ! -t 0 ]] || [[ ! -t 1 ]]; }; then
     echo "[run] ERROR: non-interactive bootstrap requires a scoped INFISICAL_TOKEN; browser login is disabled" >&2
     return 1
   fi
@@ -3671,6 +3680,9 @@ up() {
   if [[ -n "${STACK_MODE_OVERRIDE:-}" ]]; then
     TARGET_STACK_MODE="${STACK_MODE_OVERRIDE}"
   fi
+  if [[ "${TARGET_STACK_MODE}" == "local-fast" || "${TARGET_STACK_MODE}" == "local-convex" ]]; then
+    ensure_local_fast_clerk_publishable_key
+  fi
 
   if handle_existing_stack_request \
     "${TARGET_STACK_MODE}" \
@@ -3836,7 +3848,6 @@ local_convex_stack() {
 }
 
 local_fast_stack() {
-  ensure_local_fast_clerk_publishable_key
   up --ui --local-origin --local-convex --workspace-mount --parser-reload "$@"
 }
 
@@ -3903,6 +3914,9 @@ rebuild_docker_stack() {
     restart_mode="local-convex"
   elif [[ -n "${VITE_PID:-}" ]]; then
     restart_mode="local"
+  fi
+  if [[ "${restart_mode}" == "local-fast" || "${restart_mode}" == "local-convex" ]]; then
+    ensure_local_fast_clerk_publishable_key
   fi
 
   echo "[run] rebuild-docker: rebuilding parser/runtime image"
@@ -3972,12 +3986,12 @@ First-time collaborator setup:
   1. cp .env.example .env.local
   2. Set CONVEX_TEAM and CONVEX_PROJECT in root .env.local.
      These are shared project slugs, not secrets; ask a project owner for them.
-  3. ./run.sh bootstrap
+  3. npm ci --prefix my-app
+  4. ./run.sh bootstrap
      Reuses an existing Infisical session or opens the one-time browser login.
      Git repository access and Infisical project access are granted separately.
      For an override, copy my-app/.env.local.example to the ignored
      my-app/.env.local and set VITE_CLERK_PUBLISHABLE_KEY there.
-  4. npm ci --prefix my-app
   5. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
   6. ./run.sh doctor local-fast
   7. ./run.sh local-fast
@@ -4000,6 +4014,7 @@ Infisical authentication:
                        the browser flow; this flag never overrides CI fail-closed behavior.
   Headless/CI          Inject a short-lived INFISICAL_TOKEN from the host, CI provider,
                        Infisical Agent, or init process before bootstrap/local-fast.
+                       CI ignores cached sessions; the token is cleared after the scoped read.
   Docker               Keep machine credentials and tokens outside every image and layer.
                        The parser container does not consume the Clerk publishable key.
   Production Vite      Inject VITE_CLERK_PUBLISHABLE_KEY into the frontend build job.
@@ -4012,6 +4027,7 @@ Recovery and maintenance:
                       For local-fast, reacquires Clerk configuration before stopping Vite.
   rebuild-docker      Rebuild the parser/export image after Dockerfile or runtime
                       dependency changes, then restart and verify readiness.
+                      Local-fast restarts validate Clerk configuration before teardown.
   reset               Run down, remove stale containers owned by this worktree, and
                       clear local dev-stack state. Keeps images and dependency caches.
 

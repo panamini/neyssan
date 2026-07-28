@@ -508,6 +508,32 @@ test("local-fast env reload keeps Vite running when Clerk configuration cannot b
   );
 });
 
+test("local-fast Docker rebuild keeps the running stack when Clerk configuration cannot be reacquired", (t) => {
+  const fixture = createFixture(t);
+  const expectedOwner = ownerId(fixture.root);
+  const vite = startSleeper(t);
+  writeFileSync(fixture.dockerContainerFile, "running\n");
+  const stateFile = writeState(fixture.root, {
+    VITE_PID: String(vite.pid),
+    PARSER_STARTED: "1",
+    STACK_MODE: "local-fast",
+    UI_STARTED: "1",
+  });
+
+  const result = runCommand(fixture, "rebuild-docker", {
+    FAKE_DOCKER_OWNER: expectedOwner,
+    FAKE_INFISICAL_MODE: "failure",
+    FAKE_LSOF_BUSY: "1",
+    FAKE_PS_COMMAND: `twoweeks-run-sh-${expectedOwner.slice(0, 16)}:vite`,
+  });
+
+  assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(`${result.stdout}${result.stderr}`, /VITE_CLERK_PUBLISHABLE_KEY is unavailable/i);
+  assert.equal(processIsAlive(vite.pid), true);
+  assert.equal(readFileSync(fixture.dockerContainerFile, "utf8"), "running\n");
+  assert.match(readFileSync(stateFile, "utf8"), new RegExp(`^VITE_PID=${vite.pid}$`, "mu"));
+});
+
 test("run.sh exposes no global process-kill recovery path", () => {
   const source = readFileSync(sourceRunScript, "utf8");
   assert.doesNotMatch(source, /kill_vite_ports|kill-vite-ports|pgrep\s+-f/u);

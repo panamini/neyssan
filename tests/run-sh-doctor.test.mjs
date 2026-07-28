@@ -142,6 +142,14 @@ esac
   writeExecutable(
     join(binDirectory, "node"),
     `#!/bin/sh
+if test -n "\${FAKE_DOWNSTREAM_TOKEN_LOG:-}" \
+  && { test "\${1:-}" = --version || test "\${1:-}" = -v; }; then
+  if test -n "\${INFISICAL_TOKEN+x}"; then
+    printf '%s\n' set >> "\${FAKE_DOWNSTREAM_TOKEN_LOG}"
+  else
+    printf '%s\n' unset >> "\${FAKE_DOWNSTREAM_TOKEN_LOG}"
+  fi
+fi
 case "\${1:-}" in
   --version|-v) printf '%s\\n' "\${FAKE_NODE_VERSION:-v20.0.0}"; exit 0 ;;
   -e|-)
@@ -564,15 +572,26 @@ test("bootstrap is idempotent when a valid local Clerk override already exists",
   const bindingBefore = readFileSync(fixture.envFile, "utf8");
   const appEnvBefore = readFileSync(fixture.appEnvFile, "utf8");
   const callLog = join(fixture.root, "infisical-calls.log");
+  const downstreamTokenLog = join(fixture.root, "downstream-token.log");
+  const inheritedToken = "fixture-machine-token-must-not-propagate";
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const result = runBootstrap(fixture, { FAKE_INFISICAL_CALL_LOG: callLog });
+    const result = runBootstrap(fixture, {
+      FAKE_DOWNSTREAM_TOKEN_LOG: downstreamTokenLog,
+      FAKE_INFISICAL_CALL_LOG: callLog,
+      INFISICAL_TOKEN: inheritedToken,
+    });
     assert.equal(result.status, 0, result.output);
     assert.match(result.output, /already available; no Infisical login needed/i);
     assert.doesNotMatch(result.output, /pk_test_doctor_fixture_public/u);
+    assert.doesNotMatch(result.output, new RegExp(inheritedToken));
   }
 
   assert.equal(existsSync(callLog), false, "local override must bypass Infisical");
+  assert.deepEqual(
+    new Set(readFileSync(downstreamTokenLog, "utf8").trim().split("\n")),
+    new Set(["unset"]),
+  );
   assert.equal(readFileSync(fixture.envFile, "utf8"), bindingBefore);
   assert.equal(readFileSync(fixture.appEnvFile, "utf8"), appEnvBefore);
   for (const directory of generatedDirectories) {
@@ -689,21 +708,22 @@ test("bootstrap never permits browser login in CI even with the local non-TTY ov
     {
       CI: "1",
       FAKE_INFISICAL_CALL_LOG: callLog,
-      FAKE_INFISICAL_MODE: "requires-login",
+      FAKE_INFISICAL_MODE: "success",
     },
     ["--allow-browser-login"],
   );
 
   assertFailure(result);
   assert.match(result.output, /non-interactive bootstrap requires a scoped INFISICAL_TOKEN/i);
-  const calls = readFileSync(callLog, "utf8").trim().split("\n");
-  assert.equal(calls.filter((call) => /^login/u.test(call)).length, 0);
+  assert.match(result.output, /cached Infisical sessions are disabled in CI/i);
+  assert.equal(existsSync(callLog), false);
 });
 
 test("bootstrap consumes a headless INFISICAL_TOKEN without opening login", (t) => {
   const fixture = createFixture(t);
   rmSync(fixture.appEnvFile);
   const callLog = join(fixture.root, "infisical-calls.log");
+  const downstreamTokenLog = join(fixture.root, "downstream-token.log");
   const token = "headless-machine-token-must-not-print";
   const retrievedValue = "pk_test_bootstrap_headless_token_fixture";
 
@@ -712,6 +732,7 @@ test("bootstrap consumes a headless INFISICAL_TOKEN without opening login", (t) 
     FAKE_INFISICAL_EXPECTED_TOKEN: token,
     FAKE_INFISICAL_MODE: "token-required",
     FAKE_INFISICAL_VALUE: retrievedValue,
+    FAKE_DOWNSTREAM_TOKEN_LOG: downstreamTokenLog,
     INFISICAL_TOKEN: token,
   });
 
@@ -724,6 +745,9 @@ test("bootstrap consumes a headless INFISICAL_TOKEN without opening login", (t) 
   const calls = readFileSync(callLog, "utf8").trim().split("\n");
   assert.equal(calls.length, 1);
   assert.match(calls[0], /^secrets get VITE_CLERK_PUBLISHABLE_KEY /u);
+  const downstreamTokenStates = readFileSync(downstreamTokenLog, "utf8").trim().split("\n");
+  assert.ok(downstreamTokenStates.length > 0);
+  assert.deepEqual(new Set(downstreamTokenStates), new Set(["unset"]));
 });
 
 test("bootstrap fails closed for a rejected headless token without interactive login", (t) => {
@@ -776,6 +800,10 @@ test("help gives a complete collaborator path without reading config or creating
   assert.match(result.output, /First-time collaborator setup:/);
   assert.match(result.output, /cp \.env\.example \.env\.local/);
   assert.match(result.output, /npm ci --prefix my-app/);
+  assert.ok(
+    result.output.indexOf("3. npm ci --prefix my-app")
+      < result.output.indexOf("4. ./run.sh bootstrap"),
+  );
   assert.match(result.output, /\.\/run\.sh doctor local-fast/);
   assert.match(result.output, /\.\/run\.sh local-fast/);
   assert.match(result.output, /Recovery and maintenance:/);
@@ -788,10 +816,13 @@ test("help gives a complete collaborator path without reading config or creating
   assert.match(result.output, /short-lived INFISICAL_TOKEN/i);
   assert.match(result.output, /Browser login requires a terminal/i);
   assert.match(result.output, /CI always fails closed/i);
+  assert.match(result.output, /CI ignores cached sessions/i);
+  assert.match(result.output, /token is cleared after the scoped read/i);
   assert.match(result.output, /--allow-browser-login/i);
   assert.match(result.output, /parser container does not consume the Clerk publishable key/i);
   assert.match(result.output, /Inject VITE_CLERK_PUBLISHABLE_KEY into the frontend build job/i);
   assert.match(result.output, /local-fast\s+Never opens an authentication window/i);
+  assert.match(result.output, /Local-fast restarts validate Clerk configuration before teardown/i);
   assert.match(result.output, /my-app\/\.env\.local\.example/);
   assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY/);
   assert.match(result.output, /does not enforce a quality threshold/);
