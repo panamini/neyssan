@@ -365,7 +365,7 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(runnerPath).not.toContain("readControlledProofOwnerConfig");
   });
 
-  it("binds both pending operator credentials to one shared proof session", () => {
+  it("partitions pending operator credentials by shared proof session", () => {
     const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
     const operatorRoutePath = viteSource.slice(
       viteSource.indexOf("async function respondToControlledSummaryProofOperatorTokenRoute"),
@@ -373,14 +373,16 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     );
 
     expect(operatorRoutePath).toContain(
-      "flight.pendingOperatorSessionId !== submitted.sessionId",
-    );
-    expect(operatorRoutePath).toContain('reason: "proof_session_mismatch"');
-    expect(operatorRoutePath).toContain(
-      "flight.pendingOperatorSessionId = submitted.sessionId",
+      "pendingSessions.get(submitted.sessionId)",
     );
     expect(operatorRoutePath).toContain(
-      "flight.pendingOperatorSessionId = undefined",
+      "pendingSessions.set(submitted.sessionId",
+    );
+    expect(operatorRoutePath).toContain(
+      "pendingSessions.delete(submitted.sessionId)",
+    );
+    expect(operatorRoutePath).toContain(
+      "MCP_SAFE_SUMMARY_MAX_PENDING_OPERATOR_SESSIONS",
     );
   });
 

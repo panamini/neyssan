@@ -1,6 +1,6 @@
 import React from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   createMcpSafeSummaryProofSessionId,
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OPERATOR_TOKEN_PATH,
@@ -15,16 +15,31 @@ type OperatorResponse = Readonly<Record<string, unknown>>;
 export function McpSafeSummaryProofOperatorPage(): JSX.Element {
   const { getToken } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [status, setStatus] = React.useState("Prêt à envoyer le bearer éphémère.");
   const role = readRole(location.search);
-  const proofSessionId = React.useMemo(
-    () => readProofSessionId(location.search) ??
-      (role === "A" ? createMcpSafeSummaryProofSessionId() : undefined),
-    [location.search, role],
-  );
+  const [generatedProofSessionId] = React.useState(createMcpSafeSummaryProofSessionId);
+  const providedProofSessionId = readProofSessionId(location.search);
+  const proofSessionId = providedProofSessionId ??
+    (role === "A" ? generatedProofSessionId : undefined);
   const operatorBHref = role === "A" && proofSessionId
     ? buildOperatorHref(location.pathname, location.search, "B", proofSessionId)
     : undefined;
+
+  React.useEffect(() => {
+    if (role !== "A" || providedProofSessionId || !proofSessionId) return;
+    void navigate(
+      buildOperatorHref(location.pathname, location.search, "A", proofSessionId),
+      { replace: true },
+    );
+  }, [
+    location.pathname,
+    location.search,
+    navigate,
+    proofSessionId,
+    providedProofSessionId,
+    role,
+  ]);
 
   const submit = React.useCallback(async () => {
     if (!role) {

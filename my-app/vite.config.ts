@@ -157,6 +157,7 @@ const PRE_AUTH_QUOTA_LIMIT = 60;
 const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
 const MCP_SAFE_SUMMARY_OPERATOR_TOKEN_MAX_REQUEST_BYTES = 8_192;
 const MCP_SAFE_SUMMARY_OPERATOR_TOKEN_TTL_MS = 60_000;
+const MCP_SAFE_SUMMARY_MAX_PENDING_OPERATOR_SESSIONS = 8;
 const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const PRIVATE_BETA_SUBJECT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const INVALID_CLIENT_SECRET_POST_POLICY = Object.freeze({
@@ -493,9 +494,10 @@ function handleLocalMcpDevMiddlewareRequest(
 
 type ControlledSummaryProofFlightState = {
   inFlight?: Promise<void>;
-  pendingOperatorCredentials?: Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
-  pendingOperatorSessionId?: string;
-  pendingOperatorCredentialsTimer?: ReturnType<typeof setTimeout>;
+  pendingOperatorSessions?: Map<string, Readonly<{
+    credentials: Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
+    timer: ReturnType<typeof setTimeout>;
+  }>>;
 };
 
 async function respondToControlledSummaryProofOperatorTokenRoute(
@@ -548,20 +550,22 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
+  const pendingSessions = flight.pendingOperatorSessions ?? new Map();
+  const pendingSession = pendingSessions.get(submitted.sessionId);
   if (
-    flight.pendingOperatorSessionId &&
-    flight.pendingOperatorSessionId !== submitted.sessionId
+    !pendingSession &&
+    pendingSessions.size >= MCP_SAFE_SUMMARY_MAX_PENDING_OPERATOR_SESSIONS
   ) {
-    sendLocalMcpJson(res, 409, {
+    sendLocalMcpJson(res, 429, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
-      reason: "proof_session_mismatch",
+      reason: "proof_session_capacity_reached",
       safeForModel: true,
       version: 1,
     });
     return;
   }
-  const pending = flight.pendingOperatorCredentials ?? {};
+  const pending = pendingSession?.credentials ?? {};
   if (pending[submitted.role]) {
     sendLocalMcpJson(res, 409, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
@@ -574,14 +578,21 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
   }
   const next = { ...pending, [submitted.role]: submitted.token } as Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
   if (!next.A || !next.B) {
-    flight.pendingOperatorCredentials = next;
-    flight.pendingOperatorSessionId = submitted.sessionId;
-    if (flight.pendingOperatorCredentialsTimer !== undefined) clearTimeout(flight.pendingOperatorCredentialsTimer);
-    flight.pendingOperatorCredentialsTimer = setTimeout(() => {
-      flight.pendingOperatorCredentials = undefined;
-      flight.pendingOperatorSessionId = undefined;
-      flight.pendingOperatorCredentialsTimer = undefined;
+    if (pendingSession) clearTimeout(pendingSession.timer);
+    let timer: ReturnType<typeof setTimeout>;
+    timer = setTimeout(() => {
+      const current = flight.pendingOperatorSessions?.get(submitted.sessionId);
+      if (current?.timer !== timer) return;
+      flight.pendingOperatorSessions?.delete(submitted.sessionId);
+      if (flight.pendingOperatorSessions?.size === 0) {
+        flight.pendingOperatorSessions = undefined;
+      }
     }, MCP_SAFE_SUMMARY_OPERATOR_TOKEN_TTL_MS);
+    pendingSessions.set(submitted.sessionId, Object.freeze({
+      credentials: next,
+      timer,
+    }));
+    flight.pendingOperatorSessions = pendingSessions;
     sendLocalMcpJson(res, 202, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "waiting_for_other_operator",
@@ -591,11 +602,10 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     return;
   }
 
-  flight.pendingOperatorCredentials = undefined;
-  flight.pendingOperatorSessionId = undefined;
-  if (flight.pendingOperatorCredentialsTimer !== undefined) {
-    clearTimeout(flight.pendingOperatorCredentialsTimer);
-    flight.pendingOperatorCredentialsTimer = undefined;
+  if (pendingSession) clearTimeout(pendingSession.timer);
+  pendingSessions.delete(submitted.sessionId);
+  if (pendingSessions.size === 0) {
+    flight.pendingOperatorSessions = undefined;
   }
   const credentials: McpSafeSummaryLiveAdapterOperatorCredentialV8 = Object.freeze({ A: next.A, B: next.B });
   let runPromise: Promise<void>;

@@ -99,6 +99,7 @@ describe("mcp safe-summary operator credential transport", () => {
     );
     expect(pageSource).toContain("Ouvrir ou copier le lien opérateur B");
     expect(pageSource).toContain('params.set("proofSession", proofSessionId)');
+    expect(pageSource).toContain("{ replace: true }");
   });
 
   it("renders only the bounded first-call classification fields", () => {
