@@ -12,6 +12,10 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import { writeStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
 import { PROPOSAL_EXTENSION_INSTALL_LINK } from "../../lib/proposal-source-platforms";
+import {
+  ForgeTemplatePanelProvider,
+  useForgeTemplatePanel,
+} from "../../contexts/ForgeTemplatePanelContext";
 
 const mockLoadCv = vi.fn();
 const mockImportCv = vi.fn();
@@ -46,6 +50,19 @@ const mockAttachedCv = {
     },
   ],
 } as any;
+
+function TestForgePanel(): JSX.Element | null {
+  const { activeRegistration, open } = useForgeTemplatePanel();
+  if (!open || !activeRegistration) return null;
+
+  return (
+    <aside aria-label={activeRegistration.ariaLabel ?? activeRegistration.title}>
+      {activeRegistration.kind === "custom"
+        ? activeRegistration.renderContent()
+        : null}
+    </aside>
+  );
+}
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -185,9 +202,11 @@ vi.mock("../../components/ProposalInputForm", () => ({
   default: ({
     onActiveCvChange,
     cvPickerOpen,
+    onCvPickerOpenChange,
   }: {
     onActiveCvChange?: (cvId: string | null) => void;
     cvPickerOpen?: boolean;
+    onCvPickerOpenChange?: (open: boolean) => void;
   }) => (
     <div>
       <div>{cvPickerOpen ? "CV picker open" : "CV picker closed"}</div>
@@ -218,6 +237,9 @@ vi.mock("../../components/ProposalInputForm", () => ({
         }}
       >
         Remove CV from form
+      </button>
+      <button type="button" onClick={() => onCvPickerOpenChange?.(true)}>
+        Choose resume from form
       </button>
     </div>
   ),
@@ -329,6 +351,28 @@ describe("ProposalForge attached CV sync", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("opens the Forge CV drawer when the hidden proposal form requests a resume", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ForgeTemplatePanelProvider>
+          <ProposalForge />
+          <TestForgePanel />
+        </ForgeTemplatePanelProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Choose resume from form",
+        hidden: true,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the cover-letter start surface on a blank compose entry", () => {
