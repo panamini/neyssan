@@ -83,6 +83,7 @@ import {
   buildMcpSafeSummaryProofOperatorResponse,
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OPERATOR_TOKEN_PATH,
   normalizeMcpSafeSummaryOperatorToken,
+  normalizeMcpSafeSummaryProofSessionId,
   type McpSafeSummaryProofOperatorRole,
 } from "./src/modules/local-mcp/mcpSafeSummaryProofOperatorContract";
 import {
@@ -493,6 +494,7 @@ function handleLocalMcpDevMiddlewareRequest(
 type ControlledSummaryProofFlightState = {
   inFlight?: Promise<void>;
   pendingOperatorCredentials?: Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
+  pendingOperatorSessionId?: string;
   pendingOperatorCredentialsTimer?: ReturnType<typeof setTimeout>;
 };
 
@@ -546,6 +548,19 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
+  if (
+    flight.pendingOperatorSessionId &&
+    flight.pendingOperatorSessionId !== submitted.sessionId
+  ) {
+    sendLocalMcpJson(res, 409, {
+      kind: "mcp_safe_summary_controlled_proof_operator_response",
+      status: "blocked",
+      reason: "proof_session_mismatch",
+      safeForModel: true,
+      version: 1,
+    });
+    return;
+  }
   const pending = flight.pendingOperatorCredentials ?? {};
   if (pending[submitted.role]) {
     sendLocalMcpJson(res, 409, {
@@ -560,9 +575,11 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
   const next = { ...pending, [submitted.role]: submitted.token } as Partial<Record<McpSafeSummaryProofOperatorRole, string>>;
   if (!next.A || !next.B) {
     flight.pendingOperatorCredentials = next;
+    flight.pendingOperatorSessionId = submitted.sessionId;
     if (flight.pendingOperatorCredentialsTimer !== undefined) clearTimeout(flight.pendingOperatorCredentialsTimer);
     flight.pendingOperatorCredentialsTimer = setTimeout(() => {
       flight.pendingOperatorCredentials = undefined;
+      flight.pendingOperatorSessionId = undefined;
       flight.pendingOperatorCredentialsTimer = undefined;
     }, MCP_SAFE_SUMMARY_OPERATOR_TOKEN_TTL_MS);
     sendLocalMcpJson(res, 202, {
@@ -575,6 +592,7 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
   }
 
   flight.pendingOperatorCredentials = undefined;
+  flight.pendingOperatorSessionId = undefined;
   if (flight.pendingOperatorCredentialsTimer !== undefined) {
     clearTimeout(flight.pendingOperatorCredentialsTimer);
     flight.pendingOperatorCredentialsTimer = undefined;
@@ -618,7 +636,7 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
 }
 
 function parseOperatorCredentialSubmission(bodyText: string):
-  | Readonly<{ role: McpSafeSummaryProofOperatorRole; token: string }>
+  | Readonly<{ role: McpSafeSummaryProofOperatorRole; token: string; sessionId: string }>
   | undefined {
   let value: unknown;
   try {
@@ -628,8 +646,9 @@ function parseOperatorCredentialSubmission(bodyText: string):
   }
   if (!isRecord(value) || (value.role !== "A" && value.role !== "B")) return undefined;
   const token = normalizeMcpSafeSummaryOperatorToken(value.token);
-  if (!token) return undefined;
-  return Object.freeze({ role: value.role, token });
+  const sessionId = normalizeMcpSafeSummaryProofSessionId(value.sessionId);
+  if (!token || !sessionId) return undefined;
+  return Object.freeze({ role: value.role, token, sessionId });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

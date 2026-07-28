@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useLocation } from "react-router-dom";
 import {
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OPERATOR_TOKEN_PATH,
+  normalizeMcpSafeSummaryProofSessionId,
   type McpSafeSummaryProofOperatorRole,
 } from "../modules/local-mcp/mcpSafeSummaryProofOperatorContract";
 import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from
@@ -15,10 +16,15 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
   const location = useLocation();
   const [status, setStatus] = React.useState("Prêt à envoyer le bearer éphémère.");
   const role = readRole(location.search);
+  const proofSessionId = readProofSessionId(location.search);
 
   const submit = React.useCallback(async () => {
     if (!role) {
       setStatus("Rôle manquant : utilisez ?role=A ou ?role=B.");
+      return;
+    }
+    if (!proofSessionId) {
+      setStatus("Session de preuve manquante.");
       return;
     }
     setStatus(`Vérification de l’opérateur ${role}…`);
@@ -32,14 +38,14 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
         method: "POST",
         credentials: "omit",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ role, token }),
+        body: JSON.stringify({ role, token, sessionId: proofSessionId }),
       });
       const payload = await response.json() as OperatorResponse;
       setStatus(formatOperatorResponse(payload, response.status));
     } catch {
       setStatus("Échec du pont opérateur.");
     }
-  }, [getToken, role]);
+  }, [getToken, proofSessionId, role]);
 
   if (!import.meta.env.DEV) {
     return <main>Unavailable.</main>;
@@ -49,7 +55,7 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
     <main style={{ maxWidth: 640, margin: "4rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
       <h1>MCP safe-summary — opérateur {role ?? "?"}</h1>
       <p>{status}</p>
-      <button type="button" onClick={() => void submit()} disabled={!role}>
+      <button type="button" onClick={() => void submit()} disabled={!role || !proofSessionId}>
         Envoyer la preuve éphémère
       </button>
     </main>
@@ -222,4 +228,10 @@ function readString(value: unknown): string | undefined {
 function readRole(search: string): McpSafeSummaryProofOperatorRole | undefined {
   const role = new URLSearchParams(search).get("role");
   return role === "A" || role === "B" ? role : undefined;
+}
+
+function readProofSessionId(search: string): string | undefined {
+  return normalizeMcpSafeSummaryProofSessionId(
+    new URLSearchParams(search).get("proofSession"),
+  );
 }

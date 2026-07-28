@@ -365,6 +365,25 @@ describe("CC-20260724-mcp-safe-summary-live-adapter v8", () => {
     expect(runnerPath).not.toContain("readControlledProofOwnerConfig");
   });
 
+  it("binds both pending operator credentials to one shared proof session", () => {
+    const viteSource = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
+    const operatorRoutePath = viteSource.slice(
+      viteSource.indexOf("async function respondToControlledSummaryProofOperatorTokenRoute"),
+      viteSource.indexOf("function parseOperatorCredentialSubmission"),
+    );
+
+    expect(operatorRoutePath).toContain(
+      "flight.pendingOperatorSessionId !== submitted.sessionId",
+    );
+    expect(operatorRoutePath).toContain('reason: "proof_session_mismatch"');
+    expect(operatorRoutePath).toContain(
+      "flight.pendingOperatorSessionId = submitted.sessionId",
+    );
+    expect(operatorRoutePath).toContain(
+      "flight.pendingOperatorSessionId = undefined",
+    );
+  });
+
   it("classifies only allowlisted first-call fields and drops free text and sensitive values", () => {
     const sensitive = "raw-bearer-or-private-identity-sentinel";
     const routeDiagnostic = classifyMcpSafeSummaryToolsCallResponseV8({

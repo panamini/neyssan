@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMcpSafeSummaryProofOperatorResponse,
   normalizeMcpSafeSummaryOperatorToken,
+  normalizeMcpSafeSummaryProofSessionId,
 } from "../mcpSafeSummaryProofOperatorContract";
 import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from "../mcpSafeSummaryProjectionProofHarness";
 import {
@@ -24,6 +25,15 @@ describe("mcp safe-summary operator credential transport", () => {
     expect(normalizeMcpSafeSummaryOperatorToken(`${TOKEN} extra`)).toBeUndefined();
     expect(normalizeMcpSafeSummaryOperatorToken(`${"a".repeat(8193)}`)).toBeUndefined();
     expect(normalizeMcpSafeSummaryOperatorToken(undefined)).toBeUndefined();
+  });
+
+  it("accepts only bounded URL-safe proof session identifiers", () => {
+    expect(normalizeMcpSafeSummaryProofSessionId("proof_session_20260728")).toBe(
+      "proof_session_20260728",
+    );
+    expect(normalizeMcpSafeSummaryProofSessionId("short")).toBeUndefined();
+    expect(normalizeMcpSafeSummaryProofSessionId("proof session 20260728")).toBeUndefined();
+    expect(normalizeMcpSafeSummaryProofSessionId("a".repeat(129))).toBeUndefined();
   });
 
   it("keeps the sanitized sequence available at the response root and under proof", () => {
