@@ -2,6 +2,7 @@ import React from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useLocation } from "react-router-dom";
 import {
+  createMcpSafeSummaryProofSessionId,
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OPERATOR_TOKEN_PATH,
   normalizeMcpSafeSummaryProofSessionId,
   type McpSafeSummaryProofOperatorRole,
@@ -16,7 +17,14 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
   const location = useLocation();
   const [status, setStatus] = React.useState("Prêt à envoyer le bearer éphémère.");
   const role = readRole(location.search);
-  const proofSessionId = readProofSessionId(location.search);
+  const proofSessionId = React.useMemo(
+    () => readProofSessionId(location.search) ??
+      (role === "A" ? createMcpSafeSummaryProofSessionId() : undefined),
+    [location.search, role],
+  );
+  const operatorBHref = role === "A" && proofSessionId
+    ? buildOperatorHref(location.pathname, location.search, "B", proofSessionId)
+    : undefined;
 
   const submit = React.useCallback(async () => {
     if (!role) {
@@ -55,6 +63,11 @@ export function McpSafeSummaryProofOperatorPage(): JSX.Element {
     <main style={{ maxWidth: 640, margin: "4rem auto", padding: "0 1rem", fontFamily: "sans-serif" }}>
       <h1>MCP safe-summary — opérateur {role ?? "?"}</h1>
       <p>{status}</p>
+      {operatorBHref ? (
+        <p>
+          <a href={operatorBHref}>Ouvrir ou copier le lien opérateur B</a>
+        </p>
+      ) : null}
       <button type="button" onClick={() => void submit()} disabled={!role || !proofSessionId}>
         Envoyer la preuve éphémère
       </button>
@@ -234,4 +247,16 @@ function readProofSessionId(search: string): string | undefined {
   return normalizeMcpSafeSummaryProofSessionId(
     new URLSearchParams(search).get("proofSession"),
   );
+}
+
+function buildOperatorHref(
+  pathname: string,
+  search: string,
+  role: McpSafeSummaryProofOperatorRole,
+  proofSessionId: string,
+): string {
+  const params = new URLSearchParams(search);
+  params.set("role", role);
+  params.set("proofSession", proofSessionId);
+  return `${pathname}?${params.toString()}`;
 }

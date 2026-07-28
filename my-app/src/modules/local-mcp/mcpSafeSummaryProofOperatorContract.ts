@@ -24,6 +24,10 @@ export function normalizeMcpSafeSummaryProofSessionId(value: unknown): string | 
   return SAFE_PROOF_SESSION_ID_PATTERN.test(sessionId) ? sessionId : undefined;
 }
 
+export function createMcpSafeSummaryProofSessionId(): string {
+  return globalThis.crypto.randomUUID().replace(/-/gu, "");
+}
+
 /**
  * Keep the sanitized proof sequence addressable at the response root as well
  * as under `proof`. This makes the operator page resilient to a transport

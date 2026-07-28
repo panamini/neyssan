@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildMcpSafeSummaryProofOperatorResponse,
+  createMcpSafeSummaryProofSessionId,
   normalizeMcpSafeSummaryOperatorToken,
   normalizeMcpSafeSummaryProofSessionId,
 } from "../mcpSafeSummaryProofOperatorContract";
@@ -34,6 +35,12 @@ describe("mcp safe-summary operator credential transport", () => {
     expect(normalizeMcpSafeSummaryProofSessionId("short")).toBeUndefined();
     expect(normalizeMcpSafeSummaryProofSessionId("proof session 20260728")).toBeUndefined();
     expect(normalizeMcpSafeSummaryProofSessionId("a".repeat(129))).toBeUndefined();
+  });
+
+  it("creates a valid session identifier for the role-A handoff link", () => {
+    expect(normalizeMcpSafeSummaryProofSessionId(
+      createMcpSafeSummaryProofSessionId(),
+    )).toMatch(/^[a-f0-9]{32}$/u);
   });
 
   it("keeps the sanitized sequence available at the response root and under proof", () => {
@@ -90,6 +97,8 @@ describe("mcp safe-summary operator credential transport", () => {
     expect(pageSource).toContain(
       'cleanup=${cleanupCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT}',
     );
+    expect(pageSource).toContain("Ouvrir ou copier le lien opérateur B");
+    expect(pageSource).toContain('params.set("proofSession", proofSessionId)');
   });
 
   it("renders only the bounded first-call classification fields", () => {
