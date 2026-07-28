@@ -133,6 +133,7 @@ clerk_publishable_key_is_valid() {
 }
 
 local_fast_app_env_has_valid_clerk_key() {
+  unset INFISICAL_TOKEN
   node - "${ROOT_DIR}/my-app/.env.local" <<'NODE' >/dev/null 2>&1
 const fs = require("node:fs");
 const envPath = process.argv[2];
@@ -166,6 +167,7 @@ NODE
 }
 
 load_local_fast_clerk_key_from_infisical() {
+  local infisical_token="${1:-${INFISICAL_TOKEN:-}}"
   local metadata=""
   local project_id=""
   local environment=""
@@ -173,6 +175,10 @@ load_local_fast_clerk_key_from_infisical() {
   local retrieved=""
   local infisical_status=0
 
+  unset INFISICAL_TOKEN
+  if [[ -n "${CI:-}" && -z "${infisical_token}" ]]; then
+    return 1
+  fi
   command -v infisical >/dev/null 2>&1 || return 1
   command -v node >/dev/null 2>&1 || return 1
   if ! metadata="$(node - "${INFISICAL_CLERK_PROJECT_CONFIG_FILE}" <<'NODE' 2>/dev/null
@@ -195,6 +201,12 @@ NODE
   [[ -n "${project_id}" && "${environment}" == "dev" && "${domain}" == "https://eu.infisical.com" ]] || return 1
 
   retrieved="$(
+    if [[ -n "${infisical_token}" ]]; then
+      INFISICAL_TOKEN="${infisical_token}"
+      export INFISICAL_TOKEN
+    else
+      unset INFISICAL_TOKEN
+    fi
     infisical secrets get "${INFISICAL_CLERK_SECRET_KEY}" \
       --projectId="${project_id}" \
       --env="${environment}" \
@@ -207,7 +219,7 @@ NODE
       --include-imports=false \
       --secret-overriding=false 2>/dev/null
   )" || infisical_status=$?
-  unset INFISICAL_TOKEN
+  unset infisical_token
   if [[ "${infisical_status}" != "0" ]]; then
     unset retrieved
     return 1
@@ -226,23 +238,28 @@ local_fast_clerk_guidance() {
 }
 
 ensure_local_fast_clerk_publishable_key() {
+  local infisical_token=""
   # A sourced local env file can re-enable xtrace after the startup guard.
   # Disable it before expanding either a local or retrieved browser key.
   if [[ "$-" == *x* ]]; then
     set +x
   fi
+  infisical_token="${1:-${INFISICAL_TOKEN:-}}"
+  unset INFISICAL_TOKEN
   if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}"; then
-    unset INFISICAL_TOKEN
+    unset infisical_token
     return 0
   fi
   if [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] \
     && local_fast_app_env_has_valid_clerk_key; then
-    unset INFISICAL_TOKEN
+    unset infisical_token
     return 0
   fi
-  if load_local_fast_clerk_key_from_infisical; then
+  if load_local_fast_clerk_key_from_infisical "${infisical_token}"; then
+    unset infisical_token
     return 0
   fi
+  unset infisical_token
   echo -n "[run] ERROR: " >&2
   local_fast_clerk_guidance
   return 1
@@ -250,6 +267,7 @@ ensure_local_fast_clerk_publishable_key() {
 
 bootstrap() {
   local allow_browser_login=0
+  local infisical_token="${INFISICAL_TOKEN:-}"
   local login_status=1
 
   case "${1:-}" in
@@ -271,9 +289,11 @@ bootstrap() {
   if [[ "$-" == *x* ]]; then
     set +x
   fi
+  unset INFISICAL_TOKEN
   if clerk_publishable_key_is_valid "${VITE_CLERK_PUBLISHABLE_KEY:-}" \
     || { [[ -z "${VITE_CLERK_PUBLISHABLE_KEY+x}" ]] && local_fast_app_env_has_valid_clerk_key; }; then
-    ensure_local_fast_clerk_publishable_key
+    ensure_local_fast_clerk_publishable_key "${infisical_token}"
+    unset infisical_token
     echo "[run] bootstrap: Clerk configuration is already available; no Infisical login needed"
     doctor local-fast
     return
@@ -282,11 +302,13 @@ bootstrap() {
     echo "[run] ERROR: Infisical CLI is required; install it, then rerun ./run.sh bootstrap" >&2
     return 1
   fi
-  if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
-    if ! load_local_fast_clerk_key_from_infisical; then
+  if [[ -n "${infisical_token}" ]]; then
+    if ! load_local_fast_clerk_key_from_infisical "${infisical_token}"; then
+      unset infisical_token
       echo "[run] ERROR: headless Infisical authentication failed; refresh the scoped INFISICAL_TOKEN and retry" >&2
       return 1
     fi
+    unset infisical_token
     echo "[run] bootstrap: Clerk configuration loaded from headless Infisical authentication"
     doctor local-fast
     return
@@ -1471,15 +1493,19 @@ NODE
 }
 
 doctor_check_local_fast_clerk_configuration() {
+  local infisical_token="${1:-}"
   if [[ "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID:-0}" != "1" ]] \
     && clerk_publishable_key_is_valid "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY:-}"; then
+    unset infisical_token
     doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is configured for the local app"
     return 0
   fi
-  if load_local_fast_clerk_key_from_infisical; then
+  if load_local_fast_clerk_key_from_infisical "${infisical_token}"; then
+    unset infisical_token
     doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is available from Infisical for in-memory use"
     return 0
   fi
+  unset infisical_token
   doctor_fail "$(local_fast_clerk_guidance 2>&1)"
 }
 
@@ -2059,11 +2085,13 @@ NODE
 doctor() {
   local target="${1:-local-fast}"
   local original_home="${HOME:-}"
+  local doctor_infisical_token="${INFISICAL_TOKEN:-}"
   local resolved_convex_cloud_port=""
   local resolved_convex_site_port=""
   local resolved_convex_url=""
   local convex_reusable=0
   local parser_reusable=0
+  unset INFISICAL_TOKEN
   if [[ "${target}" != "local-fast" && "${target}" != "mcp-private-beta" ]]; then
     echo "usage: ./run.sh doctor [local-fast|mcp-private-beta]" >&2
     return 2
@@ -2097,7 +2125,8 @@ doctor() {
     doctor_check_startup_env_literals || true
     doctor_load_runtime_overrides "${target}" || true
     if [[ "${target}" == "local-fast" ]]; then
-      doctor_check_local_fast_clerk_configuration
+      doctor_check_local_fast_clerk_configuration "${doctor_infisical_token}"
+      unset doctor_infisical_token
     fi
   fi
   resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
@@ -3431,7 +3460,8 @@ reload_env_stack() {
   if [[ "${binding_changed}" == "true" && "${CONVEX_MODE:-cloud}" == "local" ]]; then
     local_binding_changed="true"
   fi
-  if [[ "${STACK_MODE}" == "local-fast" && "${UI_STARTED:-0}" == "1" ]]; then
+  if [[ ( "${STACK_MODE}" == "local-fast" || "${STACK_MODE}" == "local-convex" ) \
+    && "${UI_STARTED:-0}" == "1" ]]; then
     ensure_local_fast_clerk_publishable_key
     clerk_refresh_needed="true"
   fi

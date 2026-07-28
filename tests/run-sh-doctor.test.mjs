@@ -142,8 +142,7 @@ esac
   writeExecutable(
     join(binDirectory, "node"),
     `#!/bin/sh
-if test -n "\${FAKE_DOWNSTREAM_TOKEN_LOG:-}" \
-  && { test "\${1:-}" = --version || test "\${1:-}" = -v; }; then
+if test -n "\${FAKE_DOWNSTREAM_TOKEN_LOG:-}"; then
   if test -n "\${INFISICAL_TOKEN+x}"; then
     printf '%s\n' set >> "\${FAKE_DOWNSTREAM_TOKEN_LOG}"
   else
@@ -442,6 +441,27 @@ test("doctor local-fast uses an exported Clerk key without calling Infisical", (
   assert.equal(existsSync(callLog), false, "exported key must bypass Infisical");
 });
 
+test("doctor clears a headless token before diagnostics when a local Clerk key is available", (t) => {
+  const fixture = createFixture(t);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const downstreamTokenLog = join(fixture.root, "downstream-token.log");
+  const token = "headless-token-doctor-local-key-fixture";
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOWNSTREAM_TOKEN_LOG: downstreamTokenLog,
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    INFISICAL_TOKEN: token,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(token)));
+  assert.equal(existsSync(callLog), false, "local app key must bypass Infisical");
+  assert.deepEqual(
+    new Set(readFileSync(downstreamTokenLog, "utf8").trim().split("\n")),
+    new Set(["unset"]),
+  );
+});
+
 test("doctor local-fast retrieves only the Clerk key from Infisical in memory", (t) => {
   const fixture = createFixture(t);
   rmSync(fixture.appEnvFile);
@@ -481,6 +501,56 @@ test("doctor local-fast retrieves only the Clerk key from Infisical in memory", 
   assert.match(calls, /--include-imports=false/);
   assert.match(calls, /--secret-overriding=false/);
   assert.doesNotMatch(calls, new RegExp(escapeRegExp(retrievedValue)));
+});
+
+test("doctor scopes a CI machine token to the Infisical read", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  const downstreamTokenLog = join(fixture.root, "downstream-token.log");
+  const token = "headless-token-doctor-ci-fixture";
+  const retrievedValue = "pk_test_doctor_ci_token_fixture";
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    CI: "1",
+    FAKE_DOWNSTREAM_TOKEN_LOG: downstreamTokenLog,
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_EXPECTED_TOKEN: token,
+    FAKE_INFISICAL_MODE: "token-required",
+    FAKE_INFISICAL_VALUE: retrievedValue,
+    INFISICAL_TOKEN: token,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /available from Infisical for in-memory use/i);
+  assert.doesNotMatch(
+    result.output,
+    new RegExp(`${escapeRegExp(token)}|${escapeRegExp(retrievedValue)}`),
+  );
+  assert.match(
+    readFileSync(callLog, "utf8"),
+    /^secrets get VITE_CLERK_PUBLISHABLE_KEY /u,
+  );
+  assert.deepEqual(
+    new Set(readFileSync(downstreamTokenLog, "utf8").trim().split("\n")),
+    new Set(["unset"]),
+  );
+});
+
+test("doctor local-fast rejects cached Infisical sessions in CI before a provider read", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    CI: "1",
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_MODE: "success",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /\.\/run\.sh bootstrap/i);
+  assert.equal(existsSync(callLog), false, "CI must reject before Infisical");
 });
 
 test("doctor local-fast fails actionably when the Infisical CLI is absent", (t) => {
@@ -527,15 +597,24 @@ test("doctor local-fast rejects invalid Infisical project metadata without a pro
     '{"workspaceId":"wrong","defaultEnvironment":"prod","domain":"https://example.invalid"}\n',
   );
   const callLog = join(fixture.root, "infisical-calls.log");
+  const downstreamTokenLog = join(fixture.root, "downstream-token.log");
+  const token = "headless-token-invalid-metadata-fixture";
 
   const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOWNSTREAM_TOKEN_LOG: downstreamTokenLog,
     FAKE_INFISICAL_CALL_LOG: callLog,
+    INFISICAL_TOKEN: token,
   });
 
   assertFailure(result);
   assert.match(result.output, /\.\/run\.sh bootstrap/i);
   assert.match(result.output, /INFISICAL_TOKEN/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(token)));
   assert.equal(existsSync(callLog), false, "invalid metadata must block before Infisical");
+  assert.deepEqual(
+    new Set(readFileSync(downstreamTokenLog, "utf8").trim().split("\n")),
+    new Set(["unset"]),
+  );
 });
 
 test("local-fast disables xtrace before expanding a retrieved Clerk key", (t) => {
@@ -551,16 +630,23 @@ set -x
     { mode: 0o600 },
   );
   const retrievedValue = "pk_test_local_fast_xtrace_fixture";
+  const token = "headless-token-local-fast-xtrace-fixture";
   const callLog = join(fixture.root, "infisical-calls.log");
 
   const result = runScript(fixture, ["local-fast"], {
     FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_EXPECTED_TOKEN: token,
+    FAKE_INFISICAL_MODE: "token-required",
     FAKE_INFISICAL_VALUE: retrievedValue,
+    INFISICAL_TOKEN: token,
   });
 
   assertFailure(result);
   assert.match(result.output, /\+ set \+x/);
-  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(retrievedValue)));
+  assert.doesNotMatch(
+    result.output,
+    new RegExp(`${escapeRegExp(token)}|${escapeRegExp(retrievedValue)}`),
+  );
   assert.match(
     readFileSync(callLog, "utf8"),
     /^secrets get VITE_CLERK_PUBLISHABLE_KEY /,
@@ -801,6 +887,22 @@ test("local-fast never opens an interactive login when Infisical access is missi
   assert.doesNotMatch(result.output, /provider-login/i);
   const calls = readFileSync(callLog, "utf8").trim().split("\n");
   assert.equal(calls.filter((call) => /^login/u.test(call)).length, 0);
+});
+
+test("local-fast rejects cached Infisical sessions in CI before a provider read", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runScript(fixture, ["local-fast"], {
+    CI: "1",
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_MODE: "success",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /\.\/run\.sh bootstrap/i);
+  assert.equal(existsSync(callLog), false, "CI must reject before Infisical");
 });
 
 test("help gives a complete collaborator path without reading config or creating state", (t) => {

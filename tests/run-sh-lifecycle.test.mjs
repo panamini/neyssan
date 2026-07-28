@@ -474,42 +474,47 @@ test("env reload Vite failure cleans only restarted resources and records conver
   assert.match(state, /^UI_STARTED=0$/mu);
 });
 
-test("local-fast env reload refreshes Vite for an Infisical-only Clerk change", async (t) => {
-  const fixture = createFixture(t);
-  const expectedOwner = ownerId(fixture.root);
-  const infisicalCallLog = join(fixture.root, "infisical.log");
-  const clerkValue = "pk_test_reload_env_remote_change_fixture";
-  const vite = startSleeper(t);
-  const stateFile = writeState(fixture.root, {
-    STACK_MODE: "local-fast",
-    UI_STARTED: "0",
-    ENV_HASH: "stale-env-hash",
-  });
+test("local app env reload refreshes Vite for an Infisical-only Clerk change", async (t) => {
+  for (const stackMode of ["local-fast", "local-convex"]) {
+    const fixture = createFixture(t);
+    const expectedOwner = ownerId(fixture.root);
+    const infisicalCallLog = join(fixture.root, "infisical.log");
+    const clerkValue = `pk_test_reload_env_remote_change_${stackMode.replace("-", "_")}_fixture`;
+    const vite = startSleeper(t);
+    const stateFile = writeState(fixture.root, {
+      STACK_MODE: stackMode,
+      UI_STARTED: "0",
+      ENV_HASH: "stale-env-hash",
+    });
 
-  const converge = runCommand(fixture, "reload-env");
-  assert.equal(converge.status, 0, `${converge.stdout}${converge.stderr}`);
-  const convergedState = readFileSync(stateFile, "utf8")
-    .replace(/^VITE_PID=.*$/mu, `VITE_PID=${vite.pid}`)
-    .replace(/^UI_STARTED=.*$/mu, "UI_STARTED=1");
-  writeFileSync(stateFile, convergedState);
+    const converge = runCommand(fixture, "reload-env");
+    assert.equal(converge.status, 0, `${stackMode}: ${converge.stdout}${converge.stderr}`);
+    const convergedState = readFileSync(stateFile, "utf8")
+      .replace(/^VITE_PID=.*$/mu, `VITE_PID=${vite.pid}`)
+      .replace(/^UI_STARTED=.*$/mu, "UI_STARTED=1");
+    writeFileSync(stateFile, convergedState);
 
-  const result = runCommand(fixture, "reload-env", {
-    FAKE_DOCKER_OWNER: expectedOwner,
-    FAKE_INFISICAL_CALL_LOG: infisicalCallLog,
-    FAKE_INFISICAL_VALUE: clerkValue,
-    FAKE_LSOF_BUSY: "1",
-    FAKE_PS_COMMAND: `twoweeks-run-sh-${expectedOwner.slice(0, 16)}:vite`,
-  });
-  await waitForExit(vite);
+    const result = runCommand(fixture, "reload-env", {
+      FAKE_DOCKER_OWNER: expectedOwner,
+      FAKE_INFISICAL_CALL_LOG: infisicalCallLog,
+      FAKE_INFISICAL_VALUE: clerkValue,
+      FAKE_LSOF_BUSY: "1",
+      FAKE_PS_COMMAND: `twoweeks-run-sh-${expectedOwner.slice(0, 16)}:vite`,
+    });
+    await waitForExit(vite);
 
-  assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`);
-  assert.match(`${result.stdout}${result.stderr}`, /Vite failed to restart during env reload/i);
-  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(clerkValue));
-  assert.match(
-    readFileSync(infisicalCallLog, "utf8"),
-    /^secrets get VITE_CLERK_PUBLISHABLE_KEY /mu,
-  );
-  assert.equal(processIsAlive(vite.pid), false);
+    assert.notEqual(result.status, 0, `${stackMode}: ${result.stdout}${result.stderr}`);
+    assert.match(
+      `${result.stdout}${result.stderr}`,
+      /Vite failed to restart during env reload/i,
+    );
+    assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(clerkValue));
+    assert.match(
+      readFileSync(infisicalCallLog, "utf8"),
+      /^secrets get VITE_CLERK_PUBLISHABLE_KEY /mu,
+    );
+    assert.equal(processIsAlive(vite.pid), false);
+  }
 });
 
 test("local-fast env reload keeps Vite running when Clerk configuration cannot be reacquired", (t) => {
