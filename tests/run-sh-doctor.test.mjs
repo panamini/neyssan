@@ -198,9 +198,14 @@ exec ${JSON.stringify(process.execPath)} "\$@"
     "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\n",
     { mode: 0o600 },
   );
+  const appEnvFile = join(appDirectory, ".env.local");
+  writeFileSync(
+    appEnvFile,
+    "VITE_CLERK_PUBLISHABLE_KEY=doctor-fixture-public-key\n",
+  );
 
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  return { root, binDirectory, envFile };
+  return { root, binDirectory, envFile, appEnvFile };
 }
 
 function installDependencyFixture(root, name) {
@@ -321,12 +326,16 @@ ${rootEnvExtra}`,
 test("doctor defaults to a successful, read-only local-fast check", (t) => {
   const fixture = createFixture(t);
   const bindingBefore = readFileSync(fixture.envFile, "utf8");
+  const appEnvBefore = readFileSync(fixture.appEnvFile, "utf8");
 
   const result = runDoctor(fixture);
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /local-fast/i);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is configured/i);
+  assert.doesNotMatch(result.output, /doctor-fixture-public-key/);
   assert.equal(readFileSync(fixture.envFile, "utf8"), bindingBefore);
+  assert.equal(readFileSync(fixture.appEnvFile, "utf8"), appEnvBefore);
   for (const directory of generatedDirectories) {
     assert.equal(
       existsSync(join(fixture.root, directory)),
@@ -334,6 +343,31 @@ test("doctor defaults to a successful, read-only local-fast check", (t) => {
       `doctor created ${directory}`,
     );
   }
+});
+
+test("doctor local-fast blocks when the Clerk publishable key is missing", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is missing or blank/i);
+  assert.match(
+    result.output,
+    /cp my-app\/\.env\.local\.example my-app\/\.env\.local/i,
+  );
+  assert.match(result.output, /ask a project owner/i);
+});
+
+test("doctor local-fast blocks when the Clerk publishable key is blank", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(fixture.appEnvFile, "VITE_CLERK_PUBLISHABLE_KEY=\n");
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY is missing or blank/i);
 });
 
 test("help gives a complete collaborator path without reading config or creating state", (t) => {

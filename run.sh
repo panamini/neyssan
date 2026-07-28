@@ -954,7 +954,7 @@ const allowed = [
   "LOCAL_CONVEX_STARTUP_TIMEOUT",
 ];
 if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
-else allowed.push("VITE_PORT");
+else allowed.push("VITE_PORT", "VITE_CLERK_PUBLISHABLE_KEY");
 const environment = { ...process.env, ROOT_DIR: rootDir };
 const resolved = new Map(allowed.map((key) => [key, environment[key] || ""]));
 
@@ -1085,8 +1085,22 @@ function parseValue(raw) {
 
 const invalid = new Set();
 const fatal = new Set();
+const appLocalEnvPath = path.join(rootDir, "my-app", ".env.local");
+const envPaths = [
+  path.join(rootDir, ".env"),
+  path.join(rootDir, ".env.local"),
+  path.join(rootDir, "my-app", ".env"),
+];
+if (target === "local-fast") envPaths.push(appLocalEnvPath);
 
-for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
+for (const envPath of envPaths) {
+  const isAppLocalEnv = envPath === appLocalEnvPath;
+  if (
+    isAppLocalEnv
+    && Object.prototype.hasOwnProperty.call(environment, "VITE_CLERK_PUBLISHABLE_KEY")
+  ) {
+    continue;
+  }
   if (!fs.existsSync(envPath)) continue;
   let source = "";
   try {
@@ -1102,7 +1116,7 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
       const [key, rawValue] = [match[1], match[2]];
       const value = parseValue(rawValue);
       if (value !== null) environment[key] = value;
-      if (!allowed.includes(key)) continue;
+      if (!allowed.includes(key) || (isAppLocalEnv && key !== "VITE_CLERK_PUBLISHABLE_KEY")) continue;
       if (value === null) {
         invalid.add(key);
         fatal.add(key);
@@ -1113,7 +1127,11 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
       continue;
     }
     const malformed = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]+=/u);
-    if (malformed && allowed.includes(malformed[1])) {
+    if (
+      malformed
+      && allowed.includes(malformed[1])
+      && (!isAppLocalEnv || malformed[1] === "VITE_CLERK_PUBLISHABLE_KEY")
+    ) {
       invalid.add(malformed[1]);
       fatal.add(malformed[1]);
     }
@@ -1193,6 +1211,7 @@ NODE
           CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="${decoded}" ;;
           LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="${decoded}" ;;
           LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="${decoded}" ;;
+          VITE_CLERK_PUBLISHABLE_KEY) DOCTOR_VITE_CLERK_PUBLISHABLE_KEY="${decoded}" ;;
         esac
         ;;
       EMPTY)
@@ -1216,6 +1235,7 @@ NODE
           CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="" ;;
           LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="" ;;
           LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="180" ;;
+          VITE_CLERK_PUBLISHABLE_KEY) DOCTOR_VITE_CLERK_PUBLISHABLE_KEY="" ;;
         esac
         ;;
       ERROR)
@@ -1225,6 +1245,9 @@ NODE
           doctor_fail "IMAGE_NAME must be a valid Docker image reference"
         elif [[ "${key}" == "PARSER_NAME" || "${key}" == "CLOUDFLARED_NAME" ]]; then
           doctor_fail "${key} must be a valid Docker container name"
+        elif [[ "${key}" == "VITE_CLERK_PUBLISHABLE_KEY" ]]; then
+          DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID=1
+          doctor_fail "VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment"
         else
           doctor_fail "dotenv override for ${key} is not a supported literal"
         fi
@@ -1232,6 +1255,17 @@ NODE
     esac
   done <<< "${parsed}"
   return 0
+}
+
+doctor_check_local_fast_clerk_configuration() {
+  if [[ "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID:-0}" == "1" ]]; then
+    return 0
+  fi
+  if [[ -n "${DOCTOR_VITE_CLERK_PUBLISHABLE_KEY:-}" ]]; then
+    doctor_pass "VITE_CLERK_PUBLISHABLE_KEY is configured for the local app"
+    return 0
+  fi
+  doctor_fail "VITE_CLERK_PUBLISHABLE_KEY is missing or blank; run: cp my-app/.env.local.example my-app/.env.local, then ask a project owner for the correct public key through the established private team channel"
 }
 
 doctor_check_runtime_path() {
@@ -1823,6 +1857,8 @@ doctor() {
   DOCTOR_FAILURES=0
   DOCTOR_WARNINGS=0
   DOCTOR_NODE_READY=0
+  DOCTOR_VITE_CLERK_PUBLISHABLE_KEY=""
+  DOCTOR_VITE_CLERK_PUBLISHABLE_KEY_INVALID=0
 
   echo "[run] doctor: checking ${target} (values are not printed)"
   doctor_check_platform
@@ -1845,6 +1881,9 @@ doctor() {
     DOCTOR_NODE_READY=1
     doctor_check_startup_env_literals || true
     doctor_load_runtime_overrides "${target}" || true
+    if [[ "${target}" == "local-fast" ]]; then
+      doctor_check_local_fast_clerk_configuration
+    fi
   fi
   resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
   resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT}"

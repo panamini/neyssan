@@ -10,8 +10,16 @@ From a fresh clone:
 ```bash
 cp .env.example .env.local
 # Fill CONVEX_TEAM and CONVEX_PROJECT with the shared non-secret project slugs.
+cp my-app/.env.local.example my-app/.env.local
+# Ask a project owner for the correct public Clerk publishable key through the
+# established private team channel, then set VITE_CLERK_PUBLISHABLE_KEY.
 npm ci --prefix my-app
 ```
+
+The Clerk publishable key is browser-visible rather than a server secret, but
+it is environment-specific. Use the established team channel so the local app
+connects to the intended Clerk instance; never paste a real key into a tracked
+file, issue, test, or PR.
 
 Start the local Docker engine before continuing:
 
@@ -36,9 +44,18 @@ starting anything.
 `CONVEX_TEAM` and `CONVEX_PROJECT` are project identifiers, not secrets. Keep
 real API keys and personal tokens out of git.
 
+The tracked `.env.example` and `my-app/.env.local.example` files are committed
+because they contain only configuration names, safe defaults, and blank
+placeholders. Real `.env.local` files remain Git-ignored because they hold
+machine-specific values and may also contain secrets.
+
 The root `.env.local` is the canonical operator configuration. Keep
 `my-app/.env.local` limited to app/Vite values as documented in
 `my-app/.env.local.example`.
+
+The existing `./run.sh mcp-secret-sync` command is scoped to the private-beta
+OAuth client-secret digest. It does not populate `my-app/.env.local` or retrieve
+the Clerk publishable key.
 
 ## Daily local commands
 
