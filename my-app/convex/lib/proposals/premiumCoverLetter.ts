@@ -1106,6 +1106,9 @@ const PREMIUM_FREE_PROSE_WRITER_OUTPUT_V1_SCHEMA = z
   .strict();
 
 const PREMIUM_FREE_PROSE_MIN_WORDS = 130;
+const PREMIUM_FREE_PROSE_MAX_WORDS = 210;
+const PREMIUM_FREE_PROSE_MIN_PARAGRAPHS = 3;
+const PREMIUM_FREE_PROSE_MAX_PARAGRAPHS = 4;
 const PREMIUM_FREE_PROSE_CANDIDATE_ASSERTION_PATTERN =
   /\b(?:I\s+(?:(?:also|previously|recently)\s+)?(?:achieved|built|coordinated|created|delivered|designed|developed|drove|earned|grew|had|have|implemented|improved|increased|launched|led|maintained|managed|owned|reduced|served|supported|trained|worked|was)|my\s+(?:background|career|experience|role|track record|work)\s+(?:covered|focused|included|involved|spanned|was))\b/iu;
 
@@ -1632,11 +1635,21 @@ function ensureSentenceEnding(value: string): string {
 }
 
 function splitSentences(value: string): string[] {
-  const matches = compactWhitespace(value).match(
-    /(?:(?:\d+\.\d+)|[^.!?\n])+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
+  const dottedTokenSentinel = "\uE000";
+  const compact = compactWhitespace(value);
+  const protectedDottedTokens = compact.replace(
+    /\b(?:U\.S|e\.g|i\.e)\.(?=(?:,\s*|\s+)\p{L})|\b[\p{L}\p{N}]+(?:\.[\p{L}\p{N}]+)+/gu,
+    (token) => token.replaceAll(".", dottedTokenSentinel),
+  );
+  const matches = protectedDottedTokens.match(
+    /[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
   );
   if (!matches) return [];
-  return matches.map((sentence) => compactWhitespace(sentence)).filter(Boolean);
+  return matches
+    .map((sentence) =>
+      compactWhitespace(sentence.replaceAll(dottedTokenSentinel, ".")),
+    )
+    .filter(Boolean);
 }
 
 function joinSentences(sentences: string[]): string {
@@ -4066,6 +4079,7 @@ function validatePremiumFreeProseEvidenceFact(args: {
   quote: string;
   allowedFactIds: ReadonlySet<string>;
   factById: ReadonlyMap<string, FactNodeV1>;
+  allowTranslatedEvidence: boolean;
 }): string[] {
   const fact = args.factById.get(args.factId);
   if (!fact || fact.source !== "cv") {
@@ -4076,6 +4090,7 @@ function validatePremiumFreeProseEvidenceFact(args: {
     issues.push("free_prose_fact_not_planned");
   }
   if (
+    !args.allowTranslatedEvidence &&
     !premiumTextSupportsCandidateFact({
       generatedText: args.quote,
       fact: {
@@ -4097,12 +4112,16 @@ function validatePremiumFreeProseEvidenceSpan(args: {
   bodyParts: CoverLetterBodyParts;
   allowedFactIds: ReadonlySet<string>;
   factById: ReadonlyMap<string, FactNodeV1>;
+  allowTranslatedEvidence: boolean;
 }): string[] {
   const normalizedQuote = normalizeProposalConstraintText(args.span.quote);
   if (!normalizedQuote || !args.normalizedLetter.includes(normalizedQuote)) {
     return ["free_prose_evidence_quote_not_in_letter"];
   }
   const issues: string[] = [];
+  if (splitSentences(args.span.quote).length !== 1) {
+    issues.push("free_prose_evidence_span_multiple_sentences");
+  }
   const belongsToOneSidecarPart = CLAIM_PLAN_SECTIONS.some((section) =>
     normalizeProposalConstraintText(args.bodyParts[section]).includes(
       normalizedQuote,
@@ -4119,6 +4138,7 @@ function validatePremiumFreeProseEvidenceSpan(args: {
         quote: args.span.quote,
         allowedFactIds: args.allowedFactIds,
         factById: args.factById,
+        allowTranslatedEvidence: args.allowTranslatedEvidence,
       }),
     ),
   ];
@@ -4149,6 +4169,34 @@ function hasUnsupportedPremiumFreeProseNumericClaim(args: {
 function countPremiumFreeProseWords(value: string): number {
   const compact = compactWhitespace(value);
   return compact ? compact.split(/\s+/u).length : 0;
+}
+
+function premiumFreeProseLetterShapeIssues(args: {
+  letter: string;
+  rawLetter: string;
+}): string[] {
+  const wordCount = countPremiumFreeProseWords(args.letter);
+  const paragraphCount = splitPremiumFreeProseParagraphs(args.rawLetter).length;
+  return [
+    ...(wordCount < PREMIUM_FREE_PROSE_MIN_WORDS
+      ? ["free_prose_letter_too_short"]
+      : []),
+    ...(wordCount > PREMIUM_FREE_PROSE_MAX_WORDS
+      ? ["free_prose_letter_too_long"]
+      : []),
+    ...(paragraphCount < PREMIUM_FREE_PROSE_MIN_PARAGRAPHS ||
+    paragraphCount > PREMIUM_FREE_PROSE_MAX_PARAGRAPHS
+      ? ["free_prose_paragraph_structure"]
+      : []),
+  ];
+}
+
+function splitPremiumFreeProseParagraphs(value: string): string[] {
+  return value
+    .replace(/\r\n?/gu, "\n")
+    .split(/\n\s*\n/gu)
+    .map((paragraph) => compactWhitespace(paragraph))
+    .filter(Boolean);
 }
 
 function premiumFreeProseSentenceMakesCandidateClaim(args: {
@@ -4214,9 +4262,10 @@ function validatePremiumFreeProseEvidenceSpans(args: {
     ...(!letter || !derivePremiumFreeProseBodyPartTexts(letter)
       ? ["free_prose_letter_structure"]
       : []),
-    ...(countPremiumFreeProseWords(letter) < PREMIUM_FREE_PROSE_MIN_WORDS
-      ? ["free_prose_letter_too_short"]
-      : []),
+    ...premiumFreeProseLetterShapeIssues({
+      letter,
+      rawLetter: args.writerOutput.letter ?? "",
+    }),
     ...(evidenceSpans.length === 0 ? ["free_prose_evidence_missing"] : []),
     ...(hasUncoveredPremiumFreeProseCandidateClaim({
       letter,
@@ -4232,6 +4281,7 @@ function validatePremiumFreeProseEvidenceSpans(args: {
         bodyParts,
         allowedFactIds,
         factById,
+        allowTranslatedEvidence: args.claimPlan.language !== "English",
       }),
     ),
     ...(hasUnsupportedPremiumFreeProseNumericClaim(args)
@@ -7024,6 +7074,7 @@ type ExactPremiumCoverLetterOpenAIArgs = {
   maxRetries?: number;
   maxOutputTokens?: number;
   reasoningEffort?: OpenAIProposalReasoningEffort;
+  dependencies?: Parameters<typeof generateOpenAIResponsesStructured>[0]["dependencies"];
   onResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
   ) => void;
@@ -7045,6 +7096,7 @@ export async function generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(
     maxOutputTokens: args.maxOutputTokens,
     reasoningEffort:
       args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
+    dependencies: args.dependencies,
     onResponseMetadata: args.onResponseMetadata,
   });
 }
@@ -7245,6 +7297,65 @@ function isPremiumFreeProseWriterSchema(
   return "letter" in properties && "evidenceSpans" in properties;
 }
 
+function premiumSchemaProperty(
+  value: unknown,
+  key: string,
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return (value as Record<string, unknown>)[key];
+}
+
+function premiumSchemaStringEnum(value: unknown): string[] | null {
+  const enumValues = premiumSchemaProperty(value, "enum");
+  if (!Array.isArray(enumValues) || enumValues.length === 0) return null;
+  const stringValues = enumValues.filter(
+    (enumValue): enumValue is string => typeof enumValue === "string",
+  );
+  return stringValues.length === enumValues.length ? stringValues : null;
+}
+
+function buildPremiumFreeProseWriterOutputV1ZodSchema(
+  schema: Record<string, unknown>,
+): z.ZodTypeAny {
+  const factIdItems = premiumSchemaProperty(
+    premiumSchemaProperty(
+      premiumSchemaProperty(
+        premiumSchemaProperty(schema, "properties"),
+        "evidenceSpans",
+      ),
+      "items",
+    ),
+    "properties",
+  );
+  const enumValues = premiumSchemaStringEnum(
+    premiumSchemaProperty(
+      premiumSchemaProperty(factIdItems, "factIds"),
+      "items",
+    ),
+  );
+  if (!enumValues) {
+    return PREMIUM_FREE_PROSE_WRITER_OUTPUT_V1_SCHEMA;
+  }
+  const factIdSchema = z.enum(enumValues as [string, ...string[]]);
+  return z
+    .object({
+      letter: z.string(),
+      evidenceSpans: z
+        .array(
+          z
+            .object({
+              quote: z.string(),
+              factIds: z.array(factIdSchema).min(1),
+            })
+            .strict(),
+        )
+        .min(1),
+    })
+    .strict();
+}
+
 function resolvePremiumCoverLetterOpenAIResponseFormat(args: {
   schema?: Record<string, unknown>;
 }): {
@@ -7263,7 +7374,7 @@ function resolvePremiumCoverLetterOpenAIResponseFormat(args: {
     return {
       name: "premium_free_prose_writer_output_v1",
       jsonSchema: args.schema,
-      zodSchema: PREMIUM_FREE_PROSE_WRITER_OUTPUT_V1_SCHEMA,
+      zodSchema: buildPremiumFreeProseWriterOutputV1ZodSchema(args.schema),
     };
   }
   return {

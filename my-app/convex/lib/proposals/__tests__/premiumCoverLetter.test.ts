@@ -23,6 +23,7 @@ import {
   evaluatePremiumCoverLetterQualityShadow,
   evaluatePremiumCoverLetterEligibility,
   extractOpenAIJsonPayload,
+  generatePremiumCoverLetterBodyPartsWithExactOpenAIModel,
   inferPremiumCoverLetterContextClass,
   isCoverLetterFreeProseSidecarV1Enabled,
   isCoverLetterQualityRepairV1Enabled,
@@ -9125,5 +9126,284 @@ describe("premium free-prose Codex review regressions", () => {
     expect(result).not.toBeNull();
     expect(result?.content).toContain("3.5%");
     expect(result?.content).not.toContain("3. 5%");
+  });
+});
+
+describe("premium free-prose follow-up review regressions", () => {
+  it("rejects an evidence span that combines supported and unsupported sentences", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const migrationFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Led a design system migration"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const { factualSentences, letter } = buildFreeProseFixture({
+      additionalCandidateSentence: "I launched a mentoring program.",
+    });
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter,
+        evidenceSpans: [
+          { quote: factualSentences.conversion, factIds: [conversionFactId] },
+          {
+            quote: `${factualSentences.migration} I launched a mentoring program.`,
+            factIds: [migrationFactId],
+          },
+          { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(result).toBeNull();
+    expect(failures.flatMap((failure) => failure.issues ?? [])).toContain(
+      "free_prose_evidence_span_multiple_sentences",
+    );
+  });
+
+  it("accepts translated evidence when the requested output language differs", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const migrationFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Led a design system migration"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const { factualSentences: englishSentences, letter: englishLetter } =
+      buildFreeProseFixture();
+    const translatedSentences = {
+      conversion:
+        "Chez Orbit, j'ai amélioré la conversion des inscriptions après des expérimentations d'interface itératives, donnant aux équipes produit une vision plus claire des leviers d'action.",
+      migration:
+        "J'ai aussi piloté une migration de design system utilisée par quatre équipes produit, ce qui a maintenu la cohérence des interfaces partagées.",
+      dashboards:
+        "J'ai construit des tableaux de bord d'expérimentation utilisés par les équipes produit et croissance, afin que les mêmes éléments guident la livraison et l'itération.",
+    };
+    const letter = englishLetter
+      .replace(englishSentences.conversion, translatedSentences.conversion)
+      .replace(englishSentences.migration, translatedSentences.migration)
+      .replace(englishSentences.dashboards, translatedSentences.dashboards);
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "French",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter,
+        evidenceSpans: [
+          { quote: translatedSentences.conversion, factIds: [conversionFactId] },
+          { quote: translatedSentences.migration, factIds: [migrationFactId] },
+          { quote: translatedSentences.dashboards, factIds: [dashboardFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(failures).toEqual([]);
+    expect(result).not.toBeNull();
+  });
+
+  it("rejects free-prose output above 210 words or outside the three-to-four paragraph contract", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const { factGraph } = buildDirectClaimPlanFixture();
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const migrationFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Led a design system migration"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const { factualSentences, letter: sourceLetter } = buildFreeProseFixture();
+    const extraWords = Array.from(
+      { length: 100 },
+      (_, index) => `context${index}`,
+    ).join(" ");
+    const letter = sourceLetter.replace(/\n\n/gu, " ").replace(
+      /\.$/u,
+      ` ${extraWords}.`,
+    );
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter,
+        evidenceSpans: [
+          { quote: factualSentences.conversion, factIds: [conversionFactId] },
+          { quote: factualSentences.migration, factIds: [migrationFactId] },
+          { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    const issues = failures.flatMap((failure) => failure.issues ?? []);
+    expect(result).toBeNull();
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        "free_prose_letter_too_long",
+        "free_prose_paragraph_structure",
+      ]),
+    );
+  });
+
+  it("keeps dotted technical tokens intact while deriving the sidecar", async () => {
+    vi.stubEnv("ENABLE_COVER_LETTER_FREE_PROSE_SIDECAR_V1", "1");
+    const dottedContext = {
+      ...directContext,
+      recentExperience: [
+        {
+          ...directContext.recentExperience[0],
+          highlights: [
+            directContext.recentExperience[0].highlights[0],
+            "Built Node.js services used across 4 product squads.",
+          ],
+        },
+      ],
+    };
+    const factGraph = buildPremiumFactGraphV1({
+      personalizationContext: dottedContext,
+      jobDescription: directJob.jobDescription,
+    });
+    const conversionFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Improved signup conversion by 11%"),
+    )!.id;
+    const dottedFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built Node.js services"),
+    )!.id;
+    const dashboardFactId = factGraph.facts.find((fact) =>
+      fact.text.includes("Built experimentation dashboards"),
+    )!.id;
+    const { factualSentences, letter: sourceLetter } = buildFreeProseFixture();
+    const dottedSentence =
+      "I also built Node.js services used across 4 product squads, which kept shared interface work consistent across teams.";
+    const letter = sourceLetter.replace(
+      factualSentences.migration,
+      dottedSentence,
+    );
+    const failures: PremiumCoverLetterFailureTrace[] = [];
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: dottedContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () => ({
+        letter,
+        evidenceSpans: [
+          { quote: factualSentences.conversion, factIds: [conversionFactId] },
+          { quote: dottedSentence, factIds: [dottedFactId] },
+          { quote: factualSentences.dashboards, factIds: [dashboardFactId] },
+        ],
+      }),
+      onFailure: (failure) => failures.push(failure),
+    });
+
+    expect(failures).toEqual([]);
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain("Node.js");
+  });
+
+  it("passes the dynamic free-prose fact-ID enum to the OpenAI Zod transport", async () => {
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["letter", "evidenceSpans"],
+      properties: {
+        letter: { type: "string" },
+        evidenceSpans: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["quote", "factIds"],
+            properties: {
+              quote: { type: "string" },
+              factIds: {
+                type: "array",
+                minItems: 1,
+                items: { type: "string", enum: ["fact_allowed"] },
+              },
+            },
+          },
+        },
+      },
+    };
+    const parse = vi.fn(async () => ({
+      output_parsed: {
+        letter: "A supported sentence.",
+        evidenceSpans: [
+          { quote: "A supported sentence.", factIds: ["fact_other"] },
+        ],
+      },
+    }));
+    const zodTextFormat = vi.fn((zodSchema: any, name: string) => {
+      expect(() =>
+        zodSchema.parse({
+          letter: "A supported sentence.",
+          evidenceSpans: [
+            { quote: "A supported sentence.", factIds: ["fact_other"] },
+          ],
+        }),
+      ).toThrow();
+      return { type: "json_schema", name, schema, strict: true };
+    });
+
+    await expect(
+      generatePremiumCoverLetterBodyPartsWithExactOpenAIModel({
+        apiKey: "offline",
+        prompt: "free prose prompt",
+        writerModel: "gpt-5.5",
+        schema,
+        dependencies: {
+          loadOpenAIModule: async () => ({
+            OpenAI: class {
+              responses = { parse };
+            },
+          }),
+          loadZodHelperModule: async () => ({ zodTextFormat }),
+        },
+      }),
+    ).rejects.toThrow();
+    expect(zodTextFormat).toHaveBeenCalled();
   });
 });
