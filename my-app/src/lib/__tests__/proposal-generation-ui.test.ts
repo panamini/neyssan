@@ -69,15 +69,23 @@ describe("proposal generation UI error mapping", () => {
     );
   });
 
-  it("preserves non-finalization errors verbatim", () => {
-    expect(
-      getProposalGenerationUiErrorMessage({
-        error: new Error("Mistral API key is not configured"),
+  it.each([
+    "[CONVEX A(generateProposal)] Server Error: request id 123",
+    "Mistral API key is not configured",
+    "TypeError: Cannot read properties of undefined (reading 'content')",
+  ])(
+    "sanitizes unknown generation error %s to a stable retry message",
+    (rawMessage) => {
+      const message = getProposalGenerationUiErrorMessage({
+        error: new Error(rawMessage),
         proposalType: "cover_letter",
         hasCandidateContext: true,
-      }),
-    ).toBe("Mistral API key is not configured");
-  });
+      });
+
+      expect(message).toBe("Generation failed. Try again.");
+      expect(message).not.toContain(rawMessage);
+    },
+  );
 
   it("maps provider-busy fallback provenance to a disclosure message", () => {
     expect(
