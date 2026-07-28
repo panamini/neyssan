@@ -5,6 +5,8 @@ import {
   MCP_SAFE_SUMMARY_CONTROLLED_PROOF_OPERATOR_TOKEN_PATH,
   type McpSafeSummaryProofOperatorRole,
 } from "../modules/local-mcp/mcpSafeSummaryProofOperatorContract";
+import { MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT } from
+  "../modules/local-mcp/mcpSafeSummaryProjectionProofHarness";
 
 type OperatorResponse = Readonly<Record<string, unknown>>;
 
@@ -77,7 +79,7 @@ function formatOperatorResponse(payload: OperatorResponse, httpStatus: number): 
   const staticProof = proof && isRecord(proof.staticProof) ? readString(proof.staticProof.kind) : undefined;
   const firstCall = formatMcpSafeSummaryFirstToolsCallDiagnostic(sequence.firstToolsCallDiagnostic);
   const deltaDiagnostic = formatMcpSafeSummaryPostSeedDeltaDiagnostic(sequence.postSeedDiagnostic);
-  return `${status}${reason} · completed=${completed} · sequenceCompleted=${sequenceCompleted} · protected=${protectedCalls ?? "?"}/8 · seed=${seedCount ?? "?"}/3 · cleanup=${cleanupCount ?? "?"}/3 · recovery=${recovery ?? "?"} · baseline=${baseline ?? "?"} · delta=${postSeedDelta ?? "?"} · static=${staticProof ?? "?"}${firstCall ? ` · firstCall=${firstCall}` : ""}${deltaDiagnostic ? ` · deltaDiagnostic=${deltaDiagnostic}` : ""}`;
+  return `${status}${reason} · completed=${completed} · sequenceCompleted=${sequenceCompleted} · protected=${protectedCalls ?? "?"}/8 · seed=${seedCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT} · cleanup=${cleanupCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT} · recovery=${recovery ?? "?"} · baseline=${baseline ?? "?"} · delta=${postSeedDelta ?? "?"} · static=${staticProof ?? "?"}${firstCall ? ` · firstCall=${firstCall}` : ""}${deltaDiagnostic ? ` · deltaDiagnostic=${deltaDiagnostic}` : ""}`;
 }
 
 export function formatMcpSafeSummaryFirstToolsCallDiagnostic(value: unknown): string | undefined {

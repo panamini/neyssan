@@ -536,7 +536,7 @@ async function respondToControlledSummaryProofOperatorTokenRoute(
     });
     return;
   }
-  if (!(await isAuthorizedControlledProofOperatorSubmission(submitted.role, submitted.token, env, dependencies))) {
+  if (!(await isAuthorizedControlledProofOperatorSubmission(submitted.token, dependencies))) {
     sendLocalMcpJson(res, 403, {
       kind: "mcp_safe_summary_controlled_proof_operator_response",
       status: "blocked",
@@ -637,9 +637,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function isAuthorizedControlledProofOperatorSubmission(
-  role: McpSafeSummaryProofOperatorRole,
   credential: string,
-  env: Readonly<Record<string, string | undefined>>,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<boolean> {
   const readAuthenticatedOwnerIdentity = dependencies.readAuthenticatedOwnerIdentity;
@@ -655,16 +653,7 @@ async function isAuthorizedControlledProofOperatorSubmission(
   } catch {
     return false;
   }
-  if (!identity) return false;
-  const ownerConfig = readControlledProofOwnerConfig(env);
-  if (ownerConfig && (
-    identity.subject !== ownerConfig[role].subject ||
-    identity.issuer !== ownerConfig[role].issuer
-  )) return false;
-  const allowedSubjectDigests = readPrivateBetaSubjectDigestEnv(
-    env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS_VAR],
-  );
-  return !allowedSubjectDigests || allowedSubjectDigests.includes(hashSubject(identity.subject));
+  return identity !== undefined;
 }
 
 async function buildProductionMcpSafeSummaryLiveAdapterRunner(
@@ -674,7 +663,6 @@ async function buildProductionMcpSafeSummaryLiveAdapterRunner(
   operatorCredentials: McpSafeSummaryLiveAdapterOperatorCredentialV8,
 ): Promise<Readonly<{ run: () => Promise<McpSafeSummaryLiveAdapterResultV8> }> | undefined> {
   const activation = buildMcpSafeSummaryLiveAdapterActivationV8(env);
-  const ownerConfig = readControlledProofOwnerConfig(env);
   const convexConnection = readConvexConnection(env);
   const readAuthenticatedOwnerIdentity = dependencies.readAuthenticatedOwnerIdentity;
   const host = resolveMcpSafeSummaryLiveAdapterHostV8(
@@ -732,20 +720,17 @@ async function buildProductionMcpSafeSummaryLiveAdapterRunner(
   const identityA = await verifyBridgeOperatorCredential("A", operatorCredentials.A);
   const identityB = await verifyBridgeOperatorCredential("B", operatorCredentials.B);
   if (!identityA || !identityB || sameLiveAdapterIdentity(identityA, identityB)) return undefined;
-  const allowedSubjectDigests = readPrivateBetaSubjectDigestEnv(
-    env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS_VAR],
-  ) ?? [];
-  if (
-    allowedSubjectDigests.length > 0 &&
-    (!allowedSubjectDigests.includes(hashSubject(identityA.subject)) ||
-      !allowedSubjectDigests.includes(hashSubject(identityB.subject)))
-  ) return undefined;
-  if (ownerConfig && (
-    identityA.subject !== ownerConfig.A.subject ||
-    identityA.issuer !== ownerConfig.A.issuer ||
-    identityB.subject !== ownerConfig.B.subject ||
-    identityB.issuer !== ownerConfig.B.issuer
-  )) return undefined;
+  if (!config.privateBeta) return undefined;
+  const proofConfig: McpOAuthProductionRouteAdapterConfigV1 = Object.freeze({
+    ...config,
+    privateBeta: Object.freeze({
+      ...config.privateBeta,
+      allowedSubjectDigests: Object.freeze([
+        hashSubject(identityA.subject),
+        hashSubject(identityB.subject),
+      ]),
+    }),
+  });
 
   const mcpBearerCredentials = Object.freeze({
     A: randomBytes(32).toString("base64url"),
@@ -780,7 +765,7 @@ async function buildProductionMcpSafeSummaryLiveAdapterRunner(
     executeReadonlySummaryTool: executeSummary,
   });
   const routeCallToolsCall = buildMcpSafeSummaryLiveAdapterHandlerV8({
-    config,
+    config: proofConfig,
     dependencies: ephemeralDependencies,
     host,
     remoteAddress: "127.0.0.1",

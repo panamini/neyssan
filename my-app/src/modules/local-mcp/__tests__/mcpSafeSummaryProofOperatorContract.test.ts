@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildMcpSafeSummaryProofOperatorResponse,
@@ -65,6 +67,19 @@ describe("mcp safe-summary operator credential transport", () => {
     expect(result.proof).toMatchObject({ sequence });
     expect(result.sequence).toEqual(sequence);
     expect(result.safeForModel).toBe(true);
+  });
+
+  it("renders the current controlled fixture count for seed and cleanup", () => {
+    const pageSource = readFileSync(
+      resolve(process.cwd(), "src/pages/McpSafeSummaryProofOperatorPage.tsx"),
+      "utf8",
+    );
+    expect(pageSource).toContain(
+      'seed=${seedCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT}',
+    );
+    expect(pageSource).toContain(
+      'cleanup=${cleanupCount ?? "?"}/${MCP_SAFE_SUMMARY_CONTROLLED_FIXTURE_COUNT}',
+    );
   });
 
   it("renders only the bounded first-call classification fields", () => {
