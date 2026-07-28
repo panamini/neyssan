@@ -603,6 +603,21 @@ test("bootstrap is idempotent when a valid local Clerk override already exists",
   }
 });
 
+test("bootstrap accepts a Vite-compatible CRLF Clerk override", (t) => {
+  const fixture = createFixture(t);
+  const callLog = join(fixture.root, "infisical-calls.log");
+  writeFileSync(
+    fixture.appEnvFile,
+    "VITE_CLERK_PUBLISHABLE_KEY=pk_test_bootstrap_crlf_fixture\r\n",
+  );
+
+  const result = runBootstrap(fixture, { FAKE_INFISICAL_CALL_LOG: callLog });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /already available; no Infisical login needed/i);
+  assert.equal(existsSync(callLog), false);
+});
+
 test("bootstrap reuses an existing Infisical session without a login call", (t) => {
   const fixture = createFixture(t);
   rmSync(fixture.appEnvFile);
@@ -802,7 +817,11 @@ test("help gives a complete collaborator path without reading config or creating
   assert.match(result.output, /npm ci --prefix my-app/);
   assert.ok(
     result.output.indexOf("3. npm ci --prefix my-app")
-      < result.output.indexOf("4. ./run.sh bootstrap"),
+      < result.output.indexOf("4. Start Docker Desktop"),
+  );
+  assert.ok(
+    result.output.indexOf("4. Start Docker Desktop")
+      < result.output.indexOf("5. ./run.sh bootstrap"),
   );
   assert.match(result.output, /\.\/run\.sh doctor local-fast/);
   assert.match(result.output, /\.\/run\.sh local-fast/);

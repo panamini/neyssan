@@ -11,6 +11,7 @@ From a fresh clone:
 cp .env.example .env.local
 # Fill CONVEX_TEAM and CONVEX_PROJECT with the shared non-secret project slugs.
 npm ci --prefix my-app
+# Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
 ./run.sh bootstrap
 ```
 

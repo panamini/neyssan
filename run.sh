@@ -137,8 +137,7 @@ local_fast_app_env_has_valid_clerk_key() {
 const fs = require("node:fs");
 const envPath = process.argv[2];
 if (!fs.existsSync(envPath)) process.exit(1);
-const source = fs.readFileSync(envPath, "utf8");
-if (source.includes("\r")) process.exit(1);
+const source = fs.readFileSync(envPath, "utf8").replace(/\r\n?/gu, "\n");
 let resolved;
 for (const line of source.split("\n")) {
   const match = line.match(/^\s*(?:export[ \t]+)?VITE_CLERK_PUBLISHABLE_KEY=([\s\S]*)$/u);
@@ -1322,6 +1321,7 @@ for (const envPath of envPaths) {
   } catch {
     process.exit(1);
   }
+  if (isAppLocalEnv) source = source.replace(/\r\n?/gu, "\n");
   const statements = logicalStatements(source);
   if (statements === null) process.exit(1);
   for (const statement of statements) {
@@ -3392,6 +3392,7 @@ reload_env_stack() {
   local env_changed="false"
   local binding_changed="false"
   local local_binding_changed="false"
+  local clerk_refresh_needed="false"
   local current_open_browser="${OPEN_BROWSER:-1}"
   local next_vite_pid=""
   local next_convex_pid=""
@@ -3430,14 +3431,15 @@ reload_env_stack() {
   if [[ "${binding_changed}" == "true" && "${CONVEX_MODE:-cloud}" == "local" ]]; then
     local_binding_changed="true"
   fi
+  if [[ "${STACK_MODE}" == "local-fast" && "${UI_STARTED:-0}" == "1" ]]; then
+    ensure_local_fast_clerk_publishable_key
+    clerk_refresh_needed="true"
+  fi
 
-  if [[ "${env_changed}" != "true" && "${binding_changed}" != "true" ]]; then
+  if [[ "${env_changed}" != "true" && "${binding_changed}" != "true" \
+    && "${clerk_refresh_needed}" != "true" ]]; then
     echo "[run] reload-env: no env changes detected"
     return 0
-  fi
-  if [[ "${STACK_MODE}" == "local-fast" && "${UI_STARTED:-0}" == "1" \
-    && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" ) ]]; then
-    ensure_local_fast_clerk_publishable_key
   fi
 
   next_vite_pid="${VITE_PID:-}"
@@ -3465,7 +3467,9 @@ reload_env_stack() {
     tunnel_restarted_here="1"
   fi
 
-  if [[ "${UI_STARTED:-0}" == "1" && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" ) ]]; then
+  if [[ "${UI_STARTED:-0}" == "1" \
+    && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" \
+      || "${clerk_refresh_needed}" == "true" ) ]]; then
     stop_vite "${VITE_PID:-}"
     OPEN_BROWSER="0"
     if [[ "${CONVEX_MODE:-cloud}" == "local" ]]; then
@@ -3987,12 +3991,12 @@ First-time collaborator setup:
   2. Set CONVEX_TEAM and CONVEX_PROJECT in root .env.local.
      These are shared project slugs, not secrets; ask a project owner for them.
   3. npm ci --prefix my-app
-  4. ./run.sh bootstrap
+  4. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
+  5. ./run.sh bootstrap
      Reuses an existing Infisical session or opens the one-time browser login.
      Git repository access and Infisical project access are granted separately.
      For an override, copy my-app/.env.local.example to the ignored
      my-app/.env.local and set VITE_CLERK_PUBLISHABLE_KEY there.
-  5. Start Docker Desktop (macOS/WSL2) or the Docker daemon (Linux).
   6. ./run.sh doctor local-fast
   7. ./run.sh local-fast
 
@@ -4024,7 +4028,7 @@ Recovery and maintenance:
   logs                Follow the local parser container logs.
   reload-env          Restart the tracked stack after changing environment configuration.
                       Does not rebuild the Docker image.
-                      For local-fast, reacquires Clerk configuration before stopping Vite.
+                      For local-fast, always reacquires Clerk configuration and refreshes Vite.
   rebuild-docker      Rebuild the parser/export image after Dockerfile or runtime
                       dependency changes, then restart and verify readiness.
                       Local-fast restarts validate Clerk configuration before teardown.
