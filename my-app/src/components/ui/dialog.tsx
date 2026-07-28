@@ -10,6 +10,8 @@ import { translateUi } from "@/lib/i18n";
 import { useUiLanguagePreference } from "@/lib/ui-preferences";
 
 const DIALOG_EXIT_DURATION = 160;
+const DIALOG_FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface DialogProps {
   open: boolean;
@@ -36,6 +38,41 @@ function DialogRootComponent({
   );
   const exitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterFrameRef = React.useRef<number | null>(null);
+  const focusFrameRef = React.useRef<number | null>(null);
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = React.useRef<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (open) {
+      if (!restoreFocusRef.current && document.activeElement instanceof HTMLElement) {
+        restoreFocusRef.current = document.activeElement;
+      }
+      return;
+    }
+
+    const elementToRestore = restoreFocusRef.current;
+    restoreFocusRef.current = null;
+    if (elementToRestore && elementToRestore.isConnected) {
+      elementToRestore.focus();
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open || !isVisible) return;
+
+    focusFrameRef.current = requestAnimationFrame(() => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const firstFocusable = dialog.querySelector<HTMLElement>(
+        DIALOG_FOCUSABLE_SELECTOR,
+      );
+      (firstFocusable ?? dialog).focus();
+    });
+
+    return () => {
+      if (focusFrameRef.current) cancelAnimationFrame(focusFrameRef.current);
+    };
+  }, [isVisible, open]);
 
   React.useEffect(() => {
     if (open) {
@@ -61,6 +98,30 @@ function DialogRootComponent({
 
   useCloseOnEscape({ open, onClose });
 
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR),
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    if (event.shiftKey && (currentIndex <= 0 || currentIndex === -1)) {
+      event.preventDefault();
+      focusable[focusable.length - 1].focus();
+    } else if (!event.shiftKey && currentIndex === focusable.length - 1) {
+      event.preventDefault();
+      focusable[0].focus();
+    }
+  };
+
   if (!isVisible) return null;
 
   return (
@@ -73,6 +134,7 @@ function DialogRootComponent({
           aria-hidden="true"
         />
         <div
+          ref={dialogRef}
           className={clsx(
             "ds-dialog",
             size !== "md" && `ds-dialog--${size}`,
@@ -82,6 +144,8 @@ function DialogRootComponent({
           role="dialog"
           aria-modal="true"
           aria-labelledby={title ? "dialog-title" : undefined}
+          tabIndex={-1}
+          onKeyDown={handleDialogKeyDown}
         >
           {title ? (
             <div className="ds-dialog__title" id="dialog-title">

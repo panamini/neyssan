@@ -22,6 +22,9 @@ const JOB_ONLY_TOO_THIN_MESSAGE =
   "A grounded cover letter could not be generated from the job description alone. Add a CV or more concrete background details and try again.";
 const UNKNOWN_PROPOSAL_GENERATION_ERROR_MESSAGE =
   "Generation failed. Try again.";
+const AUTHENTICATION_REQUIRED_MESSAGE = "Sign in to generate a proposal.";
+const AUTHENTICATION_ERROR_PATTERN =
+  /\b(?:not authenticated|unauthenticated|authentication required|sign[ -]in required)\b/i;
 
 export type ProposalGenerationFallbackInfo = {
   requestedModelType?: string | null;
@@ -134,6 +137,13 @@ export function getProposalGenerationUiErrorMessage(args: {
     args.error instanceof Error
       ? args.error.message
       : UNKNOWN_PROPOSAL_GENERATION_ERROR_MESSAGE;
+  const errorText = [
+    rawMessage,
+    typeof errorData?.message === "string" ? errorData.message : "",
+  ].join(" ");
+  if (AUTHENTICATION_ERROR_PATTERN.test(errorText)) {
+    return AUTHENTICATION_REQUIRED_MESSAGE;
+  }
   if (
     rawMessage.includes(CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE) ||
     rawMessage.includes(CONTROLLED_PROPOSAL_PROVIDER_BUSY_MESSAGE_PREFIX)

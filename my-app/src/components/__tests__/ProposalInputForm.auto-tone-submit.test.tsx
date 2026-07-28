@@ -269,6 +269,36 @@ describe("ProposalInputForm auto tone submit", () => {
     expect(mockGenerateProposalAction).not.toHaveBeenCalled();
   });
 
+  it("localizes the no-CV confirmation from the UI language", async () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: { value: "Coordinate recurring operations across teams." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    const confirmationDialog = await screen.findByRole("dialog", {
+      name: "Générer sans CV ?",
+    });
+    expect(confirmationDialog).toHaveTextContent(
+      "Vous pouvez quand même générer une lettre à partir de l'offre, mais le résultat sera peut-être moins personnalisé.",
+    );
+    expect(
+      within(confirmationDialog).getByRole("button", {
+        name: "Choisir un CV",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(confirmationDialog).getByRole("button", {
+        name: "Générer quand même",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("uses the controlled job-scoped CV when building the generation request", async () => {
     const handleSubmit = vi.fn();
     mockGenerateProposalAction.mockResolvedValue({

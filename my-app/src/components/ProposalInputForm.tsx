@@ -50,7 +50,11 @@ import {
   type DocumentLanguageGenerationMetadata,
 } from "../lib/document-language";
 import { resolveUiLocale } from "../lib/locale-registry";
-import { readStoredUiLanguagePreference } from "../lib/ui-preferences";
+import { translateUi } from "../lib/i18n";
+import {
+  readStoredUiLanguagePreference,
+  useUiLanguagePreference,
+} from "../lib/ui-preferences";
 import { ensureProposalSignatureName } from "../lib/proposal-closing";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
@@ -417,6 +421,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   jobSourceLanguage = null,
 }) => {
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const hasHeaderLabel = Boolean(headerLabel);
   const hasHeaderAction = Boolean(headerAction);
   const headerActionOnly = hasHeaderAction && !hasHeaderLabel;
@@ -1683,13 +1688,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       <Dialog
         open={isNoCvConfirmationOpen}
         onClose={handleDismissNoCvConfirmation}
-        title="Generate without a resume?"
+        title={translateUi(resolvedLanguage, "workspace.noCvConfirmationTitle")}
         size="sm"
       >
         <DialogContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            You can still generate from the job description, but the result may
-            be less personalized.
+            {translateUi(
+              resolvedLanguage,
+              "workspace.noCvConfirmationDescription",
+            )}
           </p>
           <DialogActions>
             <button
@@ -1697,14 +1704,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               className="dasti-button dasti-button--secondary dasti-button--sm"
               onClick={handleChooseCvFromConfirmation}
             >
-              Choose resume
+              {translateUi(
+                resolvedLanguage,
+                "workspace.noCvConfirmationChooseResume",
+              )}
             </button>
             <button
               type="button"
               className="dasti-button dasti-button--accent dasti-button--sm"
               onClick={handleGenerateWithoutCv}
             >
-              Generate anyway
+              {translateUi(
+                resolvedLanguage,
+                "workspace.noCvConfirmationGenerateAnyway",
+              )}
             </button>
           </DialogActions>
         </DialogContent>

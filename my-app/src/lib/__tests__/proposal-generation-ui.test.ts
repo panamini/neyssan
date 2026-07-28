@@ -131,5 +131,15 @@ describe("proposal generation UI error mapping", () => {
     ).toBe(
       "Generation routing: route premium path saved; planned structured; executed structured; validator structured_success; save structured_saved.",
     );
+    });
   });
-});
+
+  it("preserves an actionable sign-in message for authentication failures", () => {
+    const message = getProposalGenerationUiErrorMessage({
+      error: new Error("User not authenticated"),
+      proposalType: "cover_letter",
+      hasCandidateContext: true,
+    });
+
+    expect(message).toBe("Sign in to generate a proposal.");
+  });
