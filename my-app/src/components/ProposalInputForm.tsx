@@ -6,7 +6,7 @@ import styles from "./ProposalInputForm.module.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent } from "./ui/dialog";
+import { Dialog, DialogActions, DialogContent } from "./ui/dialog";
 import { Menu, type MenuSection } from "./ui/menu";
 
 import { api } from "../../convex/_generated/api";
@@ -50,7 +50,11 @@ import {
   type DocumentLanguageGenerationMetadata,
 } from "../lib/document-language";
 import { resolveUiLocale } from "../lib/locale-registry";
-import { readStoredUiLanguagePreference } from "../lib/ui-preferences";
+import { translateUi } from "../lib/i18n";
+import {
+  readStoredUiLanguagePreference,
+  useUiLanguagePreference,
+} from "../lib/ui-preferences";
 import { ensureProposalSignatureName } from "../lib/proposal-closing";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
@@ -417,6 +421,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   jobSourceLanguage = null,
 }) => {
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const hasHeaderLabel = Boolean(headerLabel);
   const hasHeaderAction = Boolean(headerAction);
   const headerActionOnly = hasHeaderAction && !hasHeaderLabel;
@@ -461,6 +466,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     resolveCurrentActiveCvSource(),
   );
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
+  const [isNoCvConfirmationOpen, setIsNoCvConfirmationOpen] =
+    React.useState(false);
   const [pendingCvId, setPendingCvId] = React.useState<string | null>(null);
   const [cvOptions, setCvOptions] = React.useState<LocalCvPickerOption[]>(() =>
     listLocalCvPickerOptions(hasControlledActiveCvId ? activeCvId : undefined),
@@ -491,6 +498,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const activeGenerateRunIdRef = React.useRef(0);
   const activeGenerationClientRunIdRef = React.useRef<string | null>(null);
   const stopRequestedRunIdRef = React.useRef<number | null>(null);
+  const pendingNoCvSubmissionRef = React.useRef<FormValues | null>(null);
+  const generationRequestRef = React.useRef<(values: FormValues) => void>(
+    () => {},
+  );
   const lastCvPickerRequestKeyRef = React.useRef(cvPickerRequestKey);
   const shouldNotifySubmitAnimationCompleteRef = React.useRef(false);
   const shouldPlayGenerateButtonReverseRef = React.useRef(false);
@@ -1196,6 +1207,42 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     }
   }
 
+  function handleGenerationRequest(values: FormValues) {
+    if (hasAttachedCv) {
+      void handleSubmit(values);
+      return;
+    }
+
+    pendingNoCvSubmissionRef.current = values;
+    setIsNoCvConfirmationOpen(true);
+  }
+  generationRequestRef.current = handleGenerationRequest;
+  const stableHandleGenerationRequest = React.useCallback(
+    (values: FormValues) => generationRequestRef.current(values),
+    [],
+  );
+
+  function handleDismissNoCvConfirmation() {
+    pendingNoCvSubmissionRef.current = null;
+    setIsNoCvConfirmationOpen(false);
+  }
+
+  function handleChooseCvFromConfirmation() {
+    handleDismissNoCvConfirmation();
+    handleOpenCvPicker();
+  }
+
+  function handleGenerateWithoutCv() {
+    const pendingValues = pendingNoCvSubmissionRef.current;
+    if (!pendingValues) {
+      return;
+    }
+
+    pendingNoCvSubmissionRef.current = null;
+    setIsNoCvConfirmationOpen(false);
+    void handleSubmit(pendingValues);
+  }
+
   function handleOpenCvPicker() {
     const nextOptions = listLocalCvPickerOptions(
       hasControlledActiveCvId ? activeCvId : undefined,
@@ -1586,16 +1633,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       return;
     }
 
-    void form.handleSubmit(handleSubmit)();
+    void form.handleSubmit(stableHandleGenerationRequest)();
   }, [
     canStopGeneration,
     canSubmitGeneration,
     form,
-    handleSubmit,
     isGenerating,
     onStop,
     requestProposalGenerationCancel,
     requestGenerateButtonReverseSequence,
+    stableHandleGenerationRequest,
     syncExternalComposeDraftToForm,
   ]);
   const handleGenerateControlTriggerRef = React.useRef(
@@ -1638,6 +1685,43 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   return (
     <div className={styles.container}>
+      <Dialog
+        open={isNoCvConfirmationOpen}
+        onClose={handleDismissNoCvConfirmation}
+        title={translateUi(resolvedLanguage, "workspace.noCvConfirmationTitle")}
+        size="sm"
+      >
+        <DialogContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {translateUi(
+              resolvedLanguage,
+              "workspace.noCvConfirmationDescription",
+            )}
+          </p>
+          <DialogActions>
+            <button
+              type="button"
+              className="dasti-button dasti-button--secondary dasti-button--sm"
+              onClick={handleChooseCvFromConfirmation}
+            >
+              {translateUi(
+                resolvedLanguage,
+                "workspace.noCvConfirmationChooseResume",
+              )}
+            </button>
+            <button
+              type="button"
+              className="dasti-button dasti-button--accent dasti-button--sm"
+              onClick={handleGenerateWithoutCv}
+            >
+              {translateUi(
+                resolvedLanguage,
+                "workspace.noCvConfirmationGenerateAnyway",
+              )}
+            </button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
       {!suppressCvPicker ? (
         <Dialog
           open={resolvedCvPickerOpen}
@@ -1728,7 +1812,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       <form
         autoComplete="off"
         onSubmit={(e) => {
-          void form.handleSubmit(handleSubmit)(e);
+          void form.handleSubmit(stableHandleGenerationRequest)(e);
         }}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

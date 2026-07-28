@@ -283,6 +283,16 @@ describe("buildAppProposalPersonalizationPayload", () => {
     });
   });
 
+  it("does not reactivate the stored CV when an explicit null override clears it", () => {
+    window.localStorage.setItem("cvDocuments", JSON.stringify([CV_ALPHA]));
+    window.localStorage.setItem(`cv:${CV_ALPHA.id}`, JSON.stringify(CV_ALPHA));
+    setProposalAttachedCvId(CV_ALPHA.id);
+
+    expect(listLocalCvPickerOptions(null)).toEqual([
+      expect.objectContaining({ id: CV_ALPHA.id, isActive: false }),
+    ]);
+  });
+
   it("keeps the display title split between stored CV title and sidebar/library title", () => {
     const snapshot = buildActiveCvSnapshotFromCvDocument(CV_ALPHA as any);
 

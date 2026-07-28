@@ -13522,6 +13522,15 @@ export function ProposalForge(): JSX.Element {
       mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
     });
   }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
+  const handleProposalFormCvPickerOpenChange = React.useCallback(
+    (open: boolean) => {
+      setIsCvPickerOpen(open);
+      if (open) {
+        handleOpenCvsFromDraft();
+      }
+    },
+    [handleOpenCvsFromDraft],
+  );
   const handleClearCvFromDraft = React.useCallback(() => {
     if (proposalContent?.trim()) {
       setStagedProposalCvSelection({
@@ -14226,7 +14235,9 @@ export function ProposalForge(): JSX.Element {
                           }
                           prefill={prefill}
                           cvPickerOpen={isCvPickerOpen}
-                          onCvPickerOpenChange={setIsCvPickerOpen}
+                          onCvPickerOpenChange={
+                            handleProposalFormCvPickerOpenChange
+                          }
                           cvPickerRequestKey={cvPickerRequestKey}
                           suppressCvPicker
                           externalVoicePreset={composeToolbarVoicePreset}

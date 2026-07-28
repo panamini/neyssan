@@ -365,10 +365,33 @@ vi.mock("../ui/button", () => ({
 }));
 
 vi.mock("../ui/dialog", () => ({
-  Dialog: ({ open, children }: any) => (open ? <div>{children}</div> : null),
+  Dialog: ({ open, children, onClose, title }: any) =>
+    open ? (
+      <div role="dialog" aria-label={title}>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+        {children}
+      </div>
+    ) : null,
   DialogActions: ({ children }: any) => <div>{children}</div>,
   DialogContent: ({ children }: any) => <div>{children}</div>,
 }));
+
+async function confirmNoCvGenerationIfNeeded() {
+  await waitFor(() => {
+    expect(
+      mockGenerateProposalAction.mock.calls.length > 0 ||
+        screen.queryByRole("button", { name: "Generate anyway" }),
+    ).toBeTruthy();
+  });
+  const button = screen.queryByRole("button", {
+    name: "Generate anyway",
+  });
+  if (button) {
+    fireEvent.click(button);
+  }
+}
 
 describe("ProposalInputForm provider-busy handling", () => {
   beforeEach(() => {
@@ -436,6 +459,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(submitButton!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
@@ -740,6 +764,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.click(
       container.querySelector('button[type="submit"]') as HTMLButtonElement,
     );
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
@@ -816,6 +841,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(submitButton!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
@@ -902,6 +928,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(submitButton!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(
@@ -979,6 +1006,14 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Generate anyway",
+      }),
+    );
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2880);
@@ -1142,6 +1177,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
@@ -1189,6 +1225,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -1229,6 +1266,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -1274,6 +1312,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -1306,6 +1345,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     const { container } = render(<ProposalInputForm onSubmit={vi.fn()} />);
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
@@ -1345,6 +1385,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
+    await confirmNoCvGenerationIfNeeded();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledTimes(2);

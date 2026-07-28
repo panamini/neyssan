@@ -1,5 +1,11 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProposalInputForm from "../ProposalInputForm";
@@ -107,6 +113,14 @@ vi.mock("../../lib/proposal-personalization", () => ({
   setActiveLocalCvId: vi.fn(),
 }));
 
+async function confirmNoCvGeneration() {
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Generate anyway",
+    }),
+  );
+}
+
 describe("ProposalInputForm auto tone submit", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -128,7 +142,7 @@ describe("ProposalInputForm auto tone submit", () => {
     mockSetSharedActiveCvSnapshot.mockResolvedValue(undefined);
   });
 
-  it("submits successfully with Auto selected on the real form path", async () => {
+  it("soft-confirms a no-CV submit before using the existing generation path once", async () => {
     const handleSubmit = vi.fn();
 
     render(<ProposalInputForm onSubmit={handleSubmit} />);
@@ -148,6 +162,28 @@ describe("ProposalInputForm auto tone submit", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
+    const confirmationDialog = await screen.findByRole("dialog", {
+      name: "Generate without a resume?",
+    });
+    expect(confirmationDialog).toBeInTheDocument();
+    expect(
+      within(confirmationDialog).getByText(
+        "You can still generate from the job description, but the result may be less personalized.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(confirmationDialog).getByRole("button", {
+        name: "Choose resume",
+      }),
+    ).toBeInTheDocument();
+    expect(mockGenerateProposalAction).not.toHaveBeenCalled();
+
+    const generateAnywayButton = within(confirmationDialog).getByRole("button", {
+      name: "Generate anyway",
+    });
+    fireEvent.click(generateAnywayButton);
+    fireEvent.click(generateAnywayButton);
+
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -157,6 +193,7 @@ describe("ProposalInputForm auto tone submit", () => {
         }),
       );
     });
+    expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
 
     expect(handleSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -174,6 +211,92 @@ describe("ProposalInputForm auto tone submit", () => {
         resolvedLanguage: "en",
       }),
     );
+  });
+
+  it("preserves the job draft when the no-CV confirmation is cancelled or changed to resume selection", async () => {
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    const jobTitle = screen.getByPlaceholderText("Job title");
+    const jobDescription = screen.getByPlaceholderText("Paste job offer");
+    fireEvent.change(jobTitle, {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(jobDescription, {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    const initialConfirmationDialog = await screen.findByRole("dialog", {
+      name: "Generate without a resume?",
+    });
+    expect(initialConfirmationDialog).toBeInTheDocument();
+
+    fireEvent.click(
+      within(initialConfirmationDialog).getByRole("button", { name: "Close" }),
+    );
+
+    expect(jobTitle).toHaveValue("Operations Associate");
+    expect(jobDescription).toHaveValue(
+      "Support recurring processes, update internal records, and coordinate communication across teams.",
+    );
+    expect(mockGenerateProposalAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    const repeatedConfirmationDialog = await screen.findByRole("dialog", {
+      name: "Generate without a resume?",
+    });
+    expect(
+      screen.getAllByRole("dialog", {
+        name: "Generate without a resume?",
+      }),
+    ).toHaveLength(1);
+    fireEvent.click(
+      within(repeatedConfirmationDialog).getByRole("button", {
+        name: "Choose resume",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "Choose resume" }),
+    ).toBeInTheDocument();
+    expect(jobTitle).toHaveValue("Operations Associate");
+    expect(jobDescription).toHaveValue(
+      "Support recurring processes, update internal records, and coordinate communication across teams.",
+    );
+    expect(mockGenerateProposalAction).not.toHaveBeenCalled();
+  });
+
+  it("localizes the no-CV confirmation from the UI language", async () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: { value: "Coordinate recurring operations across teams." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    const confirmationDialog = await screen.findByRole("dialog", {
+      name: "Générer sans CV ?",
+    });
+    expect(confirmationDialog).toHaveTextContent(
+      "Vous pouvez quand même générer une lettre à partir de l'offre, mais le résultat sera peut-être moins personnalisé.",
+    );
+    expect(
+      within(confirmationDialog).getByRole("button", {
+        name: "Choisir un CV",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(confirmationDialog).getByRole("button", {
+        name: "Générer quand même",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("uses the controlled job-scoped CV when building the generation request", async () => {
@@ -273,6 +396,7 @@ describe("ProposalInputForm auto tone submit", () => {
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await confirmNoCvGeneration();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -374,6 +498,7 @@ describe("ProposalInputForm auto tone submit", () => {
     });
 
     generateControl?.trigger();
+    await confirmNoCvGeneration();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -500,6 +625,7 @@ describe("ProposalInputForm auto tone submit", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await confirmNoCvGeneration();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -530,6 +656,7 @@ describe("ProposalInputForm auto tone submit", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await confirmNoCvGeneration();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
@@ -560,6 +687,7 @@ describe("ProposalInputForm auto tone submit", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await confirmNoCvGeneration();
 
     await waitFor(() => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(

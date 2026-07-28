@@ -69,15 +69,23 @@ describe("proposal generation UI error mapping", () => {
     );
   });
 
-  it("preserves non-finalization errors verbatim", () => {
-    expect(
-      getProposalGenerationUiErrorMessage({
-        error: new Error("Mistral API key is not configured"),
+  it.each([
+    "[CONVEX A(generateProposal)] Server Error: request id 123",
+    "Mistral API key is not configured",
+    "TypeError: Cannot read properties of undefined (reading 'content')",
+  ])(
+    "sanitizes unknown generation error %s to a stable retry message",
+    (rawMessage) => {
+      const message = getProposalGenerationUiErrorMessage({
+        error: new Error(rawMessage),
         proposalType: "cover_letter",
         hasCandidateContext: true,
-      }),
-    ).toBe("Mistral API key is not configured");
-  });
+      });
+
+      expect(message).toBe("Generation failed. Try again.");
+      expect(message).not.toContain(rawMessage);
+    },
+  );
 
   it("maps provider-busy fallback provenance to a disclosure message", () => {
     expect(
@@ -123,5 +131,15 @@ describe("proposal generation UI error mapping", () => {
     ).toBe(
       "Generation routing: route premium path saved; planned structured; executed structured; validator structured_success; save structured_saved.",
     );
+    });
   });
-});
+
+  it("preserves an actionable sign-in message for authentication failures", () => {
+    const message = getProposalGenerationUiErrorMessage({
+      error: new Error("User not authenticated"),
+      proposalType: "cover_letter",
+      hasCandidateContext: true,
+    });
+
+    expect(message).toBe("Sign in to generate a proposal.");
+  });

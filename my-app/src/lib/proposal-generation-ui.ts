@@ -20,6 +20,11 @@ const FALLBACK_TO_CHATGPT_TRANSPORT_MESSAGE =
   "Generated with ChatGPT because the Mistral request could not be completed.";
 const JOB_ONLY_TOO_THIN_MESSAGE =
   "A grounded cover letter could not be generated from the job description alone. Add a CV or more concrete background details and try again.";
+const UNKNOWN_PROPOSAL_GENERATION_ERROR_MESSAGE =
+  "Generation failed. Try again.";
+const AUTHENTICATION_REQUIRED_MESSAGE = "Sign in to generate a proposal.";
+const AUTHENTICATION_ERROR_PATTERN =
+  /\b(?:not authenticated|unauthenticated|authentication required|sign[ -]in required)\b/i;
 
 export type ProposalGenerationFallbackInfo = {
   requestedModelType?: string | null;
@@ -131,7 +136,14 @@ export function getProposalGenerationUiErrorMessage(args: {
   const rawMessage =
     args.error instanceof Error
       ? args.error.message
-      : "Generation failed. Try again.";
+      : UNKNOWN_PROPOSAL_GENERATION_ERROR_MESSAGE;
+  const errorText = [
+    rawMessage,
+    typeof errorData?.message === "string" ? errorData.message : "",
+  ].join(" ");
+  if (AUTHENTICATION_ERROR_PATTERN.test(errorText)) {
+    return AUTHENTICATION_REQUIRED_MESSAGE;
+  }
   if (
     rawMessage.includes(CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE) ||
     rawMessage.includes(CONTROLLED_PROPOSAL_PROVIDER_BUSY_MESSAGE_PREFIX)
@@ -149,7 +161,7 @@ export function getProposalGenerationUiErrorMessage(args: {
   if (
     !rawMessage.includes(CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_PREFIX)
   ) {
-    return rawMessage;
+    return UNKNOWN_PROPOSAL_GENERATION_ERROR_MESSAGE;
   }
 
   if (args.proposalType === "cover_letter") {

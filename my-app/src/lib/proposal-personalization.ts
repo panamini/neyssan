@@ -960,8 +960,9 @@ export function listLocalCvPickerOptions(
   if (!hasLocalStorage()) return [];
 
   const activeCvId =
-    compactWhitespace(String(activeCvIdOverride ?? "")) ||
-    readStoredProposalAttachedCvId();
+    activeCvIdOverride !== undefined
+      ? compactWhitespace(String(activeCvIdOverride ?? ""))
+      : readStoredProposalAttachedCvId();
   const libraryDocs = getLibraryDocuments();
   const candidateIds = new Set<string>();
 
