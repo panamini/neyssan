@@ -212,6 +212,7 @@ function runCommand(fixture, command, env = {}) {
     timeout: 10_000,
     env: {
       ...process.env,
+      CI: "",
       HOME: join(fixture.root, "home"),
       PATH: `${fixture.binDirectory}:${process.env.PATH ?? ""}`,
       FAKE_DOCKER_LOG: fixture.dockerLog,
