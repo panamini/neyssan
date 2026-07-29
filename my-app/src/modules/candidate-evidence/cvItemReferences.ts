@@ -37,7 +37,7 @@ function requireStableId(value: unknown, label: string): string {
 function encodeSourcePathSegment(value: string): string {
   return Array.from(value)
     .map((character) =>
-      /^[A-Za-z0-9_-]$/u.test(character)
+      /^[A-Za-z0-9-]$/u.test(character)
         ? character
         : `_${character.codePointAt(0)?.toString(16) ?? "0"}_`,
     )

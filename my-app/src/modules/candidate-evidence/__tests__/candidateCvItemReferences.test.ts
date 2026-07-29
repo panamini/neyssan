@@ -67,6 +67,38 @@ const BASE_CV: CvDocument = {
 };
 
 describe("candidate CV item references", () => {
+  it("keeps source paths distinct when stable ids resemble encoded delimiters", () => {
+    const collisionCv: CvDocument = {
+      ...BASE_CV,
+      sections: [
+        {
+          ...BASE_CV.sections[0],
+          structuredContent: [
+            {
+              id: "item/a",
+              company: "Bakery One",
+              position: "Sales associate",
+              startDate: "2024-01-01T00:00:00.000Z",
+            },
+            {
+              id: "item_2f_a",
+              company: "Service Two",
+              position: "Customer service associate",
+              startDate: "2022-01-01T00:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    };
+
+    const references = buildCandidateCvItemReferences(collisionCv);
+
+    expect(references).toHaveLength(2);
+    expect(new Set(references.map((reference) => reference.sourcePath)).size).toBe(
+      2,
+    );
+  });
+
   it("keeps experience, education, and skill references stable across reorder and normal edits", () => {
     const before = buildCandidateCvItemReferences(BASE_CV);
     const editedAndReordered: CvDocument = {
