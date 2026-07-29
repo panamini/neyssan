@@ -452,6 +452,7 @@ function parseStructuredJobPayload(
 
 function normalizeHttpJobUrl(
   value: unknown,
+  options: { preserveHash?: boolean } = {},
 ): { value: string; error: string | null } {
   const raw = readString(value);
   if (!raw) {
@@ -472,7 +473,9 @@ function normalizeHttpJobUrl(
     ) {
       return { value: "", error: "Job URL must use http or https." };
     }
-    url.hash = "";
+    if (!options.preserveHash) {
+      url.hash = "";
+    }
     return { value: url.toString(), error: null };
   } catch {
     return { value: "", error: "Job URL must use http or https." };
@@ -661,7 +664,9 @@ export function normalizeJobBriefInput(args: {
       sourceUrl,
       sourceDomain,
       sourceType: readString(args.sourceType) || "extension",
-      applicationUrl: normalizeHttpJobUrl(args.applicationUrl).value,
+      applicationUrl: normalizeHttpJobUrl(args.applicationUrl, {
+        preserveHash: true,
+      }).value,
       structuredBrief,
       unmappedStructuredFields,
     },
@@ -1302,7 +1307,14 @@ export function inferRequirementType(value: string): NormalizedJobExtraction["re
   if (/\b(degree|diploma|bachelor|master|education)\b/i.test(value)) {
     return "education";
   }
-  if (/\b(language|english|french|spanish|german|italian|portuguese)\b/i.test(value)) {
+  const normalizedLanguageRequirement = value
+    .normalize("NFKD")
+    .replace(/\p{Mark}+/gu, "");
+  if (
+    /\b(language|langue|idioma|lingua|sprache|sprachkenntnisse|bilingual|bilingue|zweisprachig|english|anglais|ingles|inglese|englisch|french|francais|francaise|frances|francese|franzosisch|spanish|espagnol|espagnole|espanol|espanola|spagnolo|spagnola|spanisch|german|allemand|allemande|aleman|alemana|alemao|tedesco|tedesca|deutsch|italian|italien|italienne|italiano|italiana|italienisch|portuguese|portugais|portugaise|portugues|portuguesa|portoghese|portugiesisch)\b/i.test(
+      normalizedLanguageRequirement,
+    )
+  ) {
     return "language";
   }
   if (/\b(shift|schedule|weekend|onsite|standing|availability)\b/i.test(value)) {

@@ -457,6 +457,23 @@ describe("canonicalJobs", () => {
     expect(draft.reviewState).toBe("needs_review");
   });
 
+  it("preserves application URL fragments while canonicalizing source URLs", () => {
+    expect(
+      normalizeJobBriefInput({
+        title: "Sales associate",
+        rawDescription: "Welcome customers and operate the checkout.",
+        sourceUrl: "https://www.example.com/jobs/123#tracking",
+        applicationUrl: "https://www.example.com/apply#step=contact",
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        sourceUrl: "https://www.example.com/jobs/123",
+        applicationUrl: "https://www.example.com/apply#step=contact",
+      },
+    });
+  });
+
   it("normalizes URL-only, empty, and malformed job inputs without inventing job text", () => {
     expect(
       normalizeJobBriefInput({

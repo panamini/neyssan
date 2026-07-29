@@ -76,6 +76,33 @@ describe("canonical Job Brief demands", () => {
     );
   });
 
+  it("classifies localized language requirements as language demands", async () => {
+    const demands = await buildJobDemandsFromCanonicalJobBrief({
+      jobId: "job-localized-languages",
+      mustHaves: [
+        "Français courant requis",
+        "Español profesional requerido",
+      ],
+      responsibilities: [],
+      keywords: [],
+    });
+
+    expect(demands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "language",
+          label: "Français courant requis",
+          required: "required",
+        }),
+        expect.objectContaining({
+          kind: "language",
+          label: "Español profesional requerido",
+          required: "required",
+        }),
+      ]),
+    );
+  });
+
   it("is stable across reorder, removes empty values, and promotes duplicate must-haves", async () => {
     const brief = {
       jobId: "job-1",
