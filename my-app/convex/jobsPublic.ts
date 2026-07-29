@@ -4,6 +4,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type QueryCtx,
 } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -27,6 +28,14 @@ import {
   resolveReviewItemsAfterApprove,
   resolveReviewItemsAfterFieldUpdate,
 } from "./lib/jobs/canonicalJobs";
+import { buildApplicationContextV1FromExistingData } from "./lib/applicationContextBuilder";
+import { persistApplicationContext } from "./lib/applicationContextPersistence";
+import { buildSourceCvPlanFromPersistence } from "./lib/sourceCvPlanOrchestrator";
+import { buildSourceCvPlanPersistence } from "./lib/sourceCvPlanPersistence";
+import {
+  loadPersistedSourceCvPlanReview,
+  reviewAndPersistSourceCvPlan,
+} from "./lib/sourceCvPlanReviewPersistence";
 import {
   buildMatchReadProfile,
   computeMatchRead,
@@ -1926,6 +1935,7 @@ export const createOrReuseFromSource = mutation({
   handler: async (ctx, args) => {
     const profile = await requireCanonicalUserProfile(ctx);
     const draft = buildCanonicalJobDraftFromSource(args);
+    const shouldParse = Boolean(draft.rawDescription);
 
     await archiveActiveSampleJobsForProfile(ctx, String(profile._id));
 
@@ -1961,40 +1971,192 @@ export const createOrReuseFromSource = mutation({
       applicationUrl: draft.applicationUrl,
       dedupeKey: draft.dedupeKey,
       parseVersion: draft.parseVersion,
-      parseStatus: "parsing",
-      reviewState: "pending",
+      parseStatus: shouldParse ? "parsing" : draft.parseStatus,
+      reviewState: shouldParse ? "pending" : draft.reviewState,
       title: draft.title,
       company: draft.company,
       location: draft.location,
       rawDescription: draft.rawDescription,
       rawLanguageDetected: draft.rawLanguageDetected,
-      summary: "",
-      responsibilities: [],
-      keywords: [],
-      mustHaves: [],
-      toneCues: [],
+      summary: shouldParse ? "" : draft.summary,
+      responsibilities: shouldParse ? [] : draft.responsibilities,
+      keywords: shouldParse ? [] : draft.keywords,
+      mustHaves: shouldParse ? [] : draft.mustHaves,
+      toneCues: shouldParse ? [] : draft.toneCues,
       contacts: [],
       isSample: false,
       isFavorite: false,
       status: draft.status,
       archivedAt: draft.archivedAt,
-      reviewItems: [],
+      reviewItems: shouldParse ? [] : draft.reviewItems,
     });
 
-    await ctx.scheduler.runAfter(
-      0,
-      (internal as any).jobsPublic.parseCreatedJob,
-      { jobId: String(jobId) },
-    );
+    if (shouldParse) {
+      await ctx.scheduler.runAfter(
+        0,
+        (internal as any).jobsPublic.parseCreatedJob,
+        { jobId: String(jobId) },
+      );
+    }
 
     return {
       jobId: String(jobId),
       dedupeHit: false,
-      parseStatus: "parsing",
-      reviewState: "pending",
+      parseStatus: shouldParse ? "parsing" : draft.parseStatus,
+      reviewState: shouldParse ? "pending" : draft.reviewState,
     };
   },
 });
+
+export const prepareSourceCvVariantPlanForReview = query({
+  args: {
+    jobId: v.string(),
+    contextId: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const ownedJob = await requireOwnedActiveJobForSourceCvPlan(
+      ctx,
+      args.jobId,
+    );
+    const composition = await buildSourceCvPlanFromPersistence({
+      persistence: buildSourceCvPlanPersistence(ctx.db),
+      callerUserId: String(ownedJob.job.userId),
+      applicationContextId: args.contextId,
+      requestedJobId: String(ownedJob.jobId),
+      now: Date.now(),
+    });
+    return await loadPersistedSourceCvPlanReview(
+      ctx.db,
+      composition,
+      String(ownedJob.jobId),
+    );
+  },
+});
+
+export const prepareAttachedSourceCvVariantPlanReview = mutation({
+  args: {
+    jobId: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const ownedJob = await requireOwnedActiveJobForSourceCvPlan(
+      ctx,
+      args.jobId,
+    );
+    const attachedCvId =
+      typeof ownedJob.job.lastResumeId === "string"
+        ? ownedJob.job.lastResumeId.trim()
+        : "";
+    if (!attachedCvId) {
+      throw new Error("Job has no attached source CV");
+    }
+
+    const profiles = await listProfilesForClerk(
+      ctx,
+      ownedJob.identity.subject,
+    );
+    const candidateProfile = resolveResumeProfileById(profiles, attachedCvId);
+    const candidateCvDocument = candidateProfile?.cvDocument;
+    if (
+      !candidateProfile ||
+      !candidateCvDocument ||
+      typeof candidateCvDocument !== "object" ||
+      String(candidateCvDocument.id ?? "") !== attachedCvId
+    ) {
+      throw new Error("Attached source CV not found for authenticated owner");
+    }
+
+    const now = Date.now();
+    const built = await buildApplicationContextV1FromExistingData({
+      userId: String(ownedJob.job.userId),
+      job: {
+        ...ownedJob.job,
+        _id: String(ownedJob.jobId),
+      },
+      candidateProfile: {
+        ...candidateProfile,
+        _id: String(candidateProfile._id),
+      },
+      now,
+    });
+    await persistApplicationContext(ctx.db, built.context);
+
+    const composition = await buildSourceCvPlanFromPersistence({
+      persistence: buildSourceCvPlanPersistence(ctx.db),
+      callerUserId: String(ownedJob.job.userId),
+      applicationContextId: built.context.id,
+      requestedJobId: String(ownedJob.jobId),
+      now,
+    });
+    return await loadPersistedSourceCvPlanReview(
+      ctx.db,
+      composition,
+      String(ownedJob.jobId),
+    );
+  },
+});
+
+export const reviewSourceCvVariantPlan = mutation({
+  args: {
+    jobId: v.string(),
+    contextId: v.string(),
+    expectedPlanId: v.string(),
+    decisions: v.array(
+      v.object({
+        planItemId: v.string(),
+        reviewState: v.union(v.literal("accepted"), v.literal("rejected")),
+      }),
+    ),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const ownedJob = await requireOwnedActiveJobForSourceCvPlan(
+      ctx,
+      args.jobId,
+    );
+    const now = Date.now();
+    const composition = await buildSourceCvPlanFromPersistence({
+      persistence: buildSourceCvPlanPersistence(ctx.db),
+      callerUserId: String(ownedJob.job.userId),
+      applicationContextId: args.contextId,
+      requestedJobId: String(ownedJob.jobId),
+      now,
+    });
+    return await reviewAndPersistSourceCvPlan({
+      db: ctx.db,
+      composition,
+      requestedJobId: String(ownedJob.jobId),
+      expectedPlanId: args.expectedPlanId,
+      decisions: args.decisions,
+      updatedAt: now,
+    });
+  },
+});
+
+async function requireOwnedActiveJobForSourceCvPlan(
+  ctx: QueryCtx,
+  jobId: string,
+) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Not authenticated");
+  }
+
+  const normalizedJobId = ctx.db.normalizeId("jobs", jobId);
+  const job = normalizedJobId ? await ctx.db.get(normalizedJobId) : null;
+  const ownerProfile = job ? await ctx.db.get(job.userId) : null;
+  if (
+    !job ||
+    !ownerProfile ||
+    ownerProfile.clerkId !== identity.subject ||
+    (job.archivedAt !== null && job.archivedAt !== undefined)
+  ) {
+    throw new Error("Job not found for authenticated owner");
+  }
+
+  return { jobId: normalizedJobId, job, identity };
+}
 
 export const getById = query({
   args: {
@@ -3488,13 +3650,13 @@ export const parseCreatedJob = internalMutation({
         toneCuesExtraction: draft.toneCuesExtraction,
         contacts: draft.contacts,
         parseVersion: draft.parseVersion,
-        parseStatus: "parsed",
+        parseStatus: draft.parseStatus,
         reviewState: draft.reviewState,
         reviewItems: draft.reviewItems,
         updatedAt: Date.now(),
       });
 
-      if (isJobLlmExtractionShadowEnabled()) {
+      if (draft.rawDescription && isJobLlmExtractionShadowEnabled()) {
         // Pass 2 guardrail: keep any future visible_source_decision stable per job.
         // Shadow output must not flip UI/source behavior after the heuristic parse is shown.
         await ctx.scheduler.runAfter(

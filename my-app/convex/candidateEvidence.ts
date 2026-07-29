@@ -128,6 +128,31 @@ export const listCandidateSourceDocumentsForUser = internalQuery({
   },
 });
 
+export const listCandidateSourceDocumentsForCanonicalCv = internalQuery({
+  args: {
+    userId: v.string(),
+    canonicalCvId: v.string(),
+  },
+  returns: v.array(candidateSourceDocumentStoredValidator),
+  handler: async (ctx, args) => {
+    const canonicalCvId = normalizeCanonicalCvId(args.canonicalCvId);
+    if (!canonicalCvId) {
+      throw new TypeError(
+        "CandidateSourceDocument canonicalCvId must be a non-empty string",
+      );
+    }
+
+    return await ctx.db
+      .query("candidateSourceDocuments")
+      .withIndex("by_user_id_canonical_cv_id", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("canonicalCvId", canonicalCvId),
+      )
+      .collect();
+  },
+});
+
 export const createOrReuseCandidateFact = internalMutation({
   args: {
     fact: candidateFactValidator,
@@ -342,6 +367,7 @@ function sanitizeCandidateSourceDocument(
   return {
     id: sourceDocument.id,
     userId: sourceDocument.userId,
+    ...projectCanonicalCvId(sourceDocument.canonicalCvId),
     sourceType: sourceDocument.sourceType,
     ...(sourceDocument.title ? { title: sourceDocument.title } : {}),
     ...(sourceDocument.originalFilename
@@ -461,6 +487,12 @@ function assertSameSourceDocumentIdentity(
   if (existing.textHash !== incoming.textHash || existing.sourceType !== incoming.sourceType) {
     throw new Error("CandidateSourceDocument sourceHash reused with conflicting source metadata");
   }
+
+  if (existing.canonicalCvId !== incoming.canonicalCvId) {
+    throw new Error(
+      "CandidateSourceDocument canonical CV identity cannot change during create/reuse",
+    );
+  }
 }
 
 function assertSameFactSemantics(existing: CandidateFactV1, incoming: CandidateFactV1): void {
@@ -497,6 +529,29 @@ function projectCandidateFactConfidence(
   }
 
   return { confidence };
+}
+
+function projectCanonicalCvId(
+  canonicalCvId: CandidateSourceDocumentV1["canonicalCvId"],
+): { canonicalCvId?: string } {
+  const normalized = normalizeCanonicalCvId(canonicalCvId);
+  return normalized ? { canonicalCvId: normalized } : {};
+}
+
+function normalizeCanonicalCvId(
+  canonicalCvId: CandidateSourceDocumentV1["canonicalCvId"],
+): string | undefined {
+  if (canonicalCvId === undefined) {
+    return undefined;
+  }
+
+  const normalized = canonicalCvId.trim();
+  if (!normalized) {
+    throw new TypeError(
+      "CandidateSourceDocument canonicalCvId must be a non-empty string",
+    );
+  }
+  return normalized;
 }
 
 function assertFiniteTimestamp(value: number, label: string): number {

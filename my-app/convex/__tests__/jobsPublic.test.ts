@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveReviewItem,
   archiveJob,
+  createOrReuseFromSource,
   debugInspectMatchInputByJobId,
   deleteArchivedJob,
   duplicateJob,
@@ -24,6 +25,149 @@ import { hashNormalizedJobText } from "../lib/jobs/llmExtractJob";
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe("jobsPublic.createOrReuseFromSource", () => {
+  it("stores a URL-only brief for the authenticated owner without reusing another user's job or scheduling parsing", async () => {
+    const insertedJobs: Array<Record<string, unknown>> = [];
+    const dedupeScopes: Array<Record<string, string>> = [];
+    const scheduler = {
+      runAfter: vi.fn(async () => null),
+    };
+    const ownerProfile = {
+      _id: "profile_owner",
+      _creationTime: 100,
+      clerkId: "clerk_owner",
+      email: "owner@example.com",
+      name: "Owner",
+      updatedAt: 100,
+      createdAt: 100,
+      version: 1,
+      skills: [],
+      keywords: [],
+      experience: [],
+    };
+
+    const result = await createOrReuseFromSource._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({
+            subject: "clerk_owner",
+            email: "owner@example.com",
+            name: "Owner",
+          }),
+        },
+        scheduler,
+        db: {
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope: Record<string, string> = {};
+                  const query = {
+                    eq(field: string, value: string) {
+                      scope[field] = value;
+                      return query;
+                    },
+                  };
+                  buildIndex(query);
+                  return {
+                    collect: async () =>
+                      scope.clerkId === "clerk_owner" ? [ownerProfile] : [],
+                  };
+                },
+              };
+            }
+
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const query = {
+                    eq() {
+                      return query;
+                    },
+                  };
+                  buildIndex(query);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+
+            if (table === "jobs") {
+              return {
+                withIndex(indexName: string, buildIndex: any) {
+                  const scope: Record<string, string> = {};
+                  const query = {
+                    eq(field: string, value: string) {
+                      scope[field] = value;
+                      return query;
+                    },
+                  };
+                  buildIndex(query);
+
+                  if (indexName === "by_user_updated") {
+                    return {
+                      order() {
+                        return {
+                          collect: async () => [],
+                        };
+                      },
+                    };
+                  }
+
+                  dedupeScopes.push(scope);
+                  return {
+                    first: async () => null,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected query table: ${table}`);
+          },
+          insert: async (table: string, value: Record<string, unknown>) => {
+            if (table !== "jobs") {
+              throw new Error(`Unexpected insert table: ${table}`);
+            }
+            insertedJobs.push(value);
+            return "job_owner";
+          },
+          patch: vi.fn(async () => null),
+          get: vi.fn(async () => null),
+        },
+      } as any,
+      {
+        title: "",
+        rawDescription: "",
+        sourceUrl: "www.example.com/jobs/owner-role#apply",
+        sourceType: "chatgpt",
+      },
+    );
+
+    expect(result).toMatchObject({
+      jobId: "job_owner",
+      dedupeHit: false,
+      parseStatus: "imported",
+      reviewState: "needs_review",
+    });
+    expect(dedupeScopes).toContainEqual(
+      expect.objectContaining({
+        userId: "profile_owner",
+      }),
+    );
+    expect(insertedJobs).toHaveLength(1);
+    expect(insertedJobs[0]).toMatchObject({
+      userId: "profile_owner",
+      sourceUrl: "https://www.example.com/jobs/owner-role",
+      sourceDomain: "example.com",
+      parseStatus: "imported",
+      reviewState: "needs_review",
+      rawDescription: "",
+    });
+    expect(scheduler.runAfter).not.toHaveBeenCalled();
+  });
 });
 
 describe("jobsPublic.listForUser", () => {

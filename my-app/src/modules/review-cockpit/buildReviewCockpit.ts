@@ -27,7 +27,11 @@ const REVIEW_COCKPIT_HASH_NAMESPACE = "review-cockpit";
 const REVIEW_COCKPIT_ID_PREFIX = "review-cockpit:";
 const BLOCKED_CLAIM_PREFIX = "blocked-claim:";
 
-const ATTENTION_REVIEW_STATES = new Set(["blocked", "needs_review"]);
+const ATTENTION_REVIEW_STATES = new Set([
+  "pending",
+  "blocked",
+  "needs_review",
+]);
 
 type ReviewCockpitWithoutId = Omit<ReviewCockpitModelV1, "id">;
 

@@ -31,6 +31,7 @@ type ApplicationContextV1 = Readonly<{
     title?: string;
     company?: string;
     rawTextHash: string;
+    jobBriefHash?: string;
   }>;
   candidate:
     | Readonly<{
@@ -105,6 +106,7 @@ export type BuildApplicationContextFromExistingDataResult = Readonly<{
   context: ApplicationContextV1;
   rawTextHash: string;
   jobHash: string;
+  jobBriefHash: string;
   structuredSectionsHash?: string;
   cvSnapshotHash: string;
   candidateHash: string;
@@ -117,13 +119,21 @@ export async function buildApplicationContextV1FromExistingData(
 ): Promise<BuildApplicationContextFromExistingDataResult> {
   const now = normalizeTimestamp(input.now);
   const jobId = resolveStableId(input.job, "job");
-  const cvId = resolveStableId(input.candidateProfile, "cv");
+  const cvId = resolveCanonicalCvId(input.candidateProfile);
   const rawDescription = readString(input.job.rawDescription) ?? "";
   const title = readString(input.job.title);
   const company = readString(input.job.company);
   const sourceUrl = readString(input.job.sourceUrl);
 
   const rawTextHash = await buildRawJobTextHash(rawDescription);
+  const jobBriefHash = await buildStableHash({
+    type: "canonical-job-brief-demands",
+    version: 1,
+    jobId,
+    mustHaves: normalizeJobBriefDemandList(input.job.mustHaves),
+    responsibilities: normalizeJobBriefDemandList(input.job.responsibilities),
+    keywords: normalizeJobBriefDemandList(input.job.keywords),
+  });
   const jobHash = await buildJobHash({
     jobId,
     rawDescription,
@@ -145,7 +155,7 @@ export async function buildApplicationContextV1FromExistingData(
   const cvSnapshotHash = await buildStableHash({
     type: "cv-profile-snapshot",
     version: 1,
-    snapshot: await buildCandidateProfileSnapshot(input.candidateProfile),
+    snapshot: await buildCandidateProfileSnapshot(input.candidateProfile, cvId),
   });
   const candidateHash = await buildCandidateHash({
     sourceKind: "cv",
@@ -155,7 +165,12 @@ export async function buildApplicationContextV1FromExistingData(
   });
   const settings = normalizeSettings(input.settings);
   const settingsHash = await buildSettingsHash(settings);
-  const contextHash = await buildContextHash({ jobHash, candidateHash, settingsHash });
+  const contextHash = await buildContextHash({
+    jobHash,
+    jobBriefHash,
+    candidateHash,
+    settingsHash,
+  });
   const contextId = `application-context:${contextHash}`;
   const sourceRefs: SourceRefV1[] = [
     {
@@ -179,6 +194,7 @@ export async function buildApplicationContextV1FromExistingData(
       ...(title ? { title } : {}),
       ...(company ? { company } : {}),
       rawTextHash,
+      jobBriefHash,
     },
     candidate: {
       sourceKind: "cv",
@@ -200,6 +216,7 @@ export async function buildApplicationContextV1FromExistingData(
     context,
     rawTextHash,
     jobHash,
+    jobBriefHash,
     ...(structuredSectionsHash ? { structuredSectionsHash } : {}),
     cvSnapshotHash,
     candidateHash,
@@ -228,6 +245,11 @@ function resolveStableId(record: LooseRecord, label: string): string {
   return id;
 }
 
+function resolveCanonicalCvId(profile: ApplicationContextBuilderCandidateProfile): string {
+  const cvDocument = asRecord(profile.cvDocument);
+  return readString(cvDocument?.id) ?? resolveStableId(profile, "cv");
+}
+
 function readString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -248,11 +270,12 @@ function readArray(value: unknown): unknown[] {
 
 async function buildCandidateProfileSnapshot(
   profile: ApplicationContextBuilderCandidateProfile,
+  cvId: string,
 ) {
   const rawText = readString(profile.raw_text);
 
   return {
-    cvId: resolveStableId(profile, "cv"),
+    cvId,
     ...(readString(profile.profileId) ? { profileId: readString(profile.profileId) } : {}),
     ...(readString(profile.defaultResumeId) ? { defaultResumeId: readString(profile.defaultResumeId) } : {}),
     ...(readString(profile.defaultResumeName) ? { defaultResumeName: readString(profile.defaultResumeName) } : {}),
@@ -279,6 +302,16 @@ function compactStringArray(value: unknown): string[] {
   return readArray(value)
     .map(readString)
     .filter((item): item is string => Boolean(item));
+}
+
+function normalizeJobBriefDemandList(value: unknown): string[] {
+  return [
+    ...new Set(
+      compactStringArray(value).map((item) =>
+        item.normalize("NFKC").toLowerCase(),
+      ),
+    ),
+  ].sort();
 }
 
 function normalizeExperience(value: unknown) {

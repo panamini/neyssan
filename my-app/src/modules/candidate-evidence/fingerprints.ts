@@ -12,6 +12,7 @@ export type BuildCandidateSourceDocumentHashInput = Readonly<{
   userId: string;
   sourceType: CandidateSourceDocumentTypeV1;
   text: string;
+  canonicalCvId?: string;
   title?: string;
   originalFilename?: string;
   mimeType?: string;
@@ -38,6 +39,7 @@ export async function buildCandidateSourceDocumentHash(
   assertCandidateSourceDocumentHashInput(input);
 
   const textHash = await buildCandidateSourceDocumentTextHash(input.text);
+  const canonicalCvId = normalizeOptionalCanonicalCvId(input.canonicalCvId);
 
   return buildStableHash({
     namespace: CANDIDATE_EVIDENCE_HASH_NAMESPACE,
@@ -47,6 +49,7 @@ export async function buildCandidateSourceDocumentHash(
       userId: input.userId,
       sourceType: input.sourceType,
       textHash,
+      ...(canonicalCvId ? { canonicalCvId } : {}),
       ...(input.title ? { title: input.title } : {}),
       ...(input.originalFilename ? { originalFilename: input.originalFilename } : {}),
       ...(input.mimeType ? { mimeType: input.mimeType } : {}),
@@ -128,6 +131,20 @@ function assertCandidateSourceDocumentHashInput(
   if (typeof input.text !== "string") {
     throw new TypeError("buildCandidateSourceDocumentHash requires text to be a string");
   }
+}
+
+function normalizeOptionalCanonicalCvId(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(
+      "buildCandidateSourceDocumentHash canonicalCvId must be a non-empty string",
+    );
+  }
+
+  return value.trim();
 }
 
 function assertCandidateFactHashInput(input: BuildCandidateFactHashInput): void {

@@ -8,6 +8,9 @@ import {
   applicationHarnessStoredContextValidator,
   applicationHarnessStoredRunValidator,
 } from "./lib/applicationHarness";
+import { persistApplicationContext } from "./lib/applicationContextPersistence";
+import { buildSourceCvPlanFromPersistence } from "./lib/sourceCvPlanOrchestrator";
+import { buildSourceCvPlanPersistence } from "./lib/sourceCvPlanPersistence";
 
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 100;
@@ -60,40 +63,8 @@ export const createContext = internalMutation({
   returns: v.id("applicationContexts"),
   handler: async (ctx, args) => {
     assertContextCandidateAnchor(args.context.candidate);
-
-    const existingById = await ctx.db
-      .query("applicationContexts")
-      .withIndex("by_user_id", (q) =>
-        q.eq("userId", args.context.userId).eq("id", args.context.id),
-      )
-      .unique();
-
-    if (existingById) {
-      if (existingById.contextHash !== args.context.contextHash) {
-        throw new Error("ApplicationContext stable id collision");
-      }
-
-      return existingById._id;
-    }
-
-    const existingByHash = await ctx.db
-      .query("applicationContexts")
-      .withIndex("by_user_context_hash", (q) =>
-        q
-          .eq("userId", args.context.userId)
-          .eq("contextHash", args.context.contextHash),
-      )
-      .unique();
-
-    if (existingByHash) {
-      if (existingByHash.id !== args.context.id) {
-        throw new Error("ApplicationContext contextHash collision with different stable id");
-      }
-
-      return existingByHash._id;
-    }
-
-    return await ctx.db.insert("applicationContexts", args.context);
+    return (await persistApplicationContext(ctx.db, args.context))
+      .contextStorageId;
   },
 });
 
@@ -108,6 +79,25 @@ export const getContextById = internalQuery({
       .query("applicationContexts")
       .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
       .unique();
+  },
+});
+
+export const buildSourceCvVariantPlan = internalQuery({
+  args: {
+    userId: v.string(),
+    contextId: v.string(),
+    jobId: v.string(),
+    now: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    return await buildSourceCvPlanFromPersistence({
+      callerUserId: args.userId,
+      applicationContextId: args.contextId,
+      requestedJobId: args.jobId,
+      now: args.now,
+      persistence: buildSourceCvPlanPersistence(ctx.db),
+    });
   },
 });
 

@@ -250,11 +250,11 @@ describe("review-cockpit model", () => {
     expect(cockpit.summary.blockerCount).toBe(0);
   });
 
-  it("no-warning plan creates ready status", async () => {
+  it("pending plan creates needs_review status", async () => {
     const cockpit = await buildReviewCockpit(await cockpitInput());
 
-    expect(cockpit.summary.status).toBe("ready");
-    expect(cockpit.summary.warningCount).toBe(0);
+    expect(cockpit.summary.status).toBe("needs_review");
+    expect(cockpit.summary.warningCount).toBe(1);
     expect(cockpit.summary.blockerCount).toBe(0);
   });
 
@@ -431,7 +431,7 @@ describe("review-cockpit model", () => {
     expect(summary).toMatchObject({
       allowedClaimCount: 1,
       planItemCount: 1,
-      warningCount: 0,
+      warningCount: 1,
       missingEvidenceCount: 0,
       blockedClaimCount: 0,
       sourceFactCount: 1,

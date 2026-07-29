@@ -984,6 +984,7 @@ export default defineSchema({
   candidateSourceDocuments: defineTable(candidateSourceDocumentFields)
     .index("by_user_id", ["userId"])
     .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_canonical_cv_id", ["userId", "canonicalCvId"])
     .index("by_user_id_source_hash", ["userId", "sourceHash"])
     .index("by_user_id_text_hash", ["userId", "textHash"])
     .index("by_user_id_review_state", ["userId", "reviewState"])

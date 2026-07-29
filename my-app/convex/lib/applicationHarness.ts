@@ -83,6 +83,7 @@ export const applicationHarnessContextFields = {
     title: v.optional(v.string()),
     company: v.optional(v.string()),
     rawTextHash: v.string(),
+    jobBriefHash: v.optional(v.string()),
   }),
   candidate: applicationHarnessContextCandidateValidator,
   settingsHash: v.string(),

@@ -79,6 +79,7 @@ export function buildSettingsHash(settings: unknown): Promise<string> {
 
 export function buildContextHash(input: Readonly<{
   jobHash: string;
+  jobBriefHash?: string;
   candidateHash: string;
   settingsHash: string;
 }>): Promise<string> {

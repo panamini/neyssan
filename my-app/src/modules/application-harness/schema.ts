@@ -83,6 +83,8 @@ export type ApplicationContextV1 = Readonly<{
     company?: string;
     /** Populate with buildRawJobTextHash(rawDescription). */
     rawTextHash: string;
+    /** Deterministic binding for canonical demand-bearing Job Brief fields. */
+    jobBriefHash?: string;
   }>;
   candidate: ApplicationContextCandidateV1;
   settingsHash: string;

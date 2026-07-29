@@ -11,6 +11,9 @@ function buildJob(overrides: Record<string, unknown> = {}) {
     title: "Senior Product Engineer",
     company: "Example Co",
     rawDescription: "Build reliable product workflows and data pipelines.",
+    mustHaves: ["TypeScript"],
+    responsibilities: ["Build reliable product workflows"],
+    keywords: ["data pipelines"],
     ...overrides,
   };
 }
@@ -72,6 +75,69 @@ function clone<T>(value: T): T {
 }
 
 describe("application context shadow builder", () => {
+  it("uses the canonical CvDocument identity for the candidate and CV source reference", async () => {
+    const result = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile(),
+      now: NOW,
+    });
+
+    expect(result.context.candidate).toMatchObject({
+      sourceKind: "cv",
+      cvId: "doc_123",
+    });
+    expect(result.context.sourceRefs).toContainEqual({
+      sourceType: "cv",
+      sourceId: "doc_123",
+      sourceHash: result.candidateHash,
+    });
+  });
+
+  it("changes candidate and context hashes when the canonical CvDocument identity changes", async () => {
+    const base = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile(),
+      now: NOW,
+    });
+    const changed = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile({
+        cvDocument: {
+          ...(buildCandidateProfile().cvDocument as Record<string, unknown>),
+          id: "doc_456",
+        },
+      }),
+      now: NOW,
+    });
+
+    expect(changed.context.candidate).toMatchObject({ cvId: "doc_456" });
+    expect(changed.candidateHash).not.toBe(base.candidateHash);
+    expect(changed.contextHash).not.toBe(base.contextHash);
+  });
+
+  it("falls back to the legacy profile identity when CvDocument has no identity", async () => {
+    const result = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile({
+        cvDocument: {
+          sections: [],
+        },
+      }),
+      now: NOW,
+    });
+
+    expect(result.context.candidate).toMatchObject({ cvId: "cv_123" });
+    expect(result.context.sourceRefs).toContainEqual({
+      sourceType: "cv",
+      sourceId: "cv_123",
+      sourceHash: result.candidateHash,
+    });
+  });
+
   it("builds the same contextHash for the same job and candidate profile", async () => {
     const first = await buildApplicationContextV1FromExistingData({
       userId: "cv_123",
@@ -108,6 +174,64 @@ describe("application context shadow builder", () => {
 
     expect(changed.jobHash).not.toBe(base.jobHash);
     expect(changed.contextHash).not.toBe(base.contextHash);
+  });
+
+  it("changes jobBriefHash and contextHash when structured Job Brief demands change", async () => {
+    const base = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile(),
+      now: NOW,
+    });
+    for (const override of [
+      { mustHaves: ["TypeScript", "Postgres"] },
+      {
+        responsibilities: [
+          "Build reliable product workflows",
+          "Review production incidents",
+        ],
+      },
+      { keywords: ["data pipelines", "observability"] },
+    ]) {
+      const changed = await buildApplicationContextV1FromExistingData({
+        userId: "cv_123",
+        job: buildJob(override),
+        candidateProfile: buildCandidateProfile(),
+        now: NOW,
+      });
+
+      expect(changed.context.job.jobBriefHash).toBeTruthy();
+      expect(changed.context.job.jobBriefHash).not.toBe(
+        base.context.job.jobBriefHash,
+      );
+      expect(changed.contextHash).not.toBe(base.contextHash);
+    }
+  });
+
+  it("keeps jobBriefHash stable when equivalent demand lists are reordered", async () => {
+    const first = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob({
+        mustHaves: ["TypeScript", "Postgres"],
+        responsibilities: ["Build workflows", "Review incidents"],
+      }),
+      candidateProfile: buildCandidateProfile(),
+      now: NOW,
+    });
+    const reordered = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob({
+        mustHaves: ["Postgres", "TypeScript"],
+        responsibilities: ["Review incidents", "Build workflows"],
+      }),
+      candidateProfile: buildCandidateProfile(),
+      now: NOW,
+    });
+
+    expect(reordered.context.job.jobBriefHash).toBe(
+      first.context.job.jobBriefHash,
+    );
+    expect(reordered.contextHash).toBe(first.contextHash);
   });
 
   it("changes candidateHash and contextHash when candidate snapshot changes", async () => {

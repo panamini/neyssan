@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { stableSerialize } from "../../application-harness/fingerprints";
 import type { EvidenceGraphV1 } from "../../evidence-graph/schema";
+import { reviewResumeVariantPlan } from "../../resume-variant-plan/reviewResumeVariantPlan";
 import type { ResumeVariantPlanV1 } from "../../resume-variant-plan/schema";
+import { buildReviewCockpit } from "../../review-cockpit/buildReviewCockpit";
 import type { ReviewCockpitModelV1 } from "../../review-cockpit/schema";
 import {
   assertResumeVariantArtifactDoesNotContainGeneratedText,
@@ -51,7 +53,7 @@ function plan(evidenceGraph = graph(), overrides: Partial<ResumeVariantPlanV1> =
     targetDocumentKind: "resume",
     language: "en",
     market: "global",
-    items: [{ id: "resume-variant-plan-item:skills:typescript", section: "skills", action: "add_from_allowed_claim", priority: "required", reviewState: "pending", allowedClaimIds: ["allowed-claim:typescript-skill"], candidateFactIds: ["candidate-fact:typescript-skill"], evidenceMatchIds: ["evidence-match:typescript-direct"], demandIds: ["demand:typescript-required"], riskFlagIds: [], reason: "Use source-backed claim.", version: 1 }],
+    items: [{ id: "resume-variant-plan-item:skills:typescript", section: "skills", action: "add_from_allowed_claim", priority: "required", reviewState: "accepted", allowedClaimIds: ["allowed-claim:typescript-skill"], candidateFactIds: ["candidate-fact:typescript-skill"], evidenceMatchIds: ["evidence-match:typescript-direct"], demandIds: ["demand:typescript-required"], riskFlagIds: [], reason: "Use source-backed claim.", version: 1 }],
     warnings: [],
     blockedClaimIds: [],
     sourceFactIds: ["candidate-fact:typescript-skill"],
@@ -115,6 +117,195 @@ describe("resume variant artifact", () => {
     expect(collectResumeVariantArtifactDemandIds(first)).toEqual(["demand:typescript-required"]);
     expect(collectResumeVariantArtifactRiskFlagIds(first)).toEqual([]);
     expect(collectResumeVariantArtifactReviewItemIds(first)).toEqual(["review-cockpit-item:source-support:typescript"]);
+  });
+
+  it("keeps a pending plan in needs_review and out of generated source-backed claims", async () => {
+    const evidenceGraph = graph();
+    const pendingPlan = plan(evidenceGraph, {
+      items: plan(evidenceGraph).items.map((item) => ({
+        ...item,
+        reviewState: "pending",
+      })),
+    });
+    const reviewCockpit = await buildReviewCockpit({
+      userId: pendingPlan.userId,
+      applicationContextId: pendingPlan.applicationContextId,
+      evidenceGraph,
+      resumeVariantPlan: pendingPlan,
+      createdAt: T,
+    });
+    const artifact = await buildResumeVariantArtifact(
+      input({ evidenceGraph, resumeVariantPlan: pendingPlan, reviewCockpit }),
+    );
+
+    expect(reviewCockpit.summary.status).toBe("needs_review");
+    expect(artifact.status).toBe("needs_review");
+    expect(
+      artifact.sections.flatMap((section) => section.items).some(
+        (item) => item.kind === "source_backed_claim",
+      ),
+    ).toBe(false);
+  });
+
+  it("moves an accepted reviewed plan to ready_for_generation", async () => {
+    const evidenceGraph = graph();
+    const pendingPlan = plan(evidenceGraph, {
+      items: plan(evidenceGraph).items.map((item) => ({
+        ...item,
+        reviewState: "pending",
+      })),
+    });
+    const acceptedPlan = await reviewResumeVariantPlan({
+      userId: pendingPlan.userId,
+      applicationContextId: pendingPlan.applicationContextId,
+      expectedPlanId: pendingPlan.id,
+      plan: pendingPlan,
+      decisions: [
+        {
+          planItemId: pendingPlan.items[0]!.id,
+          reviewState: "accepted",
+        },
+      ],
+      updatedAt: T + 1,
+    });
+    const reviewCockpit = await buildReviewCockpit({
+      userId: acceptedPlan.userId,
+      applicationContextId: acceptedPlan.applicationContextId,
+      evidenceGraph,
+      resumeVariantPlan: acceptedPlan,
+      createdAt: T + 1,
+    });
+    const artifact = await buildResumeVariantArtifact(
+      input({
+        evidenceGraph,
+        resumeVariantPlan: acceptedPlan,
+        reviewCockpit,
+      }),
+    );
+
+    expect(reviewCockpit.summary.status).toBe("ready");
+    expect(artifact.status).toBe("ready_for_generation");
+    expect(collectResumeVariantArtifactSourceFactIds(artifact)).toEqual([
+      "candidate-fact:typescript-skill",
+    ]);
+  });
+
+  it("excludes rejected plan items and their source facts from the generated artifact", async () => {
+    const evidenceGraph = graph();
+    const pendingPlan = plan(evidenceGraph, {
+      items: plan(evidenceGraph).items.map((item) => ({
+        ...item,
+        reviewState: "pending",
+      })),
+    });
+    const rejectedPlan = await reviewResumeVariantPlan({
+      userId: pendingPlan.userId,
+      applicationContextId: pendingPlan.applicationContextId,
+      expectedPlanId: pendingPlan.id,
+      plan: pendingPlan,
+      decisions: [
+        {
+          planItemId: pendingPlan.items[0]!.id,
+          reviewState: "rejected",
+        },
+      ],
+      updatedAt: T + 1,
+    });
+    const reviewCockpit = await buildReviewCockpit({
+      userId: rejectedPlan.userId,
+      applicationContextId: rejectedPlan.applicationContextId,
+      evidenceGraph,
+      resumeVariantPlan: rejectedPlan,
+      createdAt: T,
+    });
+    const artifact = await buildResumeVariantArtifact(
+      input({ evidenceGraph, resumeVariantPlan: rejectedPlan, reviewCockpit }),
+    );
+
+    expect(artifact.status).toBe("draft");
+    expect(artifact.sections).toEqual([]);
+    expect(collectResumeVariantArtifactSourceFactIds(artifact)).toEqual([]);
+  });
+
+  it("does not reintroduce a rejected fact through shared-demand review provenance", async () => {
+    const evidenceGraph = graph({
+      matches: [
+        ...graph().matches,
+        {
+          ...graph().matches[0]!,
+          id: "evidence-match:typescript-adjacent",
+          candidateFactId: "candidate-fact:typescript-adjacent",
+        },
+      ],
+      allowedClaims: [
+        ...graph().allowedClaims,
+        {
+          ...graph().allowedClaims[0]!,
+          id: "allowed-claim:typescript-adjacent",
+          candidateFactIds: ["candidate-fact:typescript-adjacent"],
+        },
+      ],
+    });
+    const pendingPlan = plan(evidenceGraph, {
+      items: [
+        {
+          ...plan(evidenceGraph).items[0]!,
+          reviewState: "pending",
+        },
+        {
+          ...plan(evidenceGraph).items[0]!,
+          id: "resume-variant-plan-item:skills:typescript-adjacent",
+          reviewState: "pending",
+          allowedClaimIds: ["allowed-claim:typescript-adjacent"],
+          candidateFactIds: ["candidate-fact:typescript-adjacent"],
+          evidenceMatchIds: ["evidence-match:typescript-adjacent"],
+        },
+      ],
+      sourceFactIds: [
+        "candidate-fact:typescript-skill",
+        "candidate-fact:typescript-adjacent",
+      ],
+      allowedClaimIds: [
+        "allowed-claim:typescript-skill",
+        "allowed-claim:typescript-adjacent",
+      ],
+    });
+    const reviewedPlan = await reviewResumeVariantPlan({
+      userId: pendingPlan.userId,
+      applicationContextId: pendingPlan.applicationContextId,
+      expectedPlanId: pendingPlan.id,
+      plan: pendingPlan,
+      decisions: [
+        {
+          planItemId: pendingPlan.items[0]!.id,
+          reviewState: "accepted",
+        },
+        {
+          planItemId: pendingPlan.items[1]!.id,
+          reviewState: "rejected",
+        },
+      ],
+      updatedAt: T + 1,
+    });
+    const reviewCockpit = await buildReviewCockpit({
+      userId: reviewedPlan.userId,
+      applicationContextId: reviewedPlan.applicationContextId,
+      evidenceGraph,
+      resumeVariantPlan: reviewedPlan,
+      createdAt: T + 1,
+    });
+    const artifact = await buildResumeVariantArtifact(
+      input({
+        evidenceGraph,
+        resumeVariantPlan: reviewedPlan,
+        reviewCockpit,
+      }),
+    );
+
+    expect(artifact.status).toBe("ready_for_generation");
+    expect(collectResumeVariantArtifactSourceFactIds(artifact)).toEqual([
+      "candidate-fact:typescript-skill",
+    ]);
   });
 
   it("preserves candidateFactId on ReviewCockpit-derived artifact items", async () => {

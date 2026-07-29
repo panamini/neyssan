@@ -403,6 +403,60 @@ describe("MCP read-side materialization from proposal persistence", () => {
     assertNoRawText(tables.applicationContexts);
   });
 
+  it("materializes the canonical CvDocument identity without changing the MCP surface", async () => {
+    const canonicalCvId = "canonical_cv_document_DO_NOT_ECHO";
+    const { ctx, tables } = makeCtx({
+      userProfiles: [
+        profile({
+          cvDocument: {
+            id: canonicalCvId,
+            sections: [{ id: "summary", content: "RAW_CV_TEXT_DO_NOT_ECHO" }],
+          },
+        }),
+      ],
+    });
+
+    await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+
+    expect(tables.applicationContexts).toHaveLength(1);
+    expect((tables.applicationContexts[0].candidate as any).cvId).toBe(canonicalCvId);
+    expect(tables.applicationContexts[0].sourceRefs).toContainEqual(
+      expect.objectContaining({
+        sourceType: "cv",
+        sourceId: canonicalCvId,
+      }),
+    );
+    assertNoRawText(tables.applicationContexts);
+  });
+
+  it("rematerializes safely when a canonical CvDocument identity replaces the legacy fallback", async () => {
+    const { ctx, tables } = makeCtx();
+    await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+    const legacyContextId = String(tables.applicationContexts[0].id);
+
+    tables.userProfiles[0].cvDocument = {
+      id: "canonical_cv_document_DO_NOT_ECHO",
+      sections: [{ id: "summary", content: "RAW_CV_TEXT_DO_NOT_ECHO" }],
+    };
+    const result = await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+
+    expect(result).toMatchObject({
+      status: "materialized",
+      contextReused: false,
+      packageReused: true,
+    });
+    expect(result.applicationContextId).not.toBe(legacyContextId);
+    expect(tables.applicationContexts).toHaveLength(1);
+    expect((tables.applicationContexts[0].candidate as any).cvId).toBe(
+      "canonical_cv_document_DO_NOT_ECHO",
+    );
+    expect(tables.applicationPackages).toHaveLength(1);
+    expect(tables.applicationPackages[0].applicationContextId).toBe(
+      result.applicationContextId,
+    );
+    assertNoRawText(tables.applicationContexts);
+  });
+
   it("rematerializes from internal updateProposal when only sections change", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW + 1_000);

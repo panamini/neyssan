@@ -75,6 +75,58 @@ describe("candidate-evidence kernel", () => {
     expect(first).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("preserves the historical source-document hash when canonicalCvId is absent", async () => {
+    await expect(
+      buildCandidateSourceDocumentHash({
+        userId: "user_123",
+        sourceType: "pasted_text",
+        text: "Built internal tools and customer-facing workflows.",
+        title: "Profile notes",
+        mimeType: "text/plain",
+      }),
+    ).resolves.toBe(
+      "4b977d5f4dbb8d3378261d2fb9b6ceac8fe1477f8afc2905a6c48a4677f1e74d",
+    );
+  });
+
+  it("normalizes and hashes the same source and canonical CV deterministically", async () => {
+    const input = {
+      userId: "user_123",
+      sourceType: "pasted_text" as const,
+      text: "Same source material.",
+      canonicalCvId: "cv-canonical-1",
+    };
+
+    await expect(
+      buildCandidateSourceDocumentHash({
+        ...input,
+        canonicalCvId: "  cv-canonical-1  ",
+      }),
+    ).resolves.toBe(
+      await buildCandidateSourceDocumentHash(input),
+    );
+  });
+
+  it("separates equivalent source material linked to different canonical CVs", async () => {
+    const input = {
+      userId: "user_123",
+      sourceType: "pasted_text" as const,
+      text: "Same source material.",
+    };
+
+    await expect(
+      buildCandidateSourceDocumentHash({
+        ...input,
+        canonicalCvId: "cv-canonical-1",
+      }),
+    ).resolves.not.toBe(
+      await buildCandidateSourceDocumentHash({
+        ...input,
+        canonicalCvId: "cv-canonical-2",
+      }),
+    );
+  });
+
   it("changes source document sourceHash when text changes", async () => {
     const baseHash = await buildCandidateSourceDocumentHash({
       userId: "user_123",

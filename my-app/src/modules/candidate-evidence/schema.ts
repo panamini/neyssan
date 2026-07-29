@@ -48,9 +48,22 @@ export type CandidateImportBatchStatusV1 =
   | "failed"
   | "cancelled";
 
+export type CandidateCvItemKindV1 = "experience" | "education" | "skill";
+
+export type CandidateCvItemReferenceV1 = Readonly<{
+  id: string;
+  cvId: string;
+  sectionId: string;
+  sectionType: CandidateCvItemKindV1;
+  itemId: string;
+  sourcePath: string;
+  version: 1;
+}>;
+
 export type CandidateSourceDocumentV1 = Readonly<{
   id: string;
   userId: string;
+  canonicalCvId?: string;
   sourceType: CandidateSourceDocumentTypeV1;
   title?: string;
   originalFilename?: string;
