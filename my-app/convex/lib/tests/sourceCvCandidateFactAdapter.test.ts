@@ -298,6 +298,101 @@ describe("source CV candidate-fact persistence adapter", () => {
     expect(JSON.stringify(document)).toBe(beforeCv);
   });
 
+  it.each([
+    ["pending review", { reviewState: "pending" as const }],
+    ["rejected review", { reviewState: "rejected" as const }],
+    ["archived review", { reviewState: "archived" as const }],
+    ["private visibility", { visibility: "private" as const }],
+    ["never-use visibility", { visibility: "never_use" as const }],
+  ])(
+    "excludes a source with %s before fact lookup and fails when none remain",
+    async (_label, overrides) => {
+      const document = sourceCv();
+      const ineligible = sourceDocument(
+        "candidate-source-document:ineligible",
+        overrides,
+      );
+      const tables = {
+        sourceDocuments: [ineligible],
+        facts: await currentFactsForSource(document, ineligible.id),
+      };
+      const beforeTables = JSON.stringify(tables);
+      const beforeCv = JSON.stringify(document);
+      const { persistence, queries } = makeDb(tables);
+
+      await expect(
+        buildSourceCvCandidateFactApplicationComposition(
+          adapterInput(persistence, document),
+        ),
+      ).rejects.toThrow(/no approved application-visible source document/i);
+
+      expect(
+        queries.some(
+          (query) => query.operation === "listFactsForSourceDocument",
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(tables)).toBe(beforeTables);
+      expect(JSON.stringify(document)).toBe(beforeCv);
+    },
+  );
+
+  it("uses only eligible sources when eligible and revoked documents are mixed", async () => {
+    const document = sourceCv();
+    const eligible = sourceDocument("candidate-source-document:eligible");
+    const revoked = sourceDocument("candidate-source-document:revoked", {
+      reviewState: "rejected",
+      visibility: "never_use",
+    });
+    const eligibleFacts = await currentFactsForSource(document, eligible.id);
+    const revokedFacts = await currentFactsForSource(document, revoked.id);
+    const tables = {
+      sourceDocuments: [revoked, eligible],
+      facts: [...revokedFacts, ...eligibleFacts],
+    };
+    const beforeTables = JSON.stringify(tables);
+    const beforeCv = JSON.stringify(document);
+    const { persistence, queries } = makeDb(tables);
+
+    const result = await buildSourceCvCandidateFactApplicationComposition(
+      adapterInput(persistence, document),
+    );
+
+    expect(result.candidateFacts.length).toBeGreaterThan(0);
+    expect(
+      result.candidateFacts.every(
+        (fact) => fact.sourceDocumentId === eligible.id,
+      ),
+    ).toBe(true);
+    expect(
+      queries
+        .filter((query) => query.operation === "listFactsForSourceDocument")
+        .map((query) => query.scope.sourceDocumentId),
+    ).toEqual([eligible.id]);
+    expect(JSON.stringify(tables)).toBe(beforeTables);
+    expect(JSON.stringify(document)).toBe(beforeCv);
+  });
+
+  it("fails explicitly when no linked source document is eligible", async () => {
+    const document = sourceCv();
+    const empty = makeDb({ sourceDocuments: [], facts: [] });
+
+    await expect(
+      buildSourceCvCandidateFactApplicationComposition(
+        adapterInput(empty.persistence, document),
+      ),
+    ).rejects.toThrow(/no approved application-visible source document/i);
+
+    expect(empty.queries).toEqual([
+      {
+        operation: "listSourceDocumentsForCanonicalCv",
+        scope: {
+          userId: "user-owner",
+          canonicalCvId: "cv-source-1",
+        },
+      },
+    ]);
+  });
+
   it("invalidates a persisted fact after the referenced CV item is edited", async () => {
     const historicalCv = sourceCv("Customer service");
     const currentCv = sourceCv("Inventory management");
@@ -523,12 +618,15 @@ describe("source CV candidate-fact persistence adapter", () => {
     const invalidSources = [
       sourceDocument("candidate-source-document:foreign", {
         userId: "user-other",
+        reviewState: "rejected",
       }),
       sourceDocument("candidate-source-document:wrong-cv", {
         canonicalCvId: "cv-other",
+        visibility: "private",
       }),
       sourceDocument("candidate-source-document:unlinked", {
         canonicalCvId: undefined,
+        visibility: "never_use",
       }),
     ];
 

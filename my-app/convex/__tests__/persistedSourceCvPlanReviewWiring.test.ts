@@ -79,6 +79,8 @@ function job(id = JOB_ID) {
     _id: id,
     _creationTime: T,
     userId: USER_ID,
+    parseStatus: "parsed",
+    reviewState: "ready",
     title: "Bakery sales associate",
     company: "Bakery One",
     sourceUrl: "https://example.test/jobs/bakery",
@@ -726,6 +728,41 @@ describe("persisted source CV plan review wiring", () => {
       sourcesBefore,
     );
     now.mockRestore();
+  });
+
+  it("rejects review after source revocation without writing an artifact", async () => {
+    const value = await fixture();
+    const { ctx } = makeCtx(value.tables);
+    const pending = await prepareSourceCvVariantPlanForReview._handler(ctx, {
+      jobId: JOB_ID,
+      contextId: value.context.id,
+    });
+    value.tables.candidateSourceDocuments[0] = {
+      ...value.tables.candidateSourceDocuments[0],
+      reviewState: "rejected",
+    };
+    const sourcesBefore = JSON.stringify(value.tables.candidateSourceDocuments);
+    const factsBefore = JSON.stringify(value.tables.candidateFacts);
+
+    await expect(
+      reviewSourceCvVariantPlan._handler(ctx, {
+        jobId: JOB_ID,
+        contextId: value.context.id,
+        expectedPlanId: pending.plan.id,
+        decisions: [
+          {
+            planItemId: pending.plan.items[0].id,
+            reviewState: "accepted",
+          },
+        ],
+      }),
+    ).rejects.toThrow(/no approved application-visible source document/i);
+
+    expect(value.tables.applicationArtifacts).toEqual([]);
+    expect(JSON.stringify(value.tables.candidateSourceDocuments)).toBe(
+      sourcesBefore,
+    );
+    expect(JSON.stringify(value.tables.candidateFacts)).toBe(factsBefore);
   });
 
   it("rejects wrong job, context, and current CV bindings before selecting facts", async () => {

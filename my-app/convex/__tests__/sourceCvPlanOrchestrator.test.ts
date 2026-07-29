@@ -68,10 +68,20 @@ function job(
   ownerId = USER_ID,
   rawDescription = "Customer service in a bakery.",
   mustHaves: readonly string[] = ["Customer service"],
+  readiness: Readonly<{
+    parseStatus?:
+      | "imported"
+      | "parsing"
+      | "parsed"
+      | "failed";
+    reviewState?: "pending" | "needs_review" | "ready";
+  }> = {},
 ) {
   return {
     _id: JOB_ID,
     userId: ownerId,
+    parseStatus: readiness.parseStatus ?? "parsed",
+    reviewState: readiness.reviewState ?? "ready",
     title: "Bakery sales associate",
     company: "Bakery One",
     sourceUrl: "https://example.test/jobs/bakery",
@@ -123,6 +133,8 @@ async function fixture(overrides: {
   jobOwnerId?: string;
   currentJobDescription?: string;
   currentMustHaves?: readonly string[];
+  currentJobParseStatus?: "imported" | "parsing" | "parsed" | "failed";
+  currentJobReviewState?: "pending" | "needs_review" | "ready";
 } = {}) {
   const contextCv = overrides.contextCv ?? sourceCv();
   const currentCv = overrides.currentCv ?? contextCv;
@@ -131,6 +143,10 @@ async function fixture(overrides: {
     overrides.jobOwnerId,
     overrides.currentJobDescription ?? contextJob.rawDescription,
     overrides.currentMustHaves ?? contextJob.mustHaves,
+    {
+      parseStatus: overrides.currentJobParseStatus,
+      reviewState: overrides.currentJobReviewState,
+    },
   );
   const built = await buildApplicationContextV1FromExistingData({
     userId: USER_ID,
@@ -359,6 +375,52 @@ describe("source CV plan orchestrator", () => {
       ).toBe(false);
     }
   });
+
+  it.each(["imported", "parsing", "failed"] as const)(
+    "rejects canonical Job Brief parse status %s before reconstruction or evidence reads",
+    async (parseStatus) => {
+      const value = await fixture({ currentJobParseStatus: parseStatus });
+      const beforeFixture = JSON.stringify(value);
+      const { operations, persistence } = makePersistence(value);
+
+      await expect(
+        buildSourceCvPlanFromPersistence(
+          orchestratorInput(persistence, value),
+        ),
+      ).rejects.toThrow(/canonical Job Brief.*parsed.*ready/i);
+
+      expect(
+        operations.some(
+          (operation) =>
+            operation.operation === "listSourceDocumentsForCanonicalCv",
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(value)).toBe(beforeFixture);
+    },
+  );
+
+  it.each(["pending", "needs_review"] as const)(
+    "rejects canonical Job Brief review state %s before reconstruction or evidence reads",
+    async (reviewState) => {
+      const value = await fixture({ currentJobReviewState: reviewState });
+      const beforeFixture = JSON.stringify(value);
+      const { operations, persistence } = makePersistence(value);
+
+      await expect(
+        buildSourceCvPlanFromPersistence(
+          orchestratorInput(persistence, value),
+        ),
+      ).rejects.toThrow(/canonical Job Brief.*parsed.*ready/i);
+
+      expect(
+        operations.some(
+          (operation) =>
+            operation.operation === "listSourceDocumentsForCanonicalCv",
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(value)).toBe(beforeFixture);
+    },
+  );
 
   it("rejects stale CV and job contexts before selecting candidate evidence", async () => {
     for (const value of [

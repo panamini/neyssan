@@ -14,6 +14,8 @@ import {
 
 type OwnedJobV1 = ApplicationContextBuilderJob & {
   userId?: unknown;
+  parseStatus?: unknown;
+  reviewState?: unknown;
   mustHaves?: unknown;
   responsibilities?: unknown;
   keywords?: unknown;
@@ -130,6 +132,11 @@ export async function buildSourceCvPlanFromPersistence(
   }
   if (readId(job.userId) !== callerUserId) {
     throw new TypeError("ApplicationContext job owner does not match caller");
+  }
+  if (job.parseStatus !== "parsed" || job.reviewState !== "ready") {
+    throw new TypeError(
+      "canonical Job Brief must be parsed and ready for source CV plan preparation",
+    );
   }
 
   const rebuilt = await buildApplicationContextV1FromExistingData({

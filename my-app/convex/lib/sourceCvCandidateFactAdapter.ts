@@ -243,7 +243,18 @@ function validateAndSortSourceDocuments(
     seenIds.add(sourceDocument.id);
   }
 
-  return [...sourceDocuments].sort((left, right) =>
+  const eligibleSourceDocuments = sourceDocuments.filter(
+    (sourceDocument) =>
+      sourceDocument.reviewState === "approved" &&
+      sourceDocument.visibility === "use_in_applications",
+  );
+  if (eligibleSourceDocuments.length === 0) {
+    throw new TypeError(
+      "no approved application-visible source document is available for source CV plan preparation",
+    );
+  }
+
+  return [...eligibleSourceDocuments].sort((left, right) =>
     left.id.localeCompare(right.id),
   );
 }
