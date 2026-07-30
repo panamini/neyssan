@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  materializeCvTailoringReview,
   prepareCvTailoringReview,
   submitCvTailoringReview,
 } from "../jobsPublic";
@@ -528,6 +529,314 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(
       fixture.writes.some((write) =>
         /candidateFacts|candidateSourceDocuments/.test(write),
+      ),
+    ).toBe(false);
+  });
+
+  it("materializes one derived profile from only jobId and expectedPlanId, then attaches a safe identity", async () => {
+    const fixture = makeContext();
+    const sourceBefore = structuredClone(fixture.profile.cvDocument);
+    const jobBefore = structuredClone(fixture.tables.jobs[0]);
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!prepared.plan) {
+      throw new Error("Expected automatic plan");
+    }
+    const reviewed = await submitCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: prepared.plan.id,
+      decisions: prepared.plan.items.map((item) => ({
+        planItemId: item.id,
+        reviewState: "accepted" as const,
+      })),
+    });
+    if (!reviewed.plan) {
+      throw new Error("Expected reviewed plan");
+    }
+    const writesBeforeMaterialization = [...fixture.writes];
+
+    const result = await materializeCvTailoringReview._handler(
+      fixture.ctx,
+      {
+        jobId: JOB_ID,
+        expectedPlanId: reviewed.plan.id,
+      },
+    );
+
+    expect(result).toEqual({
+      jobId: JOB_ID,
+      resumeId: expect.stringMatching(/^source-cv-variant:v1:/),
+      resumeName: "Canonical source CV",
+      sourceCvId: PROFILE_ID,
+      reused: false,
+    });
+    expect(result).not.toHaveProperty("_id");
+    expect(result).not.toHaveProperty("_creationTime");
+    expect(result).not.toHaveProperty("cvDocument");
+    const derivedProfiles = fixture.tables.userProfiles.filter(
+      (profile) => profile.profileId === result.resumeId,
+    );
+    expect(derivedProfiles).toHaveLength(1);
+    expect(derivedProfiles[0]?.cvDocument).toMatchObject({
+      id: result.resumeId,
+      metadata: {
+        reviewedSourceCvVariant: {
+          kind: "reviewed_source_cv_variant",
+          sourceCvId: PROFILE_ID,
+          jobId: JOB_ID,
+          reviewedPlanId: reviewed.plan.id,
+          version: 1,
+        },
+      },
+    });
+    expect(fixture.tables.jobs[0]).toEqual({
+      ...jobBefore,
+      lastResumeId: result.resumeId,
+      lastResumeName: result.resumeName,
+    });
+    expect(fixture.profile.cvDocument).toEqual(sourceBefore);
+    expect(fixture.tables.applicationArtifacts).toHaveLength(1);
+    expect(fixture.writes.slice(writesBeforeMaterialization.length)).toEqual([
+      "insert:userProfiles",
+      "patch:jobs",
+    ]);
+    expect(
+      fixture.writes.some((write) =>
+        /candidateFacts|candidateSourceDocuments/.test(write),
+      ),
+    ).toBe(false);
+  });
+
+  it("replays the same reviewed plan without overwriting later derived-CV edits", async () => {
+    const fixture = makeContext();
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!prepared.plan) {
+      throw new Error("Expected automatic plan");
+    }
+    const reviewed = await submitCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: prepared.plan.id,
+      decisions: prepared.plan.items.map((item) => ({
+        planItemId: item.id,
+        reviewState: "accepted" as const,
+      })),
+    });
+    if (!reviewed.plan) {
+      throw new Error("Expected reviewed plan");
+    }
+    const first = await materializeCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: reviewed.plan.id,
+    });
+    const derived = fixture.tables.userProfiles.find(
+      (profile) => profile.profileId === first.resumeId,
+    );
+    if (!derived) {
+      throw new Error("Expected derived profile");
+    }
+    const editedDocument = {
+      ...(derived.cvDocument as Record<string, unknown>),
+      title: "User-edited tailored CV",
+      tags: ["edited-after-materialization"],
+    };
+    derived.cvDocument = editedDocument;
+    const profileCountBeforeReplay = fixture.tables.userProfiles.length;
+
+    const replayed = await materializeCvTailoringReview._handler(
+      fixture.ctx,
+      {
+        jobId: JOB_ID,
+        expectedPlanId: reviewed.plan.id,
+      },
+    );
+
+    expect(replayed).toEqual({
+      ...first,
+      resumeName: "User-edited tailored CV",
+      reused: true,
+    });
+    expect(fixture.tables.userProfiles).toHaveLength(
+      profileCountBeforeReplay,
+    );
+    expect(derived.cvDocument).toBe(editedDocument);
+    expect(fixture.tables.jobs[0]?.lastResumeId).toBe(first.resumeId);
+    expect(fixture.tables.jobs[0]?.lastResumeName).toBe(
+      "User-edited tailored CV",
+    );
+    expect(
+      fixture.writes.filter(
+        (write) => write === "insert:userProfiles",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("fails closed on a deterministic provenance collision", async () => {
+    const fixture = makeContext();
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!prepared.plan) {
+      throw new Error("Expected automatic plan");
+    }
+    const reviewed = await submitCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: prepared.plan.id,
+      decisions: prepared.plan.items.map((item) => ({
+        planItemId: item.id,
+        reviewState: "accepted" as const,
+      })),
+    });
+    if (!reviewed.plan) {
+      throw new Error("Expected reviewed plan");
+    }
+    const first = await materializeCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: reviewed.plan.id,
+    });
+    const derived = fixture.tables.userProfiles.find(
+      (profile) => profile.profileId === first.resumeId,
+    );
+    const derivedDocument = derived?.cvDocument as
+      | Record<string, any>
+      | undefined;
+    if (!derived || !derivedDocument) {
+      throw new Error("Expected derived profile");
+    }
+    derivedDocument.metadata.reviewedSourceCvVariant.sourceCvId =
+      "cv-collision";
+    fixture.tables.jobs[0]!.lastResumeId = PROFILE_ID;
+    fixture.tables.jobs[0]!.lastResumeName = "Canonical source CV";
+    const writesBeforeCollision = [...fixture.writes];
+
+    await expect(
+      materializeCvTailoringReview._handler(fixture.ctx, {
+        jobId: JOB_ID,
+        expectedPlanId: reviewed.plan.id,
+      }),
+    ).rejects.toThrow(/provenance collision/i);
+    expect(fixture.writes).toEqual(writesBeforeCollision);
+  });
+
+  it("rejects missing auth, foreign jobs, wrong jobs, pending, blocked, stale, and wrong-current-CV materialization", async () => {
+    for (const fixture of [
+      makeContext({ authenticated: false }),
+      makeContext({ jobOwnerId: "profile-foreign" }),
+    ]) {
+      await expect(
+        materializeCvTailoringReview._handler(fixture.ctx, {
+          jobId: JOB_ID,
+          expectedPlanId: "resume-variant-plan:not-authorized",
+        }),
+      ).rejects.toThrow();
+      expect(fixture.writes).toEqual([]);
+    }
+    const wrongJob = makeContext();
+    await expect(
+      materializeCvTailoringReview._handler(wrongJob.ctx, {
+        jobId: "job-missing",
+        expectedPlanId: "resume-variant-plan:not-authorized",
+      }),
+    ).rejects.toThrow();
+    expect(wrongJob.writes).toEqual([]);
+
+    const pending = makeContext();
+    const pendingPlan = await prepareCvTailoringReview._handler(
+      pending.ctx,
+      { jobId: JOB_ID },
+    );
+    if (!pendingPlan.plan) {
+      throw new Error("Expected pending plan");
+    }
+    await expect(
+      materializeCvTailoringReview._handler(pending.ctx, {
+        jobId: JOB_ID,
+        expectedPlanId: pendingPlan.plan.id,
+      }),
+    ).rejects.toThrow(/fully reviewed/i);
+    expect(pending.tables.userProfiles).toHaveLength(1);
+
+    const blocked = makeContext({
+      mustHaves: ["Customer service", "Forklift certification"],
+    });
+    const blockedPending = await prepareCvTailoringReview._handler(
+      blocked.ctx,
+      { jobId: JOB_ID },
+    );
+    if (!blockedPending.plan) {
+      throw new Error("Expected blocked plan");
+    }
+    const blockedReviewed = await submitCvTailoringReview._handler(
+      blocked.ctx,
+      {
+        jobId: JOB_ID,
+        expectedPlanId: blockedPending.plan.id,
+        decisions: blockedPending.plan.items.map((item) => ({
+          planItemId: item.id,
+          reviewState: "accepted" as const,
+        })),
+      },
+    );
+    if (!blockedReviewed.plan) {
+      throw new Error("Expected reviewed blocked plan");
+    }
+    await expect(
+      materializeCvTailoringReview._handler(blocked.ctx, {
+        jobId: JOB_ID,
+        expectedPlanId: blockedReviewed.plan.id,
+      }),
+    ).rejects.toThrow(/generation-ready/i);
+
+    const ready = makeContext();
+    const readyPending = await prepareCvTailoringReview._handler(ready.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!readyPending.plan) {
+      throw new Error("Expected ready plan");
+    }
+    const readyReviewed = await submitCvTailoringReview._handler(
+      ready.ctx,
+      {
+        jobId: JOB_ID,
+        expectedPlanId: readyPending.plan.id,
+        decisions: readyPending.plan.items.map((item) => ({
+          planItemId: item.id,
+          reviewState: "accepted" as const,
+        })),
+      },
+    );
+    if (!readyReviewed.plan) {
+      throw new Error("Expected reviewed ready plan");
+    }
+    await expect(
+      materializeCvTailoringReview._handler(ready.ctx, {
+        jobId: JOB_ID,
+        expectedPlanId: readyPending.plan.id,
+      }),
+    ).rejects.toThrow(/stale/i);
+
+    const wrongCv: StoredRow = {
+      ...ready.profile,
+      _id: "profile-wrong-cv",
+      profileId: "profile-wrong-cv",
+      cvDocument: sourceCv("profile-wrong-cv"),
+    };
+    ready.tables.userProfiles.push(wrongCv);
+    ready.tables.jobs[0]!.lastResumeId = "profile-wrong-cv";
+    ready.tables.jobs[0]!.lastResumeName = "Wrong current CV";
+    await expect(
+      materializeCvTailoringReview._handler(ready.ctx, {
+        jobId: JOB_ID,
+        expectedPlanId: readyReviewed.plan.id,
+      }),
+    ).rejects.toThrow();
+    expect(
+      ready.tables.userProfiles.some((profile) =>
+        String(profile.profileId ?? "").startsWith(
+          "source-cv-variant:v1:",
+        ),
       ),
     ).toBe(false);
   });
