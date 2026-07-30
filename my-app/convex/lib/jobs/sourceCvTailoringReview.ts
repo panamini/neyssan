@@ -25,9 +25,11 @@ import {
   reviewAndPersistSourceCvPlan,
 } from "../sourceCvPlanReviewPersistence";
 import { resolveResumeProfileById } from "./matchRead";
+import { buildScoringProfileFieldsFromCvDocument } from "../../profiles";
 import {
   DEFAULT_PROFILE_PREFERENCES,
   listProfilesForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
 } from "../userProfiles";
 
 export type CvTailoringReviewModeV1 =
@@ -182,6 +184,7 @@ export async function materializeOwnedCvTailoringReview(
     sourceCv: prepared.sourceCv,
     reviewedPlan: reviewed.plan,
   });
+  const attachmentUpdatedAt = Date.now();
   const candidates = await ctx.db
     .query("userProfiles")
     .withIndex("by_profileId", (q) =>
@@ -221,9 +224,11 @@ export async function materializeOwnedCvTailoringReview(
         ? existingDocument.title
         : materialized.name;
   } else {
-    const now = Date.now();
     const profilePreferences = readRecord(
       prepared.sourceProfile.preferences,
+    );
+    const scoringFields = buildScoringProfileFieldsFromCvDocument(
+      materialized.document,
     );
     await ctx.db.insert("userProfiles", {
       profileId: materialized.id,
@@ -241,9 +246,23 @@ export async function materializeOwnedCvTailoringReview(
         ...DEFAULT_PROFILE_PREFERENCES,
         ...(profilePreferences ?? {}),
       },
+      ...(scoringFields.summary
+        ? { summary: scoringFields.summary }
+        : {}),
+      skills: scoringFields.skills,
+      keywords: resolveCanonicalProfileKeywordsForWrite({
+        summary: scoringFields.summary,
+        skills: scoringFields.skills,
+        experience: scoringFields.experience,
+        rawText: scoringFields.raw_text,
+      }),
+      experience: scoringFields.experience,
+      ...(scoringFields.raw_text
+        ? { raw_text: scoringFields.raw_text }
+        : {}),
       version: 1,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: attachmentUpdatedAt,
+      updatedAt: attachmentUpdatedAt,
       cvDocument: materialized.document,
     });
   }
@@ -251,6 +270,7 @@ export async function materializeOwnedCvTailoringReview(
   await ctx.db.patch(prepared.job._id, {
     lastResumeId: materialized.id,
     lastResumeName: resumeName,
+    updatedAt: attachmentUpdatedAt,
   });
   return {
     jobId: prepared.jobId,

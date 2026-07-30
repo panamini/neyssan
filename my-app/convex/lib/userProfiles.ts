@@ -406,6 +406,12 @@ function buildCanonicalProfileProjection(
 }
 
 function sortByRecency(left: StoredUserProfile, right: StoredUserProfile): number {
+  const leftIsVariant = isReviewedSourceCvVariant(left);
+  const rightIsVariant = isReviewedSourceCvVariant(right);
+  if (leftIsVariant !== rightIsVariant) {
+    return leftIsVariant ? 1 : -1;
+  }
+
   const leftTs = left.updatedAt ?? left.createdAt ?? left._creationTime ?? 0;
   const rightTs = right.updatedAt ?? right.createdAt ?? right._creationTime ?? 0;
   if (rightTs !== leftTs) {
@@ -417,6 +423,13 @@ function sortByRecency(left: StoredUserProfile, right: StoredUserProfile): numbe
   }
 
   return String(right._id).localeCompare(String(left._id));
+}
+
+function isReviewedSourceCvVariant(profile: StoredUserProfile): boolean {
+  return (
+    typeof profile.profileId === "string" &&
+    profile.profileId.startsWith("source-cv-variant:v1:")
+  );
 }
 
 export async function listProfilesForClerk(

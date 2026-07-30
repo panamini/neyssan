@@ -5,6 +5,7 @@ import {
   prepareCvTailoringReview,
   submitCvTailoringReview,
 } from "../jobsPublic";
+import { listProfilesForClerk } from "../lib/userProfiles";
 
 const T = Date.UTC(2026, 6, 30);
 const CLERK_ID = "clerk-owner";
@@ -22,11 +23,13 @@ function sourceCv(
   options: Readonly<{
     legacyIds?: boolean;
     skillNames?: readonly string[];
+    summary?: string;
   }> = {},
 ) {
   return {
     id,
     title: "Canonical source CV",
+    ...(options.summary ? { summary: options.summary } : {}),
     metadata: {
       createdAt: "2026-07-30T00:00:00.000Z",
       updatedAt: "2026-07-30T00:00:00.000Z",
@@ -91,6 +94,7 @@ function makeContext(overrides: {
   mustHaves?: readonly string[];
   skillNames?: readonly string[];
   keywords?: readonly string[];
+  cvSummary?: string;
 } = {}) {
   const attachedProfileId = overrides.siblingAttachedCv
     ? SIBLING_PROFILE_ID
@@ -106,6 +110,7 @@ function makeContext(overrides: {
     cvDocument: sourceCv(canonicalCvId, {
       legacyIds: overrides.legacyCvIds,
       skillNames: overrides.skillNames,
+      summary: overrides.cvSummary,
     }),
     createdAt: T,
     updatedAt: T,
@@ -534,7 +539,10 @@ describe("authenticated source CV tailoring review boundary", () => {
   });
 
   it("materializes one derived profile from only jobId and expectedPlanId, then attaches a safe identity", async () => {
-    const fixture = makeContext();
+    const fixture = makeContext({
+      cvSummary: "Customer-focused bakery professional",
+      skillNames: ["Customer service"],
+    });
     const sourceBefore = structuredClone(fixture.profile.cvDocument);
     const jobBefore = structuredClone(fixture.tables.jobs[0]);
     const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
@@ -590,11 +598,25 @@ describe("authenticated source CV tailoring review boundary", () => {
         },
       },
     });
+    expect(derivedProfiles[0]).toMatchObject({
+      summary: "Customer-focused bakery professional",
+      skills: ["Customer service"],
+      experience: [
+        expect.objectContaining({
+          company: "Bakery One",
+          title: "Sales associate",
+        }),
+      ],
+      raw_text: expect.stringContaining("Customer service"),
+      keywords: expect.arrayContaining(["customer-focused"]),
+    });
     expect(fixture.tables.jobs[0]).toEqual({
       ...jobBefore,
       lastResumeId: result.resumeId,
       lastResumeName: result.resumeName,
+      updatedAt: expect.any(Number),
     });
+    expect(Number(fixture.tables.jobs[0]?.updatedAt)).toBeGreaterThan(T);
     expect(fixture.profile.cvDocument).toEqual(sourceBefore);
     expect(fixture.tables.applicationArtifacts).toHaveLength(1);
     expect(fixture.writes.slice(writesBeforeMaterialization.length)).toEqual([
@@ -606,6 +628,30 @@ describe("authenticated source CV tailoring review boundary", () => {
         /candidateFacts|candidateSourceDocuments/.test(write),
       ),
     ).toBe(false);
+  });
+
+  it("keeps a newer reviewed source-CV variant behind the canonical primary profile", async () => {
+    const fixture = makeContext();
+    const derivedProfileId = "source-cv-variant:v1:derived";
+    fixture.tables.userProfiles.push({
+      _id: "profile-derived-storage",
+      _creationTime: T + 2,
+      clerkId: CLERK_ID,
+      profileId: derivedProfileId,
+      email: "owner@example.test",
+      updatedAt: T + 10_000,
+      createdAt: T + 1,
+      version: 2,
+      // Simulates a later full-document edit that replaces provenance metadata.
+      cvDocument: sourceCv(derivedProfileId),
+    });
+
+    const profiles = await listProfilesForClerk(fixture.ctx, CLERK_ID);
+
+    expect(profiles.map((profile) => profile.profileId)).toEqual([
+      PROFILE_ID,
+      derivedProfileId,
+    ]);
   });
 
   it("replays the same reviewed plan without overwriting later derived-CV edits", async () => {
