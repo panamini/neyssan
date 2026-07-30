@@ -1,4 +1,9 @@
 import type { MutationCtx } from "../../_generated/server";
+import {
+  materializeSourceCvVariant,
+  type ReviewedSourceCvVariantProvenanceV1,
+} from "../../../src/modules/resume-variant-materialization/materializeSourceCvVariant";
+import type { CvDocument } from "../../../src/types/cvDocument";
 import type { ResumeVariantPlanReviewDecisionV1 } from "../../../src/modules/resume-variant-plan/reviewResumeVariantPlan";
 import type {
   ResumeVariantPlanActionV1,
@@ -20,7 +25,12 @@ import {
   reviewAndPersistSourceCvPlan,
 } from "../sourceCvPlanReviewPersistence";
 import { resolveResumeProfileById } from "./matchRead";
-import { listProfilesForClerk } from "../userProfiles";
+import { buildScoringProfileFieldsFromCvDocument } from "../../profiles";
+import {
+  DEFAULT_PROFILE_PREFERENCES,
+  listProfilesForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
+} from "../userProfiles";
 
 export type CvTailoringReviewModeV1 =
   | "auto_recommended"
@@ -72,6 +82,14 @@ export type CvTailoringReviewDtoV1 =
       plan: null;
     }>;
 
+export type CvTailoringMaterializationDtoV1 = Readonly<{
+  jobId: string;
+  resumeId: string;
+  resumeName: string;
+  sourceCvId: string;
+  reused: boolean;
+}>;
+
 export async function prepareOwnedCvTailoringReview(
   ctx: MutationCtx,
   input: Readonly<{
@@ -122,10 +140,152 @@ export async function submitOwnedCvTailoringReview(
   return projectCvTailoringReview(reviewed);
 }
 
+export async function materializeOwnedCvTailoringReview(
+  ctx: MutationCtx,
+  input: Readonly<{
+    jobId: string;
+    expectedPlanId: string;
+  }>,
+): Promise<CvTailoringMaterializationDtoV1> {
+  const expectedPlanId = requireString(
+    input.expectedPlanId,
+    "expectedPlanId",
+  );
+  const prepared = await buildOwnedCvTailoringComposition(
+    ctx,
+    input.jobId,
+    "auto_recommended",
+    expectedPlanId,
+  );
+  if (prepared.composition.mode !== "auto_recommended") {
+    throw new TypeError("CV tailoring materialization requires a plan");
+  }
+  const reviewed = await loadPersistedSourceCvPlanReview(
+    ctx.db,
+    prepared.composition,
+    prepared.jobId,
+  );
+  if (reviewed.plan.id !== expectedPlanId) {
+    throw new TypeError("stale ResumeVariantPlan materialization");
+  }
+  const reviewOutcome =
+    resolveApplicationScopedSourceCvReviewOutcome(
+      reviewed.plan,
+      reviewed.evidenceGraph,
+    );
+  if (reviewOutcome.status !== "approved") {
+    throw new TypeError(
+      "CV tailoring materialization requires a fully reviewed generation-ready plan",
+    );
+  }
+
+  const materialized = await materializeSourceCvVariant({
+    applicationContext: prepared.applicationContext,
+    sourceCv: prepared.sourceCv,
+    reviewedPlan: reviewed.plan,
+  });
+  const attachmentUpdatedAt = Date.now();
+  const candidates = await ctx.db
+    .query("userProfiles")
+    .withIndex("by_profileId", (q) =>
+      q.eq("profileId", materialized.id),
+    )
+    .collect();
+  let reused = false;
+  let resumeName = materialized.name;
+
+  if (candidates.length > 0) {
+    if (candidates.length !== 1) {
+      throw new TypeError(
+        "deterministic source CV variant identity collision",
+      );
+    }
+    const existing = candidates[0];
+    const existingDocument = readRecord(existing.cvDocument);
+    const existingProvenance =
+      readReviewedSourceCvVariantProvenance(existingDocument);
+    if (
+      existing.clerkId !== prepared.clerkId ||
+      existing.profileId !== materialized.id ||
+      existingDocument?.id !== materialized.id ||
+      !sameMaterializationProvenance(
+        existingProvenance,
+        materialized.provenance,
+      )
+    ) {
+      throw new TypeError(
+        "deterministic source CV variant provenance collision",
+      );
+    }
+    reused = true;
+    resumeName =
+      typeof existingDocument.title === "string" &&
+      existingDocument.title.trim()
+        ? existingDocument.title
+        : materialized.name;
+  } else {
+    const profilePreferences = readRecord(
+      prepared.sourceProfile.preferences,
+    );
+    const scoringFields = buildScoringProfileFieldsFromCvDocument(
+      materialized.document,
+    );
+    await ctx.db.insert("userProfiles", {
+      profileId: materialized.id,
+      clerkId: prepared.clerkId,
+      email: requireString(
+        prepared.sourceProfile.email ??
+          prepared.ownerProfile.email,
+        "profile email",
+      ),
+      ...(typeof prepared.sourceProfile.name === "string" &&
+      prepared.sourceProfile.name.trim()
+        ? { name: prepared.sourceProfile.name }
+        : {}),
+      preferences: {
+        ...DEFAULT_PROFILE_PREFERENCES,
+        ...(profilePreferences ?? {}),
+      },
+      ...(scoringFields.summary
+        ? { summary: scoringFields.summary }
+        : {}),
+      skills: scoringFields.skills,
+      keywords: resolveCanonicalProfileKeywordsForWrite({
+        summary: scoringFields.summary,
+        skills: scoringFields.skills,
+        experience: scoringFields.experience,
+        rawText: scoringFields.raw_text,
+      }),
+      experience: scoringFields.experience,
+      ...(scoringFields.raw_text
+        ? { raw_text: scoringFields.raw_text }
+        : {}),
+      version: 1,
+      createdAt: attachmentUpdatedAt,
+      updatedAt: attachmentUpdatedAt,
+      cvDocument: materialized.document,
+    });
+  }
+
+  await ctx.db.patch(prepared.job._id, {
+    lastResumeId: materialized.id,
+    lastResumeName: resumeName,
+    updatedAt: attachmentUpdatedAt,
+  });
+  return {
+    jobId: prepared.jobId,
+    resumeId: materialized.id,
+    resumeName,
+    sourceCvId: materialized.provenance.sourceCvId,
+    reused,
+  };
+}
+
 async function buildOwnedCvTailoringComposition(
   ctx: MutationCtx,
   requestedJobId: string,
   mode: CvTailoringReviewModeV1,
+  expectedReviewedPlanId?: string,
 ) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
@@ -163,12 +323,47 @@ async function buildOwnedCvTailoringComposition(
     job.lastResumeId,
     "attached resume",
   );
-  const selectedProfile = resolveResumeProfileById(
+  const attachedProfile = resolveResumeProfileById(
     profiles,
     attachedResumeId,
   );
-  if (!selectedProfile) {
+  if (!attachedProfile) {
     throw new Error("Attached resume not found");
+  }
+  const attachedProfileId = String(
+    attachedProfile.profileId ?? attachedProfile._id ?? "",
+  ).trim();
+  const attachedCv = readRecord(attachedProfile.cvDocument);
+  const attachedCvId = requireString(
+    attachedCv?.id,
+    "canonical attached CV",
+  );
+  if (
+    attachedProfileId !== attachedResumeId ||
+    attachedCvId !== attachedResumeId
+  ) {
+    throw new Error(
+      "Attached resume, selected profile, and canonical source CV do not match",
+    );
+  }
+  const attachedMaterialization =
+    readReviewedSourceCvVariantProvenance(attachedCv);
+  const replayedMaterialization =
+    expectedReviewedPlanId &&
+    attachedMaterialization?.jobId === jobId &&
+    attachedMaterialization.reviewedPlanId ===
+      expectedReviewedPlanId
+      ? attachedMaterialization
+      : null;
+  const selectedProfile =
+    replayedMaterialization
+      ? resolveResumeProfileById(
+          profiles,
+          replayedMaterialization.sourceCvId,
+        )
+      : attachedProfile;
+  if (!selectedProfile) {
+    throw new Error("Materialized resume source CV not found");
   }
   const selectedProfileId = String(
     selectedProfile.profileId ?? selectedProfile._id ?? "",
@@ -176,8 +371,9 @@ async function buildOwnedCvTailoringComposition(
   const sourceCv = readRecord(selectedProfile.cvDocument);
   const sourceCvId = requireString(sourceCv?.id, "canonical source CV");
   if (
-    selectedProfileId !== attachedResumeId ||
-    sourceCvId !== attachedResumeId
+    selectedProfileId !== sourceCvId ||
+    (selectedProfile === attachedProfile &&
+      sourceCvId !== attachedResumeId)
   ) {
     throw new Error(
       "Attached resume, selected profile, and canonical source CV do not match",
@@ -198,8 +394,13 @@ async function buildOwnedCvTailoringComposition(
   if (
     persisted.context.job.jobId !== jobId ||
     persisted.context.candidate.sourceKind !== "cv" ||
-    persisted.context.candidate.cvId !== attachedResumeId ||
-    persisted.context.candidate.candidateHash !== built.candidateHash
+    persisted.context.candidate.cvId !== sourceCvId ||
+    persisted.context.candidate.candidateHash !== built.candidateHash ||
+    (replayedMaterialization &&
+      (replayedMaterialization.applicationContextId !==
+        persisted.context.id ||
+        replayedMaterialization.applicationContextHash !==
+          persisted.context.contextHash))
   ) {
     throw new TypeError(
       "Persisted ApplicationContext does not match the attached source CV",
@@ -215,7 +416,16 @@ async function buildOwnedCvTailoringComposition(
     sourceAuthorization: "attached_source_cv",
     now: persisted.context.updatedAt,
   });
-  return { composition, jobId };
+  return {
+    composition,
+    jobId,
+    job,
+    clerkId: identity.subject,
+    ownerProfile,
+    sourceProfile: selectedProfile,
+    sourceCv: sourceCv as unknown as Readonly<CvDocument>,
+    applicationContext: persisted.context,
+  };
 }
 
 function projectCvTailoringReview(
@@ -284,4 +494,38 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function readReviewedSourceCvVariantProvenance(
+  document: Record<string, unknown> | null,
+): ReviewedSourceCvVariantProvenanceV1 | null {
+  const metadata = readRecord(document?.metadata);
+  const provenance = readRecord(
+    metadata?.reviewedSourceCvVariant,
+  );
+  return provenance?.kind === "reviewed_source_cv_variant" &&
+    provenance.version === 1 &&
+    typeof provenance.sourceCvId === "string" &&
+    typeof provenance.jobId === "string" &&
+    typeof provenance.applicationContextId === "string" &&
+    typeof provenance.applicationContextHash === "string" &&
+    typeof provenance.reviewedPlanId === "string"
+    ? (provenance as ReviewedSourceCvVariantProvenanceV1)
+    : null;
+}
+
+function sameMaterializationProvenance(
+  left: ReviewedSourceCvVariantProvenanceV1 | null,
+  right: ReviewedSourceCvVariantProvenanceV1,
+): boolean {
+  return (
+    left?.kind === right.kind &&
+    left.sourceCvId === right.sourceCvId &&
+    left.jobId === right.jobId &&
+    left.applicationContextId === right.applicationContextId &&
+    left.applicationContextHash ===
+      right.applicationContextHash &&
+    left.reviewedPlanId === right.reviewedPlanId &&
+    left.version === right.version
+  );
 }

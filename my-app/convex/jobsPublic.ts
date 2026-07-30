@@ -68,6 +68,7 @@ import {
 } from "./lib/jobs/structuredMatchReview";
 import { buildLiveMatchReviewRecord } from "./lib/jobs/liveMatchReviewExport";
 import {
+  materializeOwnedCvTailoringReview,
   prepareOwnedCvTailoringReview,
   submitOwnedCvTailoringReview,
 } from "./lib/jobs/sourceCvTailoringReview";
@@ -169,6 +170,13 @@ const cvTailoringReviewResultValidator = v.union(
     plan: v.null(),
   }),
 );
+const cvTailoringMaterializationResultValidator = v.object({
+  jobId: v.string(),
+  resumeId: v.string(),
+  resumeName: v.string(),
+  sourceCvId: v.string(),
+  reused: v.boolean(),
+});
 const jobExtractionShadowValidationStatus = v.union(
   v.literal("valid"),
   v.literal("invalid_json"),
@@ -2973,6 +2981,17 @@ export const submitCvTailoringReview = mutation({
   returns: cvTailoringReviewResultValidator,
   handler: async (ctx, args) => {
     return await submitOwnedCvTailoringReview(ctx, args);
+  },
+});
+
+export const materializeCvTailoringReview = mutation({
+  args: {
+    jobId: v.string(),
+    expectedPlanId: v.string(),
+  },
+  returns: cvTailoringMaterializationResultValidator,
+  handler: async (ctx, args) => {
+    return await materializeOwnedCvTailoringReview(ctx, args);
   },
 });
 
