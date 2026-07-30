@@ -28,6 +28,9 @@ const restoreArchivedJobMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
 const setJobFavoriteMock = vi.fn().mockResolvedValue(null);
 const setJobResumeMock = vi.fn().mockResolvedValue(null);
+const prepareCvTailoringReviewMock = vi.fn();
+const submitCvTailoringReviewMock = vi.fn();
+const materializeCvTailoringReviewMock = vi.fn();
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const debugInspectMatchInputMock = vi.fn();
@@ -301,6 +304,15 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.setJobFavorite") {
       return setJobFavoriteMock;
     }
+    if (reference === "jobsPublic.prepareCvTailoringReview") {
+      return prepareCvTailoringReviewMock;
+    }
+    if (reference === "jobsPublic.submitCvTailoringReview") {
+      return submitCvTailoringReviewMock;
+    }
+    if (reference === "jobsPublic.materializeCvTailoringReview") {
+      return materializeCvTailoringReviewMock;
+    }
     if (reference === "jobsPublic.updateField") {
       return updateFieldMock;
     }
@@ -334,6 +346,9 @@ vi.mock("../../../convex/_generated/api", () => ({
       refreshStructuredMatch: "jobsPublic.refreshStructuredMatch",
       setResumeForJob: "jobsPublic.setResumeForJob",
       setJobFavorite: "jobsPublic.setJobFavorite",
+      prepareCvTailoringReview: "jobsPublic.prepareCvTailoringReview",
+      submitCvTailoringReview: "jobsPublic.submitCvTailoringReview",
+      materializeCvTailoringReview: "jobsPublic.materializeCvTailoringReview",
       updateField: "jobsPublic.updateField",
     },
   },
@@ -369,6 +384,103 @@ function createDeferred<T>() {
     reject = nextReject;
   });
   return { promise, resolve, reject };
+}
+
+const pendingCvTailoringReview = {
+  mode: "auto_recommended" as const,
+  sourceCv: {
+    id: "cv_alpha",
+    contextHash: "source-cv-context-alpha",
+  },
+  plan: {
+    id: "resume-variant-plan:pending",
+    blocked: false,
+    requiredDemandIds: ["job-demand:operations"],
+    items: [
+      {
+        id: "resume-variant-plan-item:experience",
+        section: "experience" as const,
+        action: "include" as const,
+        priority: "required" as const,
+        reviewState: "pending" as const,
+        displayLabel: "Operations Lead · Example Co",
+        demandIds: ["job-demand:operations"],
+        sourceCvItemReferenceIds: ["candidate-cv-item:v1:experience"],
+        reason: "Matches the required operations demand.",
+      },
+      {
+        id: "resume-variant-plan-item:skill",
+        section: "skills" as const,
+        action: "include" as const,
+        priority: "optional" as const,
+        reviewState: "pending" as const,
+        displayLabel: "Process mapping",
+        demandIds: [],
+        sourceCvItemReferenceIds: ["candidate-cv-item:v1:skill"],
+        reason: "Available in the attached resume.",
+      },
+    ],
+    warnings: [],
+  },
+};
+
+const reviewedCvTailoringReview = {
+  ...pendingCvTailoringReview,
+  plan: {
+    ...pendingCvTailoringReview.plan,
+    id: "resume-variant-plan:reviewed",
+    items: [
+      {
+        ...pendingCvTailoringReview.plan.items[0],
+        reviewState: "accepted" as const,
+      },
+      {
+        ...pendingCvTailoringReview.plan.items[1],
+        reviewState: "rejected" as const,
+      },
+    ],
+  },
+};
+
+function readyJobWithAttachedResume() {
+  return {
+    ...selectedJob,
+    reviewState: "ready",
+    resumeId: "cv_alpha",
+    resumeName: "Primary resume",
+    resumeSource: "job" as const,
+    reviewItems: [],
+  };
+}
+
+function renderJobsDetail(
+  initialEntry = "/jobs/job_alpha",
+): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route
+          path="/jobs/:jobId"
+          element={
+            <>
+              <JobsPage />
+              <LocationProbe />
+            </>
+          }
+        />
+        <Route
+          path="/jobs"
+          element={
+            <>
+              <JobsPage />
+              <LocationProbe />
+            </>
+          }
+        />
+        <Route path="/proposal" element={<LocationProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 function enableJobsMatchDebug(): void {
@@ -426,6 +538,9 @@ describe("JobsPage", () => {
     seedSampleJobMock.mockResolvedValue({ jobId: "job_sample" });
     setJobFavoriteMock.mockClear();
     setJobResumeMock.mockClear();
+    prepareCvTailoringReviewMock.mockReset();
+    submitCvTailoringReviewMock.mockReset();
+    materializeCvTailoringReviewMock.mockReset();
     showToastMock.mockClear();
     trackEventMock.mockClear();
     updateFieldMock.mockClear();
@@ -3080,6 +3195,446 @@ describe("JobsPage", () => {
       "Sample failed.",
     );
     expect(screen.queryByText("Convex sample seed failed")).toBeNull();
+  });
+
+  it("prepares attached ready jobs with the fixed auto mode and checks pending recommendations by default", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+
+    renderJobsDetail();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+
+    await waitFor(() => {
+      expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        mode: "auto_recommended",
+      });
+    });
+    expect(
+      await screen.findByRole("checkbox", {
+        name: /Operations Lead · Example Co/i,
+      }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: /Process mapping/i }),
+    ).toBeChecked();
+  });
+
+  it("submits decisions only for pending selectable items and materializes with the returned reviewed plan id", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    const sourceCvBefore = JSON.stringify(cvLibraryResult.cvs[0]);
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+    submitCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: false,
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /Process mapping/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create tailored resume" }),
+    );
+
+    await waitFor(() => {
+      expect(submitCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        expectedPlanId: "resume-variant-plan:pending",
+        decisions: [
+          {
+            planItemId: "resume-variant-plan-item:experience",
+            reviewState: "accepted",
+          },
+          {
+            planItemId: "resume-variant-plan-item:skill",
+            reviewState: "rejected",
+          },
+        ],
+      });
+      expect(materializeCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        expectedPlanId: "resume-variant-plan:reviewed",
+      });
+    });
+    expect(JSON.stringify(cvLibraryResult.cvs[0])).toBe(sourceCvBefore);
+    expect(screen.getByText("Tailored resume ready")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Continue to proposal" }),
+    );
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/proposal?jobId=job_alpha&drawer=proposal-draft",
+    );
+
+    for (const [input] of [
+      ...prepareCvTailoringReviewMock.mock.calls,
+      ...submitCvTailoringReviewMock.mock.calls,
+      ...materializeCvTailoringReviewMock.mock.calls,
+    ]) {
+      expect(input).not.toHaveProperty("userId");
+      expect(input).not.toHaveProperty("candidateFacts");
+      expect(input).not.toHaveProperty("cvDocument");
+      expect(input).not.toHaveProperty("evidenceGraph");
+      expect(input).not.toHaveProperty("sourceAuthorization");
+    }
+  });
+
+  it("blocks submission when a checked selection leaves a required demand uncovered", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("checkbox", {
+        name: /Operations Lead · Example Co/i,
+      }),
+    );
+
+    expect(
+      screen.getByText(/Keep at least one recommendation for every required/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create tailored resume" }),
+    ).toBeDisabled();
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves settled decisions and materializes a fully reviewed resumed plan without resubmitting", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: true,
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+
+    expect(
+      await screen.findByRole("checkbox", {
+        name: /Operations Lead · Example Co/i,
+      }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: /Operations Lead · Example Co/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", { name: /Process mapping/i }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: /Process mapping/i }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create tailored resume" }),
+    );
+
+    await waitFor(() => {
+      expect(materializeCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        expectedPlanId: "resume-variant-plan:reviewed",
+      });
+    });
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for blocked and stale reviews with a recoverable reload action", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValueOnce({
+      ...pendingCvTailoringReview,
+      plan: {
+        ...pendingCvTailoringReview.plan,
+        blocked: true,
+        blockedReason: "Required evidence is missing.",
+      },
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+
+    expect(
+      await screen.findByRole("alert"),
+    ).toHaveTextContent("Required evidence is missing.");
+    expect(
+      screen.getByRole("button", { name: "Create tailored resume" }),
+    ).toBeDisabled();
+
+    prepareCvTailoringReviewMock.mockResolvedValueOnce(
+      pendingCvTailoringReview,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Reload recommendations" }));
+    await screen.findByRole("checkbox", { name: /Process mapping/i });
+    submitCvTailoringReviewMock.mockRejectedValue(
+      new Error("stale ResumeVariantPlan review"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create tailored resume" }),
+    );
+
+    expect(
+      await screen.findByText(/review changed.*reload/i),
+    ).toBeInTheDocument();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
+  });
+
+  it("validates full_source_cv with only prepare and then reuses the existing proposal route", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    const sourceCvBefore = JSON.stringify(cvLibraryResult.cvs[0]);
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        mode: "full_source_cv",
+      });
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
+    });
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(cvLibraryResult.cvs[0])).toBe(sourceCvBefore);
+  });
+
+  it("does not prepare without an attached resume or a ready Job Brief", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      reviewState: "ready",
+      resumeId: undefined,
+      resumeName: undefined,
+    };
+    const firstRender = renderJobsDetail();
+
+    expect(
+      await screen.findByText(/Attach a resume to tailor it for this job/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Tailor resume" }),
+    ).toBeDisabled();
+    expect(prepareCvTailoringReviewMock).not.toHaveBeenCalled();
+
+    firstRender.unmount();
+    selectedJobResult = {
+      ...readyJobWithAttachedResume(),
+      reviewState: "needs_review",
+    };
+    renderJobsDetail();
+
+    expect(
+      await screen.findByText(/Finish the Job Brief review before tailoring/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Tailor resume" }),
+    ).toBeDisabled();
+    expect(prepareCvTailoringReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("closing or changing the selected job never submits or materializes", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Close resume review" }),
+    );
+    fireEvent.click(screen.getByText("Support Specialist"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_beta",
+      );
+    });
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("invalidates an active review before attaching a different resume on the same job", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        { id: "cv_beta", title: "Alternate resume", sections: [] },
+      ],
+      currentCv: null,
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+    const attachment = createDeferred<null>();
+    setJobResumeMock.mockReturnValueOnce(attachment.promise);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    await screen.findByRole("checkbox", {
+      name: /Operations Lead · Example Co/i,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach Alternate resume" }),
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Review recommendations" }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /resume review reset.*prepare recommendations again/i,
+    );
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+
+    attachment.resolve(null);
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: "cv_beta",
+        resumeName: "Alternate resume",
+      });
+    });
+  });
+
+  it("invalidates an active review before detaching its resume on the same job", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+    const detachment = createDeferred<null>();
+    setJobResumeMock.mockReturnValueOnce(detachment.promise);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    await screen.findByRole("checkbox", {
+      name: /Operations Lead · Example Co/i,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove attached resume" }),
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Review recommendations" }),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /resume review reset.*prepare recommendations again/i,
+    );
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+
+    detachment.resolve(null);
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: null,
+        resumeName: null,
+      });
+    });
+  });
+
+  it("ignores an in-flight full-source response after the attached resume changes", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        { id: "cv_beta", title: "Alternate resume", sections: [] },
+      ],
+      currentCv: null,
+    };
+    const fullSourceResponse =
+      createDeferred<typeof pendingCvTailoringReview | {
+        mode: "full_source_cv";
+        sourceCv: { id: string; contextHash: string };
+        plan: null;
+      }>();
+    prepareCvTailoringReviewMock.mockReturnValueOnce(
+      fullSourceResponse.promise,
+    );
+    setJobResumeMock.mockResolvedValueOnce(null);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach Alternate resume" }),
+    );
+
+    fullSourceResponse.resolve({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /resume review reset.*prepare recommendations again/i,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_alpha",
+      );
+    });
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
   });
 
   it("renders recovery guidance when the jobs query is missing from the local Convex runtime", async () => {

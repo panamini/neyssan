@@ -5,6 +5,11 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ClipboardText } from "@/lib/icons";
 import { api } from "../../../convex/_generated/api";
 import { FirstRunPanel } from "./FirstRunPanel";
+import {
+  CvTailoringReviewPanel,
+  type AutoCvTailoringReviewDtoV1,
+  type CvTailoringReviewDtoV1,
+} from "./CvTailoringReviewPanel";
 import { JobDetail } from "./JobDetail";
 import { JobsList } from "./JobsList";
 import {
@@ -25,6 +30,7 @@ import {
 import { openOnboardingReplay } from "../../lib/onboarding-replay-event";
 import type { CvDocument } from "../../types/cvDocument";
 import { formatUiDate } from "../../lib/ui-date";
+import { isClaimBackedResumeVariantPlanAction } from "../../modules/resume-variant-plan/planRules";
 
 type JobsPageRouteParams = {
   jobId?: string;
@@ -1116,6 +1122,115 @@ function formatJobsActionError(error: unknown, fallback: string): string {
   return message || fallback;
 }
 
+function readCvTailoringReviewResult(
+  value: unknown,
+  expectedMode: "auto_recommended" | "full_source_cv",
+  expectedSourceCvId: string,
+): CvTailoringReviewDtoV1 | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const result = value as Record<string, unknown>;
+  const sourceCv =
+    result.sourceCv &&
+    typeof result.sourceCv === "object" &&
+    !Array.isArray(result.sourceCv)
+      ? (result.sourceCv as Record<string, unknown>)
+      : null;
+  if (
+    result.mode !== expectedMode ||
+    sourceCv?.id !== expectedSourceCvId ||
+    typeof sourceCv.contextHash !== "string"
+  ) {
+    return null;
+  }
+  if (expectedMode === "full_source_cv") {
+    return result.plan === null
+      ? (result as CvTailoringReviewDtoV1)
+      : null;
+  }
+  const plan =
+    result.plan &&
+    typeof result.plan === "object" &&
+    !Array.isArray(result.plan)
+      ? (result.plan as Record<string, unknown>)
+      : null;
+  if (
+    !plan ||
+    typeof plan.id !== "string" ||
+    typeof plan.blocked !== "boolean" ||
+    !Array.isArray(plan.requiredDemandIds) ||
+    !plan.requiredDemandIds.every((id) => typeof id === "string") ||
+    !Array.isArray(plan.items) ||
+    !Array.isArray(plan.warnings)
+  ) {
+    return null;
+  }
+  const itemsAreValid = plan.items.every((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return false;
+    }
+    const item = candidate as Record<string, unknown>;
+    return (
+      typeof item.id === "string" &&
+      typeof item.section === "string" &&
+      typeof item.action === "string" &&
+      typeof item.priority === "string" &&
+      typeof item.reviewState === "string" &&
+      typeof item.displayLabel === "string" &&
+      typeof item.reason === "string" &&
+      Array.isArray(item.demandIds) &&
+      item.demandIds.every((id) => typeof id === "string") &&
+      Array.isArray(item.sourceCvItemReferenceIds) &&
+      item.sourceCvItemReferenceIds.every((id) => typeof id === "string")
+    );
+  });
+  return itemsAreValid
+    ? (result as CvTailoringReviewDtoV1)
+    : null;
+}
+
+function formatCvTailoringError(error: unknown): string {
+  const message = formatJobsActionError(
+    error,
+    "Resume tailoring failed. Try again.",
+  );
+  return /stale|changed|expected plan/i.test(message)
+    ? "This review changed. Reload recommendations and try again."
+    : message;
+}
+
+const CV_TAILORING_SOURCE_CHANGED_MESSAGE =
+  "Resume review reset. Prepare recommendations again for the attached resume.";
+
+function getMissingRequiredDemandIds(
+  review: AutoCvTailoringReviewDtoV1,
+  selectedItemIds: ReadonlySet<string>,
+): string[] {
+  const coveredDemandIds = new Set<string>();
+  for (const item of review.plan.items) {
+    if (
+      !isClaimBackedResumeVariantPlanAction(item.action) ||
+      item.reviewState === "rejected" ||
+      (item.reviewState === "pending" && !selectedItemIds.has(item.id))
+    ) {
+      continue;
+    }
+    if (
+      item.reviewState !== "accepted" &&
+      item.reviewState !== "pending"
+    ) {
+      continue;
+    }
+    for (const demandId of item.demandIds) {
+      coveredDemandIds.add(demandId);
+    }
+  }
+  return review.plan.requiredDemandIds.filter(
+    (demandId) => !coveredDemandIds.has(demandId),
+  );
+}
+
 function readCvPickerProfilePreview(
   cv: CvDocument,
 ): Record<string, unknown> | null {
@@ -1281,6 +1396,23 @@ function JobsPageContent(): JSX.Element {
   const resumePickerRef = React.useRef<HTMLDivElement | null>(null);
   const [isResumePickerOpen, setIsResumePickerOpen] = React.useState(false);
   const [selectedJobRefreshKey, setSelectedJobRefreshKey] = React.useState(0);
+  const [cvTailoringPanelOpen, setCvTailoringPanelOpen] = React.useState(false);
+  const [cvTailoringReview, setCvTailoringReview] =
+    React.useState<AutoCvTailoringReviewDtoV1 | null>(null);
+  const [cvTailoringSelectedItemIds, setCvTailoringSelectedItemIds] =
+    React.useState<Set<string>>(() => new Set());
+  const [cvTailoringBusy, setCvTailoringBusy] = React.useState(false);
+  const [cvTailoringError, setCvTailoringError] = React.useState<string | null>(
+    null,
+  );
+  const [cvTailoringLauncherError, setCvTailoringLauncherError] =
+    React.useState<string | null>(null);
+  const [materializedResumeName, setMaterializedResumeName] =
+    React.useState<string | null>(null);
+  const cvTailoringRequestVersionRef = React.useRef(0);
+  const selectedJobIdRef = React.useRef(selectedJobId);
+  const selectedJobResumeIdRef = React.useRef<string | null>(null);
+  selectedJobIdRef.current = selectedJobId;
   const [confirmingPermanentDeleteJobId, setConfirmingPermanentDeleteJobId] =
     React.useState<string | null>(null);
   const [duplicateTransition, setDuplicateTransition] = React.useState<{
@@ -1330,6 +1462,18 @@ function JobsPageContent(): JSX.Element {
   const refreshStructuredMatch = useMutation(
     ((api as any).jobsPublic?.refreshStructuredMatch ??
       "jobsPublic.refreshStructuredMatch") as any,
+  );
+  const prepareCvTailoringReview = useMutation(
+    ((api as any).jobsPublic?.prepareCvTailoringReview ??
+      "jobsPublic.prepareCvTailoringReview") as any,
+  );
+  const submitCvTailoringReview = useMutation(
+    ((api as any).jobsPublic?.submitCvTailoringReview ??
+      "jobsPublic.submitCvTailoringReview") as any,
+  );
+  const materializeCvTailoringReview = useMutation(
+    ((api as any).jobsPublic?.materializeCvTailoringReview ??
+      "jobsPublic.materializeCvTailoringReview") as any,
   );
   const manualApplicationHandoffQueryReference = React.useMemo(
     () =>
@@ -1442,6 +1586,17 @@ function JobsPageContent(): JSX.Element {
 
   React.useEffect(() => {
     setIsResumePickerOpen(false);
+  }, [selectedJobId]);
+
+  React.useEffect(() => {
+    cvTailoringRequestVersionRef.current += 1;
+    setCvTailoringPanelOpen(false);
+    setCvTailoringReview(null);
+    setCvTailoringSelectedItemIds(new Set());
+    setCvTailoringBusy(false);
+    setCvTailoringError(null);
+    setCvTailoringLauncherError(null);
+    setMaterializedResumeName(null);
   }, [selectedJobId]);
 
   React.useEffect(() => {
@@ -1631,6 +1786,13 @@ function JobsPageContent(): JSX.Element {
     [jobs, selectedJobId],
   );
   const selectedJob = optimisticSelectedJob ?? selectedJobRecord ?? null;
+  selectedJobResumeIdRef.current = selectedJob?.resumeId ?? null;
+  const cvTailoringUnavailableReason = !selectedJob?.resumeId
+    ? "Attach a resume to tailor it for this job."
+    : selectedJob.parseStatus !== "parsed" ||
+        selectedJob.reviewState !== "ready"
+      ? "Finish the Job Brief review before tailoring."
+      : null;
   const selectedJobIsFavorite = selectedJob
     ? optimisticFavoriteById[selectedJob.id] ?? selectedJob.isFavorite
     : false;
@@ -1732,6 +1894,364 @@ function JobsPageContent(): JSX.Element {
     [navigate, recordJobDecision],
   );
 
+  const invalidateCvTailoringForSourceChange = React.useCallback(() => {
+    cvTailoringRequestVersionRef.current += 1;
+    setCvTailoringPanelOpen(false);
+    setCvTailoringReview(null);
+    setCvTailoringSelectedItemIds(new Set());
+    setCvTailoringBusy(false);
+    setCvTailoringError(null);
+    setCvTailoringLauncherError(CV_TAILORING_SOURCE_CHANGED_MESSAGE);
+    setMaterializedResumeName(null);
+  }, []);
+
+  const handlePrepareCvTailoringReview = React.useCallback(async () => {
+    const job = selectedJob;
+    if (
+      !job?.id ||
+      !job.resumeId ||
+      job.parseStatus !== "parsed" ||
+      job.reviewState !== "ready"
+    ) {
+      return;
+    }
+    const requestVersion =
+      cvTailoringRequestVersionRef.current + 1;
+    cvTailoringRequestVersionRef.current = requestVersion;
+    const requestOwnsUi = () =>
+      cvTailoringRequestVersionRef.current === requestVersion &&
+      selectedJobIdRef.current === job.id;
+    const requestIsCurrent = () =>
+      requestOwnsUi() &&
+      selectedJobResumeIdRef.current === job.resumeId;
+    setCvTailoringPanelOpen(true);
+    setCvTailoringBusy(true);
+    setCvTailoringError(null);
+    setCvTailoringLauncherError(null);
+    setMaterializedResumeName(null);
+
+    try {
+      const result = await prepareCvTailoringReview({
+        jobId: job.id,
+        mode: "auto_recommended",
+      });
+      if (!requestIsCurrent()) {
+        if (requestOwnsUi()) {
+          invalidateCvTailoringForSourceChange();
+        }
+        return;
+      }
+      const review = readCvTailoringReviewResult(
+        result,
+        "auto_recommended",
+        job.resumeId,
+      );
+      if (!review || review.mode !== "auto_recommended") {
+        throw new Error(
+          "The resume review response did not match the attached resume. Reload and try again.",
+        );
+      }
+      setCvTailoringReview(review);
+      setCvTailoringSelectedItemIds(
+        new Set(
+          review.plan.items
+            .filter(
+              (item) =>
+                isClaimBackedResumeVariantPlanAction(item.action) &&
+                (item.reviewState === "pending" ||
+                  item.reviewState === "accepted"),
+            )
+            .map((item) => item.id),
+        ),
+      );
+    } catch (error) {
+      if (!requestIsCurrent()) {
+        if (requestOwnsUi()) {
+          invalidateCvTailoringForSourceChange();
+        }
+        return;
+      }
+      const message = formatCvTailoringError(error);
+      if (cvTailoringReview) {
+        setCvTailoringError(message);
+      } else {
+        setCvTailoringPanelOpen(false);
+        setCvTailoringLauncherError(message);
+      }
+    } finally {
+      if (requestIsCurrent()) {
+        setCvTailoringBusy(false);
+      } else if (requestOwnsUi()) {
+        invalidateCvTailoringForSourceChange();
+      }
+    }
+  }, [
+    cvTailoringReview,
+    invalidateCvTailoringForSourceChange,
+    prepareCvTailoringReview,
+    selectedJob,
+  ]);
+
+  const handleCloseCvTailoringReview = React.useCallback(() => {
+    cvTailoringRequestVersionRef.current += 1;
+    setCvTailoringPanelOpen(false);
+    setCvTailoringReview(null);
+    setCvTailoringSelectedItemIds(new Set());
+    setCvTailoringBusy(false);
+    setCvTailoringError(null);
+    setMaterializedResumeName(null);
+  }, []);
+
+  const handleToggleCvTailoringItem = React.useCallback(
+    (itemId: string, checked: boolean) => {
+      const item = cvTailoringReview?.plan.items.find(
+        (candidate) => candidate.id === itemId,
+      );
+      if (
+        !item ||
+        item.reviewState !== "pending" ||
+        !isClaimBackedResumeVariantPlanAction(item.action)
+      ) {
+        return;
+      }
+      setCvTailoringSelectedItemIds((current) => {
+        const next = new Set(current);
+        if (checked) {
+          next.add(itemId);
+        } else {
+          next.delete(itemId);
+        }
+        return next;
+      });
+      setCvTailoringError(null);
+    },
+    [cvTailoringReview],
+  );
+
+  const handleCreateTailoredResume = React.useCallback(async () => {
+    const job = selectedJob;
+    const initialReview = cvTailoringReview;
+    if (
+      !job?.id ||
+      !job.resumeId ||
+      !initialReview
+    ) {
+      return;
+    }
+    if (initialReview.sourceCv.id !== job.resumeId) {
+      invalidateCvTailoringForSourceChange();
+      return;
+    }
+    if (
+      initialReview.plan.blocked ||
+      getMissingRequiredDemandIds(
+        initialReview,
+        cvTailoringSelectedItemIds,
+      ).length > 0
+    ) {
+      return;
+    }
+
+    const requestVersion =
+      cvTailoringRequestVersionRef.current + 1;
+    cvTailoringRequestVersionRef.current = requestVersion;
+    const requestOwnsUi = () =>
+      cvTailoringRequestVersionRef.current === requestVersion &&
+      selectedJobIdRef.current === job.id;
+    const requestIsCurrent = () =>
+      requestOwnsUi() &&
+      selectedJobResumeIdRef.current === initialReview.sourceCv.id;
+    setCvTailoringBusy(true);
+    setCvTailoringError(null);
+
+    try {
+      const pendingItems = initialReview.plan.items.filter(
+        (item) =>
+          item.reviewState === "pending" &&
+          isClaimBackedResumeVariantPlanAction(item.action),
+      );
+      let reviewed = initialReview;
+      if (pendingItems.length > 0) {
+        const result = await submitCvTailoringReview({
+          jobId: job.id,
+          expectedPlanId: initialReview.plan.id,
+          decisions: pendingItems.map((item) => ({
+            planItemId: item.id,
+            reviewState: cvTailoringSelectedItemIds.has(item.id)
+              ? "accepted"
+              : "rejected",
+          })),
+        });
+        if (!requestIsCurrent()) {
+          if (requestOwnsUi()) {
+            invalidateCvTailoringForSourceChange();
+          }
+          return;
+        }
+        const submittedReview = readCvTailoringReviewResult(
+          result,
+          "auto_recommended",
+          initialReview.sourceCv.id,
+        );
+        if (
+          !submittedReview ||
+          submittedReview.mode !== "auto_recommended"
+        ) {
+          throw new Error(
+            "The reviewed plan response was invalid. Reload recommendations.",
+          );
+        }
+        reviewed = submittedReview;
+        setCvTailoringReview(submittedReview);
+        setCvTailoringSelectedItemIds(
+          new Set(
+            submittedReview.plan.items
+              .filter((item) => item.reviewState === "accepted")
+              .map((item) => item.id),
+          ),
+        );
+      }
+
+      const stillPending = reviewed.plan.items.some(
+        (item) =>
+          item.reviewState === "pending" &&
+          isClaimBackedResumeVariantPlanAction(item.action),
+      );
+      if (
+        reviewed.plan.blocked ||
+        stillPending ||
+        getMissingRequiredDemandIds(
+          reviewed,
+          new Set(
+            reviewed.plan.items
+              .filter((item) => item.reviewState === "accepted")
+              .map((item) => item.id),
+          ),
+        ).length > 0
+      ) {
+        throw new Error(
+          reviewed.plan.blockedReason ??
+            "The review is not ready to create a resume. Reload recommendations.",
+        );
+      }
+
+      const materialized = await materializeCvTailoringReview({
+        jobId: job.id,
+        expectedPlanId: reviewed.plan.id,
+      });
+      if (!requestIsCurrent()) {
+        if (requestOwnsUi()) {
+          invalidateCvTailoringForSourceChange();
+        }
+        return;
+      }
+      if (
+        !materialized ||
+        materialized.jobId !== job.id ||
+        materialized.sourceCvId !== reviewed.sourceCv.id ||
+        typeof materialized.resumeId !== "string" ||
+        typeof materialized.resumeName !== "string"
+      ) {
+        throw new Error(
+          "The tailored resume response did not match this job. Reload and try again.",
+        );
+      }
+      setSelectedJobRefreshKey((key) => key + 1);
+      setOptimisticSelectedJob((current) =>
+        current && current.id === job.id
+          ? {
+              ...current,
+              resumeId: materialized.resumeId,
+              resumeName: materialized.resumeName,
+              resumeSource: "job",
+            }
+          : current,
+      );
+      setMaterializedResumeName(materialized.resumeName);
+    } catch (error) {
+      if (requestIsCurrent()) {
+        setCvTailoringError(formatCvTailoringError(error));
+      } else if (requestOwnsUi()) {
+        invalidateCvTailoringForSourceChange();
+      }
+    } finally {
+      if (requestOwnsUi()) {
+        setCvTailoringBusy(false);
+      }
+    }
+  }, [
+    cvTailoringReview,
+    cvTailoringSelectedItemIds,
+    invalidateCvTailoringForSourceChange,
+    materializeCvTailoringReview,
+    selectedJob,
+    submitCvTailoringReview,
+  ]);
+
+  const handleUseFullSourceCv = React.useCallback(async () => {
+    const job = selectedJob;
+    if (
+      !job?.id ||
+      !job.resumeId ||
+      job.parseStatus !== "parsed" ||
+      job.reviewState !== "ready"
+    ) {
+      return;
+    }
+    const requestVersion =
+      cvTailoringRequestVersionRef.current + 1;
+    cvTailoringRequestVersionRef.current = requestVersion;
+    const requestOwnsUi = () =>
+      cvTailoringRequestVersionRef.current === requestVersion &&
+      selectedJobIdRef.current === job.id;
+    const requestIsCurrent = () =>
+      requestOwnsUi() &&
+      selectedJobResumeIdRef.current === job.resumeId;
+    setCvTailoringBusy(true);
+    setCvTailoringLauncherError(null);
+
+    try {
+      const result = await prepareCvTailoringReview({
+        jobId: job.id,
+        mode: "full_source_cv",
+      });
+      if (!requestIsCurrent()) {
+        if (requestOwnsUi()) {
+          invalidateCvTailoringForSourceChange();
+        }
+        return;
+      }
+      const review = readCvTailoringReviewResult(
+        result,
+        "full_source_cv",
+        job.resumeId,
+      );
+      if (!review || review.mode !== "full_source_cv") {
+        throw new Error(
+          "The complete resume response did not match the attached resume.",
+        );
+      }
+      handleCreateProposal(job.id);
+    } catch (error) {
+      if (requestIsCurrent()) {
+        setCvTailoringLauncherError(formatCvTailoringError(error));
+      } else if (requestOwnsUi()) {
+        invalidateCvTailoringForSourceChange();
+      }
+    } finally {
+      if (requestIsCurrent()) {
+        setCvTailoringBusy(false);
+      } else if (requestOwnsUi()) {
+        invalidateCvTailoringForSourceChange();
+      }
+    }
+  }, [
+    handleCreateProposal,
+    invalidateCvTailoringForSourceChange,
+    prepareCvTailoringReview,
+    selectedJob,
+  ]);
+
   const handleRefreshSelectedJobMatch = React.useCallback(async () => {
     if (!selectedJob?.id) {
       return;
@@ -1768,6 +2288,14 @@ function JobsPageContent(): JSX.Element {
       if (!selectedJob?.id) {
         return;
       }
+      if (
+        cvTailoringBusy ||
+        cvTailoringPanelOpen ||
+        cvTailoringReview ||
+        materializedResumeName
+      ) {
+        invalidateCvTailoringForSourceChange();
+      }
 
       const selectedOption =
         resumePickerOptions.find((option) => option.id === resumeId) ?? null;
@@ -1795,12 +2323,30 @@ function JobsPageContent(): JSX.Element {
         showToast("Attach failed.", { variant: "error" });
       }
     },
-    [resumePickerOptions, selectedJob?.id, setJobResume, showToast],
+    [
+      cvTailoringBusy,
+      cvTailoringPanelOpen,
+      cvTailoringReview,
+      invalidateCvTailoringForSourceChange,
+      materializedResumeName,
+      resumePickerOptions,
+      selectedJob?.id,
+      setJobResume,
+      showToast,
+    ],
   );
 
   const handleDetachResumeFromJob = React.useCallback(async () => {
     if (!selectedJob?.id) {
       return;
+    }
+    if (
+      cvTailoringBusy ||
+      cvTailoringPanelOpen ||
+      cvTailoringReview ||
+      materializedResumeName
+    ) {
+      invalidateCvTailoringForSourceChange();
     }
 
     try {
@@ -1824,7 +2370,16 @@ function JobsPageContent(): JSX.Element {
     } catch (error) {
       showToast("Detach failed.", { variant: "error" });
     }
-  }, [selectedJob?.id, setJobResume, showToast]);
+  }, [
+    cvTailoringBusy,
+    cvTailoringPanelOpen,
+    cvTailoringReview,
+    invalidateCvTailoringForSourceChange,
+    materializedResumeName,
+    selectedJob?.id,
+    setJobResume,
+    showToast,
+  ]);
 
   const handleSetJobFavorite = React.useCallback(
     async (jobId: string, nextFavorite: boolean) => {
@@ -2226,6 +2781,12 @@ function JobsPageContent(): JSX.Element {
       isResumePickerOpen={isResumePickerOpen}
       resumePickerRef={resumePickerRef}
       resumePickerOptions={resumePickerOptions}
+      canTailorResume={
+        cvTailoringUnavailableReason === null && !cvTailoringBusy
+      }
+      tailoringUnavailableReason={cvTailoringUnavailableReason}
+      tailoringActionPending={cvTailoringBusy}
+      tailoringActionError={cvTailoringLauncherError}
       onBackToJobs={() => void navigate("/jobs")}
       onSetJobFavorite={(jobId, nextFavorite) => {
         void handleSetJobFavorite(jobId, nextFavorite);
@@ -2239,6 +2800,12 @@ function JobsPageContent(): JSX.Element {
         void handleDetachResumeFromJob();
       }}
       onCreateProposal={handleCreateProposal}
+      onTailorResume={() => {
+        void handlePrepareCvTailoringReview();
+      }}
+      onUseFullSourceCv={() => {
+        void handleUseFullSourceCv();
+      }}
       onDismissJob={(jobId) => {
         void handleDismissJob(jobId);
       }}
@@ -2254,6 +2821,34 @@ function JobsPageContent(): JSX.Element {
       onSaveReviewItem={(item, nextValue) => {
         void handleSaveReviewItem(item as JobsPageReviewItem, nextValue);
       }}
+      tailoringPanel={
+        cvTailoringPanelOpen && cvTailoringReview && selectedJob ? (
+          <CvTailoringReviewPanel
+            review={cvTailoringReview}
+            selectedItemIds={cvTailoringSelectedItemIds}
+            hasMissingRequiredDemandCoverage={
+              getMissingRequiredDemandIds(
+                cvTailoringReview,
+                cvTailoringSelectedItemIds,
+              ).length > 0
+            }
+            isBusy={cvTailoringBusy}
+            errorMessage={cvTailoringError}
+            materializedResumeName={materializedResumeName}
+            onToggleItem={handleToggleCvTailoringItem}
+            onCreate={() => {
+              void handleCreateTailoredResume();
+            }}
+            onReload={() => {
+              void handlePrepareCvTailoringReview();
+            }}
+            onClose={handleCloseCvTailoringReview}
+            onContinueToProposal={() => {
+              handleCreateProposal(selectedJob.id);
+            }}
+          />
+        ) : null
+      }
       handoffPanel={
         selectedJob ? (
           <ManualApplicationHandoffPanel

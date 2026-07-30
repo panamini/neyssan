@@ -1005,6 +1005,16 @@
   outline: none;
 }
 
+.dasti-jobs-detail__header-action:disabled,
+.dasti-jobs-detail__header-action:disabled:hover {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .dasti-jobs-detail__header-action svg {
   flex: 0 0 auto;
 }
@@ -1047,6 +1057,24 @@
   box-shadow: none;
 }
 
+.dasti-jobs-detail__header-action--full-resume {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-jobs-detail__tailoring-help,
+.dasti-jobs-detail__tailoring-error {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--tm2);
+  font: var(--type-small);
+}
+
+.dasti-jobs-detail__tailoring-error {
+  color: var(--danger-text, var(--tm2));
+}
+
 .dasti-jobs-detail__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1083,6 +1111,129 @@
 .dasti-jobs-detail__meta-favorite-action:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.dasti-cv-tailoring-review {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf1);
+  color: var(--ti);
+}
+
+.dasti-cv-tailoring-review__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dasti-cv-tailoring-review__header h2,
+.dasti-cv-tailoring-review__header p {
+  margin: 0;
+}
+
+.dasti-cv-tailoring-review__eyebrow {
+  color: var(--ac);
+  font: var(--type-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dasti-cv-tailoring-review__intro {
+  margin-block-start: var(--space-1) !important;
+  color: var(--tm2);
+  font: var(--type-small);
+}
+
+.dasti-cv-tailoring-review__alert,
+.dasti-cv-tailoring-review__coverage,
+.dasti-cv-tailoring-review__success,
+.dasti-cv-tailoring-review__warnings {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--sf2);
+  color: var(--tm2);
+}
+
+.dasti-cv-tailoring-review__alert,
+.dasti-cv-tailoring-review__coverage {
+  border: 1px solid var(--border-soft);
+}
+
+.dasti-cv-tailoring-review__success {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--ti);
+}
+
+.dasti-cv-tailoring-review__groups {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dasti-cv-tailoring-review__group {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dasti-cv-tailoring-review__group legend {
+  margin-block-end: var(--space-2);
+  color: var(--ti);
+  font-weight: 700;
+}
+
+.dasti-cv-tailoring-review__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--sf0);
+}
+
+.dasti-cv-tailoring-review__item input {
+  margin-block-start: 3px;
+  accent-color: var(--ac);
+}
+
+.dasti-cv-tailoring-review__item-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dasti-cv-tailoring-review__item-label {
+  color: var(--ti);
+  font-weight: 700;
+}
+
+.dasti-cv-tailoring-review__item-meta,
+.dasti-cv-tailoring-review__reason {
+  color: var(--tm2);
+  font: var(--type-small);
+}
+
+.dasti-cv-tailoring-review__warnings ul {
+  margin: var(--space-1) 0 0;
+  padding-inline-start: var(--space-4);
+}
+
+.dasti-cv-tailoring-review__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .ds-verdict {
@@ -1537,6 +1688,20 @@
 }
 
 @media (max-width: 640px) {
+  .dasti-cv-tailoring-review {
+    padding: var(--space-3);
+  }
+
+  .dasti-cv-tailoring-review__header,
+  .dasti-cv-tailoring-review__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dasti-cv-tailoring-review__footer .dasti-button {
+    width: 100%;
+  }
+
   .dasti-job-match-panel__header-line {
     grid-template-columns: 1fr;
     align-items: start;

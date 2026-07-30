@@ -21,6 +21,7 @@ type StoredRow = Record<string, unknown> & {
 function sourceCv(
   id = PROFILE_ID,
   options: Readonly<{
+    educationFieldOfStudy?: string;
     legacyIds?: boolean;
     skillNames?: readonly string[];
     summary?: string;
@@ -68,6 +69,24 @@ function sourceCv(
             },
           ]
         : []),
+      ...(options.educationFieldOfStudy
+        ? [
+            {
+              id: "section-education",
+              title: "Education",
+              type: "education",
+              blocks: [],
+              structuredContent: [
+                {
+                  id: "education-field-only",
+                  institution: "",
+                  degree: "   ",
+                  fieldOfStudy: options.educationFieldOfStudy,
+                },
+              ],
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -95,6 +114,7 @@ function makeContext(overrides: {
   skillNames?: readonly string[];
   keywords?: readonly string[];
   cvSummary?: string;
+  educationFieldOfStudy?: string;
 } = {}) {
   const attachedProfileId = overrides.siblingAttachedCv
     ? SIBLING_PROFILE_ID
@@ -111,6 +131,7 @@ function makeContext(overrides: {
       legacyIds: overrides.legacyCvIds,
       skillNames: overrides.skillNames,
       summary: overrides.cvSummary,
+      educationFieldOfStudy: overrides.educationFieldOfStudy,
     }),
     createdAt: T,
     updatedAt: T,
@@ -277,11 +298,14 @@ describe("authenticated source CV tailoring review boundary", () => {
       plan: {
         id: expect.stringMatching(/^resume-variant-plan:/),
         blocked: false,
+        requiredDemandIds: [expect.stringMatching(/^job-demand:/)],
         items: [
           expect.objectContaining({
             id: expect.any(String),
             action: "include",
             reviewState: "pending",
+            displayLabel: "Sales associate · Bakery One",
+            demandIds: [expect.stringMatching(/^job-demand:/)],
             sourceCvItemReferenceIds: [
               expect.stringMatching(/^candidate-cv-item:v1:/),
             ],
@@ -292,11 +316,119 @@ describe("authenticated source CV tailoring review boundary", () => {
     });
     expect(result).not.toHaveProperty("userId");
     expect(result).not.toHaveProperty("applicationContextId");
-    expect(JSON.stringify(result)).not.toContain("_creationTime");
-    expect(JSON.stringify(result)).not.toContain("candidateFacts");
-    expect(JSON.stringify(result)).not.toContain("evidenceGraph");
+    expect(Object.keys(result.plan?.items[0] ?? {}).sort()).toEqual([
+      "action",
+      "demandIds",
+      "displayLabel",
+      "id",
+      "priority",
+      "reason",
+      "reviewState",
+      "section",
+      "sourceCvItemReferenceIds",
+    ]);
+    const projectedReview = JSON.stringify(result);
+    expect(projectedReview).not.toContain("_creationTime");
+    expect(projectedReview).not.toContain("candidateFacts");
+    expect(projectedReview).not.toContain("evidenceGraph");
+    expect(projectedReview).not.toContain("responsibilityBullets");
+    expect(projectedReview).not.toContain("Customer service");
+    expect(projectedReview).not.toContain("owner@example.test");
     expect(fixture.profile.cvDocument).toEqual(sourceCvBefore);
     expect(fixture.writes).toEqual(["insert:applicationContexts"]);
+  });
+
+  it("keeps the registered public return validator aligned with the projected review DTO", async () => {
+    const exportedReturns = JSON.parse(
+      (
+        prepareCvTailoringReview as unknown as {
+          exportReturns(): string;
+        }
+      ).exportReturns(),
+    ) as {
+      type: "union";
+      value: Array<{
+        type: "object";
+        value: Record<
+          string,
+          {
+            fieldType: {
+              type: string;
+              value?: Record<string, unknown>;
+            };
+          }
+        >;
+      }>;
+    };
+    const autoRecommended = exportedReturns.value.find(
+      (branch) =>
+        (
+          branch.value.mode?.fieldType as {
+            type?: string;
+            value?: unknown;
+          }
+        )?.value === "auto_recommended",
+    );
+    const planFields = (
+      autoRecommended?.value.plan?.fieldType.value as
+        | Record<
+            string,
+            {
+              fieldType: {
+                type: string;
+                value?: unknown;
+              };
+            }
+          >
+        | undefined
+    );
+    const itemFields = (
+      (
+        planFields?.items?.fieldType.value as {
+          type?: string;
+          value?: Record<string, unknown>;
+        }
+      )?.value ?? {}
+    ) as Record<string, unknown>;
+
+    expect(planFields).toHaveProperty("requiredDemandIds");
+    expect(itemFields).toHaveProperty("displayLabel");
+    expect(itemFields).toHaveProperty("demandIds");
+
+    const fixture = makeContext();
+    const result = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      mode: "auto_recommended",
+    });
+
+    expect(result.plan).toEqual(
+      expect.objectContaining({
+        requiredDemandIds: expect.any(Array),
+        items: [
+          expect.objectContaining({
+            displayLabel: expect.any(String),
+            demandIds: expect.any(Array),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("uses a normalized field of study when an education degree is empty", async () => {
+    const fixture = makeContext({
+      educationFieldOfStudy: "  Industrial   Design  ",
+      mustHaves: ["Industrial Design"],
+    });
+
+    const result = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      mode: "auto_recommended",
+    });
+
+    expect(
+      result.plan?.items.find((item) => item.section === "education")
+        ?.displayLabel,
+    ).toBe("Industrial Design");
   });
 
   it("returns full_source_cv with plan null and no review artifact or CandidateEvidence mutation", async () => {

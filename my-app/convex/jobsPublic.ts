@@ -126,6 +126,8 @@ const cvTailoringReviewPlanItemValidator = v.object({
     v.literal("blocked"),
     v.literal("needs_review"),
   ),
+  displayLabel: v.string(),
+  demandIds: v.array(v.string()),
   sourceCvItemReferenceIds: v.array(v.string()),
   reason: v.string(),
 });
@@ -160,6 +162,7 @@ const cvTailoringReviewResultValidator = v.union(
       id: v.string(),
       blocked: v.boolean(),
       blockedReason: v.optional(v.string()),
+      requiredDemandIds: v.array(v.string()),
       items: v.array(cvTailoringReviewPlanItemValidator),
       warnings: v.array(cvTailoringReviewWarningValidator),
     }),
