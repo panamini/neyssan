@@ -106,9 +106,11 @@ export function CvTailoringReviewPanel({
     }
     return [...groups.entries()];
   }, [review.plan.items]);
+  const hasNoItems = review.plan.items.length === 0;
   const createDisabled =
     isBusy ||
     review.plan.blocked ||
+    hasNoItems ||
     hasMissingRequiredDemandCoverage ||
     Boolean(errorMessage);
 
@@ -147,6 +149,12 @@ export function CvTailoringReviewPanel({
       {errorMessage ? (
         <div className="dasti-cv-tailoring-review__alert" role="alert">
           {errorMessage}
+        </div>
+      ) : null}
+      {hasNoItems ? (
+        <div className="dasti-cv-tailoring-review__alert" role="alert">
+          No resume items are available to tailor. Attach a resume with
+          experience, education, or skills, then reload recommendations.
         </div>
       ) : null}
       {hasMissingRequiredDemandCoverage ? (
@@ -223,7 +231,7 @@ export function CvTailoringReviewPanel({
       ) : null}
 
       <div className="dasti-cv-tailoring-review__footer">
-        {review.plan.blocked || errorMessage ? (
+        {review.plan.blocked || hasNoItems || errorMessage ? (
           <button
             type="button"
             className="dasti-button dasti-button--pill"
