@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { CvDocument } from "../../../types/cvDocument";
-import { buildCandidateCvItemReferences } from "../cvItemReferences";
+import {
+  buildCandidateCvItemReferences,
+  buildReviewableCandidateCvItemReferences,
+} from "../cvItemReferences";
 
 const BASE_CV: CvDocument = {
   id: "cv-source-1",
@@ -155,27 +158,64 @@ describe("candidate CV item references", () => {
     expect(JSON.stringify(BASE_CV)).toBe(snapshot);
   });
 
-  it("fails closed when active canonical item ids are absent instead of using reorder-unstable indexes", () => {
+  it("derives deterministic legacy references without mutating the source or depending on order", () => {
     const legacyCv: CvDocument = {
       ...BASE_CV,
       sections: BASE_CV.sections.map((section) =>
         section.type === "experience"
           ? {
               ...section,
+              id: "",
               structuredContent: [
                 {
                   company: "Legacy Bakery",
                   position: "Sales associate",
                   startDate: "2020-01-01T00:00:00.000Z",
                 },
+                {
+                  company: "Legacy Service",
+                  position: "Customer adviser",
+                  startDate: "2018-01-01T00:00:00.000Z",
+                },
               ],
             }
           : section,
       ),
     };
+    const snapshot = JSON.stringify(legacyCv);
 
     expect(() => buildCandidateCvItemReferences(legacyCv)).toThrow(
       /stable item id.*normalize and persist the source CV first/i,
     );
+    const before = buildReviewableCandidateCvItemReferences(legacyCv);
+    const reordered: CvDocument = {
+      ...legacyCv,
+      sections: legacyCv.sections.map((section) =>
+        section.type === "experience"
+          ? {
+              ...section,
+              structuredContent: [
+                ...(section.structuredContent ?? []),
+              ].reverse() as typeof section.structuredContent,
+            }
+          : section,
+      ),
+    };
+    const after = buildReviewableCandidateCvItemReferences(reordered);
+
+    expect(before).toHaveLength(5);
+    expect(before.map((reference) => reference.id).sort()).toEqual(
+      after.map((reference) => reference.id).sort(),
+    );
+    expect(
+      before
+        .filter((reference) => reference.sectionType === "experience")
+        .every(
+          (reference) =>
+            reference.sectionId.startsWith("legacy-section-") &&
+            reference.itemId.startsWith("legacy-item-"),
+        ),
+    ).toBe(true);
+    expect(JSON.stringify(legacyCv)).toBe(snapshot);
   });
 });

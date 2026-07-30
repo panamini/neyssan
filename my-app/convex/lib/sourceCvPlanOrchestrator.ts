@@ -5,8 +5,8 @@ import type {
   SourceCvApplicationCompositionResultV1,
 } from "../../src/modules/application-harness/sourceCvApplicationComposition";
 import {
-  buildCandidateCvItemReferences,
-  resolveCandidateCvItemReference,
+  buildReviewableCandidateCvItemReferences,
+  resolveReviewableCandidateCvItemReference,
 } from "../../src/modules/candidate-evidence/cvItemReferences";
 import { buildEvidenceGraph } from "../../src/modules/evidence-graph/buildEvidenceGraph";
 import type { JobDemandV1 } from "../../src/modules/evidence-graph/schema";
@@ -15,6 +15,7 @@ import type {
   ResumeVariantPlanItemV1,
   ResumeVariantPlanSectionV1,
   ResumeVariantPlanV1,
+  ResumeVariantPlanWarningV1,
 } from "../../src/modules/resume-variant-plan/schema";
 import { composeSourceCvVariantPlan } from "../../src/modules/application-harness/sourceCvComposition";
 import {
@@ -135,9 +136,12 @@ export async function buildSourceCvPlanFromPersistence(
   if (!ownerProfile || readId(ownerProfile._id) !== callerUserId) {
     throw new TypeError("source CV owner profile not found for caller");
   }
-  const ownerSourceCv = requireSourceCv(ownerProfile.cvDocument);
+  const ownerSourceCv = readSourceCv(ownerProfile.cvDocument);
   let candidateProfile = ownerProfile;
-  if (ownerSourceCv.id !== applicationContext.candidate.cvId) {
+  if (
+    !ownerSourceCv ||
+    ownerSourceCv.id !== applicationContext.candidate.cvId
+  ) {
     const ownerClerkId = readId(ownerProfile.clerkId);
     const siblingProfile =
       await input.persistence.getSourceCvProfileForOwner?.({
@@ -237,9 +241,9 @@ async function buildApplicationScopedSourceCvComposition(input: Readonly<{
       "application-scoped source CV caller does not own the context",
     );
   }
-  const cvItemReferences = buildCandidateCvItemReferences(input.sourceCv).sort(
-    (left, right) => left.id.localeCompare(right.id),
-  );
+  const cvItemReferences = buildReviewableCandidateCvItemReferences(
+    input.sourceCv,
+  ).sort((left, right) => left.id.localeCompare(right.id));
   const evidenceGraph = await buildEvidenceGraph({
     userId: input.applicationContext.userId,
     applicationContextId: input.applicationContext.id,
@@ -249,7 +253,7 @@ async function buildApplicationScopedSourceCvComposition(input: Readonly<{
     createdAt: input.applicationContext.createdAt,
   });
   const items = cvItemReferences.map((reference) => {
-    const resolved = resolveCandidateCvItemReference(
+    const resolved = resolveReviewableCandidateCvItemReference(
       input.sourceCv,
       reference,
     );
@@ -259,6 +263,23 @@ async function buildApplicationScopedSourceCvComposition(input: Readonly<{
     );
     return buildApplicationScopedPlanItem(reference, matchingDemands);
   });
+  const matchedDemandIds = new Set(
+    items.flatMap((item) => item.demandIds),
+  );
+  const unmatchedRequiredDemands = input.demands.filter(
+    (demand) =>
+      demand.required === "required" &&
+      !matchedDemandIds.has(demand.id),
+  );
+  const warnings: ResumeVariantPlanWarningV1[] =
+    unmatchedRequiredDemands.map((demand) => ({
+      id: `resume-variant-plan-warning:missing-evidence:${demand.id}`,
+      category: "missing_evidence",
+      severity: "blocker",
+      demandId: demand.id,
+      reason: `Required Job Brief demand has no matching source CV item: ${demand.label}`,
+      version: 1,
+    }));
   const planWithoutStableId: ResumeVariantPlanV1 = {
     id: "resume-variant-plan:pending-hash",
     userId: input.applicationContext.userId,
@@ -274,12 +295,18 @@ async function buildApplicationScopedSourceCvComposition(input: Readonly<{
       ? { market: input.applicationContext.candidate.market }
       : {}),
     items,
-    warnings: [],
+    warnings,
     blockedClaimIds: [],
     sourceFactIds: [],
     allowedClaimIds: [],
     riskFlagIds: [],
-    blocked: false,
+    blocked: warnings.length > 0,
+    ...(warnings.length > 0
+      ? {
+          blockedReason:
+            "One or more required Job Brief demands have no matching source CV item.",
+        }
+      : {}),
     createdAt: input.applicationContext.createdAt,
     updatedAt: input.applicationContext.updatedAt,
     version: 1,
@@ -305,7 +332,9 @@ async function buildApplicationScopedSourceCvComposition(input: Readonly<{
 }
 
 function buildApplicationScopedPlanItem(
-  reference: ReturnType<typeof buildCandidateCvItemReferences>[number],
+  reference: ReturnType<
+    typeof buildReviewableCandidateCvItemReferences
+  >[number],
   matchingDemands: readonly JobDemandV1[],
 ): ResumeVariantPlanItemV1 {
   const requiredMatch = matchingDemands.some(
@@ -425,16 +454,21 @@ function assertCurrentContext(
 }
 
 function requireSourceCv(value: unknown): Readonly<CvDocument> {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    Array.isArray(value) ||
-    !requireOptionalString((value as { id?: unknown }).id) ||
-    !Array.isArray((value as { sections?: unknown }).sections)
-  ) {
+  const sourceCv = readSourceCv(value);
+  if (!sourceCv) {
     throw new TypeError("owner profile has no canonical source CV");
   }
-  return value as Readonly<CvDocument>;
+  return sourceCv;
+}
+
+function readSourceCv(value: unknown): Readonly<CvDocument> | undefined {
+  return value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    requireOptionalString((value as { id?: unknown }).id) &&
+    Array.isArray((value as { sections?: unknown }).sections)
+    ? (value as Readonly<CvDocument>)
+    : undefined;
 }
 
 function readStringArray(value: unknown): readonly string[] {

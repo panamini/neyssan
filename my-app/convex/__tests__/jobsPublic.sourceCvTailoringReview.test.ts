@@ -8,6 +8,7 @@ import {
 const T = Date.UTC(2026, 6, 30);
 const CLERK_ID = "clerk-owner";
 const PROFILE_ID = "profile-owner";
+const SIBLING_PROFILE_ID = "profile-sibling";
 const JOB_ID = "job-owner";
 
 type StoredRow = Record<string, unknown> & {
@@ -15,9 +16,12 @@ type StoredRow = Record<string, unknown> & {
   _creationTime: number;
 };
 
-function sourceCv() {
+function sourceCv(
+  id = PROFILE_ID,
+  options: Readonly<{ legacyIds?: boolean }> = {},
+) {
   return {
-    id: PROFILE_ID,
+    id,
     title: "Canonical source CV",
     metadata: {
       createdAt: "2026-07-30T00:00:00.000Z",
@@ -26,13 +30,15 @@ function sourceCv() {
     },
     sections: [
       {
-        id: "section-experience",
+        ...(options.legacyIds ? {} : { id: "section-experience" }),
         title: "Experience",
         type: "experience",
         blocks: [],
         structuredContent: [
           {
-            id: "experience-customer-service",
+            ...(options.legacyIds
+              ? {}
+              : { id: "experience-customer-service" }),
             company: "Bakery One",
             position: "Sales associate",
             startDate: "2024-01-01",
@@ -61,7 +67,28 @@ function makeContext(overrides: {
   reviewState?: string;
   lastResumeId?: string | null;
   cvId?: string;
+  legacyCvIds?: boolean;
+  siblingAttachedCv?: boolean;
+  mustHaves?: readonly string[];
 } = {}) {
+  const attachedProfileId = overrides.siblingAttachedCv
+    ? SIBLING_PROFILE_ID
+    : PROFILE_ID;
+  const canonicalCvId = overrides.cvId ?? attachedProfileId;
+  const attachedProfile: StoredRow = {
+    _id: attachedProfileId,
+    _creationTime: T,
+    clerkId: CLERK_ID,
+    profileId: attachedProfileId,
+    email: "owner@example.test",
+    name: "Owner",
+    cvDocument: sourceCv(canonicalCvId, {
+      legacyIds: overrides.legacyCvIds,
+    }),
+    createdAt: T,
+    updatedAt: T,
+    version: 1,
+  };
   const profile: StoredRow = {
     _id: PROFILE_ID,
     _creationTime: T,
@@ -69,10 +96,9 @@ function makeContext(overrides: {
     profileId: PROFILE_ID,
     email: "owner@example.test",
     name: "Owner",
-    cvDocument: {
-      ...sourceCv(),
-      id: overrides.cvId ?? PROFILE_ID,
-    },
+    ...(overrides.siblingAttachedCv
+      ? {}
+      : { cvDocument: attachedProfile.cvDocument }),
     createdAt: T,
     updatedAt: T,
     version: 1,
@@ -83,7 +109,7 @@ function makeContext(overrides: {
     userId: overrides.jobOwnerId ?? PROFILE_ID,
     lastResumeId:
       overrides.lastResumeId === undefined
-        ? PROFILE_ID
+        ? attachedProfileId
         : overrides.lastResumeId,
     lastResumeName: "Canonical source CV",
     archivedAt:
@@ -94,14 +120,16 @@ function makeContext(overrides: {
     company: "Bakery One",
     sourceUrl: "https://example.test/jobs/bakery",
     rawDescription: "Customer service in a bakery.",
-    mustHaves: ["Customer service"],
+    mustHaves: [...(overrides.mustHaves ?? ["Customer service"])],
     responsibilities: ["Customer service"],
     keywords: [],
     createdAt: T,
     updatedAt: T,
   };
   const tables: Record<string, StoredRow[]> = {
-    userProfiles: [profile],
+    userProfiles: overrides.siblingAttachedCv
+      ? [profile, attachedProfile]
+      : [profile],
     jobs: [job],
     applicationContexts: [],
     applicationArtifacts: [],
@@ -197,6 +225,7 @@ function makeContext(overrides: {
     } as any,
     job,
     profile,
+    attachedProfile,
     tables,
     writes,
     getReadCount: () => readCount,
@@ -262,6 +291,73 @@ describe("authenticated source CV tailoring review boundary", () => {
     });
     expect(fixture.tables.applicationArtifacts).toEqual([]);
     expect(fixture.profile.cvDocument).toEqual(sourceCvBefore);
+  });
+
+  it("prepares a stable review for a legacy attached CV without section or item ids", async () => {
+    const fixture = makeContext({ legacyCvIds: true });
+    const sourceCvBefore = structuredClone(fixture.attachedProfile.cvDocument);
+
+    const first = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    const second = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+
+    expect(first).toEqual(second);
+    expect(first.plan?.items[0]?.sourceCvItemReferenceIds[0]).toMatch(
+      /^candidate-cv-item:v1:.*:legacy-section-.*:legacy-item-/,
+    );
+    expect(fixture.attachedProfile.cvDocument).toEqual(sourceCvBefore);
+  });
+
+  it("resolves an attached sibling CV when the owning profile has no CV document", async () => {
+    const fixture = makeContext({ siblingAttachedCv: true });
+    const sourceCvBefore = structuredClone(
+      fixture.attachedProfile.cvDocument,
+    );
+
+    const result = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+
+    expect(result.sourceCv.id).toBe(SIBLING_PROFILE_ID);
+    expect(result.plan?.items).toHaveLength(1);
+    expect(fixture.profile).not.toHaveProperty("cvDocument");
+    expect(fixture.attachedProfile.cvDocument).toEqual(sourceCvBefore);
+  });
+
+  it("keeps a fully reviewed plan blocked when a required Job Brief demand is unmatched", async () => {
+    const fixture = makeContext({
+      mustHaves: ["Customer service", "Forklift certification"],
+    });
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!prepared.plan) {
+      throw new Error("Expected automatic plan");
+    }
+
+    expect(prepared.plan.blocked).toBe(true);
+    expect(prepared.plan.warnings).toEqual([
+      expect.objectContaining({
+        category: "missing_evidence",
+        severity: "blocker",
+        reason: expect.stringContaining("Forklift certification"),
+      }),
+    ]);
+
+    await submitCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: prepared.plan.id,
+      decisions: prepared.plan.items.map((item) => ({
+        planItemId: item.id,
+        reviewState: "accepted" as const,
+      })),
+    });
+
+    expect(fixture.tables.applicationArtifacts).toHaveLength(1);
+    expect(fixture.tables.applicationArtifacts[0]?.status).toBe("blocked");
   });
 
   it("rejects unauthenticated, foreign, archived, unready, detached, and mismatched CV requests before persistence", async () => {
