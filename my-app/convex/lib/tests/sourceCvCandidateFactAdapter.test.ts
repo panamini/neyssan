@@ -422,6 +422,44 @@ describe("source CV candidate-fact persistence adapter", () => {
     ).toBe(false);
   });
 
+  it("excludes a persisted quote that is not grounded in the current CV item", async () => {
+    const document = sourceCv();
+    const linked = sourceDocument("candidate-source-document:linked");
+    const persistedExperience = await withPersistedProvenance(
+      (await currentFactsForSource(document, linked.id)).find(
+        (fact) => fact.factType === "experience",
+      )!,
+      {
+        sourceQuote: "French",
+        confidence: 0.91,
+      },
+    );
+    const { persistence } = makeDb({
+      sourceDocuments: [linked],
+      facts: [persistedExperience],
+    });
+
+    const result = await buildSourceCvCandidateFactApplicationComposition({
+      ...adapterInput(persistence, document),
+      demands: [
+        {
+          id: "demand:french",
+          kind: "language",
+          label: "French",
+          required: "required",
+          source: "job",
+          sourcePath: "job.languageRequirements",
+          version: 1,
+        },
+      ],
+    });
+
+    expect(result.candidateFacts).toEqual([]);
+    expect(
+      result.plan.items.some((item) => item.action === "include"),
+    ).toBe(false);
+  });
+
   it("ignores an approved current fact that is unrelated to every job demand", async () => {
     const document = sourceCv();
     const linked = sourceDocument("candidate-source-document:linked");
@@ -547,7 +585,10 @@ describe("source CV candidate-fact persistence adapter", () => {
     const firstFacts = await Promise.all(
       (await currentFactsForSource(document, firstSource.id)).map((fact) =>
         withPersistedProvenance(fact, {
-          sourceQuote: `primary:${fact.factType}`,
+          sourceQuote:
+            fact.factType === "experience"
+              ? "Customer service"
+              : "TypeScript",
           confidence: 0.7,
         }),
       ),
@@ -555,7 +596,10 @@ describe("source CV candidate-fact persistence adapter", () => {
     const secondFacts = await Promise.all(
       (await currentFactsForSource(document, secondSource.id)).map((fact) =>
         withPersistedProvenance(fact, {
-          sourceQuote: `secondary:${fact.factType}`,
+          sourceQuote:
+            fact.factType === "experience"
+              ? "Sales associate"
+              : "Advanced",
           confidence: 0.95,
         }),
       ),
@@ -584,7 +628,7 @@ describe("source CV candidate-fact persistence adapter", () => {
       first.candidateFacts.every(
         (fact) =>
           fact.sourceDocumentId === firstSource.id &&
-          fact.sourceQuote?.startsWith("primary:"),
+          ["Customer service", "TypeScript"].includes(fact.sourceQuote ?? ""),
       ),
     ).toBe(true);
     expect(second.plan.items).toEqual(first.plan.items);

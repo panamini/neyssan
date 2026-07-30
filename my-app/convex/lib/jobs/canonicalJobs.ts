@@ -76,6 +76,17 @@ const MAX_RESPONSIBILITIES = 3;
 const MAX_KEYWORDS = 8;
 const MAX_MUST_HAVES = 4;
 const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.7;
+const NON_SUBSTANTIVE_STRUCTURED_VALUES = new Set([
+  "n/a",
+  "na",
+  "none",
+  "not applicable",
+  "not available",
+  "not provided",
+  "not specified",
+  "not stated",
+  "unknown",
+]);
 export type JobPostingLanguage = "en" | "fr" | "es" | "pt" | "it" | "de";
 
 const RESPONSIBILITY_CUE_RE =
@@ -1176,6 +1187,19 @@ export function flattenExtractionValues(
   return (values ?? []).map((value) => value.value).filter(Boolean);
 }
 
+function isSubstantiveStructuredValue(value: string): boolean {
+  const normalized = value
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[.!?]+$/gu, "")
+    .trim();
+  return (
+    normalized.length > 0 &&
+    !NON_SUBSTANTIVE_STRUCTURED_VALUES.has(normalized)
+  );
+}
+
 function buildProvidedExtractions(values: string[]): CanonicalJobExtraction[] {
   return values.map((value) => toExtraction(value, 0.55, null));
 }
@@ -1218,7 +1242,7 @@ export function buildCanonicalJobDraftFromSource(args: {
         ...structuredBrief.niceToHaves,
         structuredBrief.languageRequirements,
       ]
-        .filter(Boolean)
+        .filter(isSubstantiveStructuredValue)
         .join(". ")
     : rawDescription;
   const responsibilitiesExtraction = structuredBrief

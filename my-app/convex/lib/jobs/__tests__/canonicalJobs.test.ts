@@ -453,8 +453,31 @@ describe("canonicalJobs", () => {
     expect(draft.mustHaves).toEqual([
       "Apply hygiene and safety procedures",
     ]);
+    expect(draft.keywords).not.toEqual(
+      expect.arrayContaining(["not", "stated"]),
+    );
     expect(draft.parseStatus).toBe("parsed");
     expect(draft.reviewState).toBe("needs_review");
+  });
+
+  it("does not extract placeholder-only structured values as job keywords", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "",
+      sourceType: "chatgpt",
+      rawDescription: JSON.stringify({
+        job_title: "Shop assistant",
+        normalized_job_brief: {
+          responsibilities: [],
+          must_have_requirements: [],
+          nice_to_haves: ["Not stated"],
+          language_requirements: "Not stated",
+        },
+      }),
+    });
+
+    expect(draft.keywords).not.toEqual(
+      expect.arrayContaining(["not", "stated"]),
+    );
   });
 
   it("preserves application URL fragments while canonicalizing source URLs", () => {

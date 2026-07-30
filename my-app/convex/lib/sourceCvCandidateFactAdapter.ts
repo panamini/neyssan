@@ -9,6 +9,7 @@ import type {
   CandidateSourceDocumentV1,
 } from "../../src/modules/candidate-evidence/schema";
 import { buildEvidenceGraph } from "../../src/modules/evidence-graph/buildEvidenceGraph";
+import { normalizeComparableText } from "../../src/modules/evidence-graph/riskRules";
 import type { JobDemandV1 } from "../../src/modules/evidence-graph/schema";
 import { composeSourceCvVariantPlan } from "../../src/modules/application-harness/sourceCvComposition";
 import type { AutoRecommendedSourceCvApplicationCompositionResultV1 } from "../../src/modules/application-harness/sourceCvApplicationComposition";
@@ -325,7 +326,8 @@ async function findCurrentPersistedFact(
       persistedFact.userId !== currentFact.userId ||
       persistedFact.sourceDocumentId !== currentFact.sourceDocumentId ||
       persistedFact.sourcePath !== currentFact.sourcePath ||
-      persistedFact.factType !== currentFact.factType
+      persistedFact.factType !== currentFact.factType ||
+      !isSourceQuoteGroundedInCurrentFact(persistedFact, currentFact)
     ) {
       continue;
     }
@@ -349,6 +351,25 @@ async function findCurrentPersistedFact(
   }
 
   return undefined;
+}
+
+function isSourceQuoteGroundedInCurrentFact(
+  persistedFact: CandidateFactV1,
+  currentFact: CandidateFactV1,
+): boolean {
+  if (!persistedFact.sourceQuote) {
+    return true;
+  }
+
+  const normalizedQuote = normalizeComparableText(persistedFact.sourceQuote);
+  const normalizedCurrentText = normalizeComparableText(
+    currentFact.normalizedText ?? "",
+  );
+  return (
+    normalizedQuote.length > 0 &&
+    normalizedCurrentText.length > 0 &&
+    normalizedCurrentText.includes(normalizedQuote)
+  );
 }
 
 function projectCandidateFactContract(
