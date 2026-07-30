@@ -31,10 +31,62 @@ export type CanonicalJobReviewItem = {
   updatedAt: number;
 };
 
+export type NormalizedStructuredJobBriefInput = {
+  dateChecked: string;
+  contract: unknown;
+  schedule: unknown;
+  salary: unknown;
+  responsibilities: string[];
+  mustHaves: string[];
+  niceToHaves: string[];
+  languageRequirements: string;
+  factualCvMatches: string[];
+  gapsAndUncertainties: string[];
+  excludedCvFacts: string[];
+  applicationLanguage: string;
+  questionsBeforeDrafting: string[];
+};
+
+export type NormalizedJobBriefInput = {
+  kind: "url_only" | "pasted_text" | "structured_payload";
+  title: string;
+  rawDescription: string;
+  company: string;
+  location: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceType: string;
+  applicationUrl: string;
+  structuredBrief: NormalizedStructuredJobBriefInput | null;
+  unmappedStructuredFields: string[];
+};
+
+export type NormalizeJobBriefInputResult =
+  | {
+      ok: true;
+      value: NormalizedJobBriefInput;
+    }
+  | {
+      ok: false;
+      code: "job_input_required" | "invalid_job_url";
+      message: string;
+    };
+
 const MAX_RESPONSIBILITIES = 3;
 const MAX_KEYWORDS = 8;
 const MAX_MUST_HAVES = 4;
 const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.7;
+const NON_SUBSTANTIVE_STRUCTURED_VALUES = new Set([
+  "n/a",
+  "na",
+  "none",
+  "not applicable",
+  "not available",
+  "not provided",
+  "not specified",
+  "not stated",
+  "unknown",
+]);
 export type JobPostingLanguage = "en" | "fr" | "es" | "pt" | "it" | "de";
 
 const RESPONSIBILITY_CUE_RE =
@@ -326,6 +378,310 @@ type SentenceSegment = {
 
 function compactWhitespace(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? compactWhitespace(value) : "";
+}
+
+function readStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const values: string[] = [];
+  for (const entry of value) {
+    const normalized = readString(entry);
+    const key = normalized.toLocaleLowerCase();
+    if (!normalized || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    values.push(normalized);
+  }
+  return values;
+}
+
+function readFirstValue(
+  source: Record<string, unknown>,
+  keys: readonly string[],
+): unknown {
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+  return undefined;
+}
+
+function parseStructuredJobPayload(
+  rawDescription: string,
+): {
+  root: Record<string, unknown>;
+  brief: Record<string, unknown>;
+} | null {
+  const trimmed = rawDescription.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return null;
+  }
+
+  try {
+    const root = readObject(JSON.parse(trimmed));
+    if (!root) {
+      return null;
+    }
+    const brief =
+      readObject(
+        readFirstValue(root, [
+          "normalized_job_brief",
+          "normalizedJobBrief",
+          "job_brief",
+          "jobBrief",
+        ]),
+      ) ?? {};
+    const hasRecognizedShape =
+      Object.keys(brief).length > 0 ||
+      readFirstValue(root, [
+        "job_title",
+        "jobTitle",
+        "employer",
+        "source_url",
+        "sourceUrl",
+      ]) !== undefined;
+    return hasRecognizedShape ? { root, brief } : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHttpJobUrl(
+  value: unknown,
+  options: { preserveHash?: boolean } = {},
+): { value: string; error: string | null } {
+  const raw = readString(value);
+  if (!raw) {
+    return { value: "", error: null };
+  }
+
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw)
+    ? raw
+    : `https://${raw}`;
+
+  try {
+    const url = new URL(candidate);
+    if (
+      (url.protocol !== "http:" && url.protocol !== "https:") ||
+      !url.hostname ||
+      url.username ||
+      url.password
+    ) {
+      return { value: "", error: "Job URL must use http or https." };
+    }
+    if (!options.preserveHash) {
+      url.hash = "";
+    }
+    return { value: url.toString(), error: null };
+  } catch {
+    return { value: "", error: "Job URL must use http or https." };
+  }
+}
+
+function deriveUrlOnlyTitle(sourceDomain: string): string {
+  return sourceDomain ? `Job from ${sourceDomain}` : "Untitled job";
+}
+
+function hasStructuredValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>).length > 0;
+  }
+  return readString(value).length > 0;
+}
+
+export function normalizeJobBriefInput(args: {
+  title?: string;
+  rawDescription?: string;
+  sourceUrl?: string;
+  sourceDomain?: string;
+  sourceType?: string;
+  applicationUrl?: string;
+  company?: string;
+  location?: string;
+}): NormalizeJobBriefInputResult {
+  const rawDescription =
+    typeof args.rawDescription === "string" ? args.rawDescription.trim() : "";
+  const structuredPayload = parseStructuredJobPayload(rawDescription);
+  const payloadSourceUrl = structuredPayload
+    ? readFirstValue(structuredPayload.root, ["source_url", "sourceUrl"])
+    : undefined;
+  const normalizedSourceUrl = normalizeHttpJobUrl(
+    readString(args.sourceUrl) || payloadSourceUrl,
+  );
+
+  if (!rawDescription && normalizedSourceUrl.error) {
+    return {
+      ok: false,
+      code: "invalid_job_url",
+      message: normalizedSourceUrl.error,
+    };
+  }
+
+  if (!rawDescription && !normalizedSourceUrl.value) {
+    return {
+      ok: false,
+      code: "job_input_required",
+      message: "Paste a job offer or provide a valid job URL.",
+    };
+  }
+
+  const sourceUrl = normalizedSourceUrl.value;
+  const sourceDomain =
+    readString(args.sourceDomain) || extractDomain(sourceUrl);
+  const root = structuredPayload?.root ?? {};
+  const brief = structuredPayload?.brief ?? {};
+  const title =
+    readString(args.title) ||
+    readString(readFirstValue(root, ["job_title", "jobTitle", "title"])) ||
+    (!rawDescription ? deriveUrlOnlyTitle(sourceDomain) : "Untitled job");
+  const company =
+    readString(args.company) ||
+    readString(readFirstValue(root, ["employer", "company"]));
+  const location =
+    readString(args.location) ||
+    readString(readFirstValue(brief, ["location"])) ||
+    readString(readFirstValue(root, ["location"]));
+
+  const structuredBrief = structuredPayload
+    ? {
+        dateChecked: readString(
+          readFirstValue(root, ["date_checked", "dateChecked"]),
+        ),
+        contract: readFirstValue(brief, ["contract"]) ?? null,
+        schedule:
+          readFirstValue(brief, ["schedule"]) ??
+          readFirstValue(readObject(brief.contract) ?? {}, [
+            "schedule",
+            "working_days",
+            "daily_time_range",
+          ]) ??
+          null,
+        salary: readFirstValue(brief, ["salary", "compensation"]) ?? null,
+        responsibilities: readStringList(
+          readFirstValue(brief, ["responsibilities"]),
+        ),
+        mustHaves: readStringList(
+          readFirstValue(brief, [
+            "must_have_requirements",
+            "mustHaves",
+            "must_haves",
+          ]),
+        ),
+        niceToHaves: readStringList(
+          readFirstValue(brief, ["nice_to_haves", "niceToHaves"]),
+        ),
+        languageRequirements: readString(
+          readFirstValue(brief, [
+            "language_requirements",
+            "languageRequirements",
+          ]),
+        ),
+        factualCvMatches: readStringList(
+          readFirstValue(brief, [
+            "strongest_factual_matches",
+            "factual_cv_matches",
+            "factualCvMatches",
+          ]) ??
+            readFirstValue(root, [
+              "cv_facts_to_emphasize",
+              "cvFactsToEmphasize",
+            ]),
+        ),
+        gapsAndUncertainties: readStringList(
+          readFirstValue(brief, [
+            "gaps_and_uncertainties",
+            "gapsAndUncertainties",
+          ]),
+        ),
+        excludedCvFacts: readStringList(
+          readFirstValue(root, [
+            "facts_that_must_not_be_used",
+            "factsThatMustNotBeUsed",
+          ]) ??
+            readFirstValue(brief, [
+              "excluded_cv_facts",
+              "excludedCvFacts",
+            ]),
+        ),
+        applicationLanguage: readString(
+          readFirstValue(root, [
+            "application_language",
+            "applicationLanguage",
+          ]),
+        ),
+        questionsBeforeDrafting: readStringList(
+          readFirstValue(root, [
+            "questions_before_drafting",
+            "questionsBeforeDrafting",
+          ]) ??
+            readFirstValue(brief, [
+              "questions_before_drafting",
+              "questionsBeforeDrafting",
+            ]),
+        ),
+      }
+    : null;
+
+  const unmappedStructuredFields = structuredBrief
+    ? (
+        [
+          ["dateChecked", structuredBrief.dateChecked],
+          ["contract", structuredBrief.contract],
+          ["schedule", structuredBrief.schedule],
+          ["salary", structuredBrief.salary],
+          ["niceToHaves", structuredBrief.niceToHaves],
+          ["languageRequirements", structuredBrief.languageRequirements],
+          ["factualCvMatches", structuredBrief.factualCvMatches],
+          ["gapsAndUncertainties", structuredBrief.gapsAndUncertainties],
+          ["excludedCvFacts", structuredBrief.excludedCvFacts],
+          ["applicationLanguage", structuredBrief.applicationLanguage],
+          ["questionsBeforeDrafting", structuredBrief.questionsBeforeDrafting],
+        ] as const
+      )
+        .filter(([, value]) => hasStructuredValue(value))
+        .map(([field]) => field)
+    : [];
+
+  return {
+    ok: true,
+    value: {
+      kind: structuredPayload
+        ? "structured_payload"
+        : rawDescription
+          ? "pasted_text"
+          : "url_only",
+      title,
+      rawDescription,
+      company,
+      location,
+      sourceUrl,
+      sourceDomain,
+      sourceType: readString(args.sourceType) || "extension",
+      applicationUrl: normalizeHttpJobUrl(args.applicationUrl, {
+        preserveHash: true,
+      }).value,
+      structuredBrief,
+      unmappedStructuredFields,
+    },
+  };
 }
 
 export function detectJobPostingLanguage(value: string): JobPostingLanguage {
@@ -831,6 +1187,23 @@ export function flattenExtractionValues(
   return (values ?? []).map((value) => value.value).filter(Boolean);
 }
 
+function isSubstantiveStructuredValue(value: string): boolean {
+  const normalized = value
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[.!?]+$/gu, "")
+    .trim();
+  return (
+    normalized.length > 0 &&
+    !NON_SUBSTANTIVE_STRUCTURED_VALUES.has(normalized)
+  );
+}
+
+function buildProvidedExtractions(values: string[]): CanonicalJobExtraction[] {
+  return values.map((value) => toExtraction(value, 0.55, null));
+}
+
 /**
  * `sourceSpan` offsets are rawDescription character offsets. Title-only keyword matches keep
  * `sourceSpan: null` because they do not originate from a substring in the imported job body.
@@ -846,27 +1219,51 @@ export function buildCanonicalJobDraftFromSource(args: {
   location?: string;
 }) {
   const now = Date.now();
-  const rawDescription = String(args.rawDescription ?? "").trim();
-  const title = compactWhitespace(args.title);
-  const sourceUrl = compactWhitespace(args.sourceUrl ?? "");
-  const sourceDomain = compactWhitespace(args.sourceDomain ?? "") || extractDomain(sourceUrl);
-  const structuredCompany = compactWhitespace(args.company ?? "");
-  const structuredLocation = compactWhitespace(args.location ?? "");
-  const responsibilitiesExtraction = extractResponsibilities(rawDescription);
-  const mustHavesExtraction = buildMustHavesWithTitleRole({
+  const normalizedInput = normalizeJobBriefInput(args);
+  if (normalizedInput.ok === false) {
+    throw new TypeError(normalizedInput.message);
+  }
+
+  const {
     title,
     rawDescription,
-  });
+    sourceUrl,
+    sourceDomain,
+    sourceType,
+    applicationUrl,
+    company: structuredCompany,
+    location: structuredLocation,
+    structuredBrief,
+  } = normalizedInput.value;
+  const extractionText = structuredBrief
+    ? [
+        ...structuredBrief.responsibilities,
+        ...structuredBrief.mustHaves,
+        ...structuredBrief.niceToHaves,
+        structuredBrief.languageRequirements,
+      ]
+        .filter(isSubstantiveStructuredValue)
+        .join(". ")
+    : rawDescription;
+  const responsibilitiesExtraction = structuredBrief
+    ? buildProvidedExtractions(structuredBrief.responsibilities)
+    : extractResponsibilities(rawDescription);
+  const mustHavesExtraction = structuredBrief
+    ? buildProvidedExtractions(structuredBrief.mustHaves)
+    : buildMustHavesWithTitleRole({
+        title,
+        rawDescription,
+      });
   const keywordsExtraction = extractKeywords({
     title,
-    rawDescription,
+    rawDescription: extractionText,
     responsibilities: responsibilitiesExtraction,
     mustHaves: mustHavesExtraction,
   });
-  const toneCuesExtraction = extractToneCues(rawDescription);
+  const toneCuesExtraction = extractToneCues(extractionText);
   const summaryExtraction = extractSummary({
     title,
-    rawDescription,
+    rawDescription: extractionText,
     responsibilities: responsibilitiesExtraction,
   });
   const reviewItems = buildReviewItems({
@@ -885,19 +1282,25 @@ export function buildCanonicalJobDraftFromSource(args: {
     lastOpenedAt: now,
     sourceUrl,
     sourceDomain,
-    sourceType: compactWhitespace(args.sourceType ?? "extension") || "extension",
-    applicationUrl: compactWhitespace(args.applicationUrl ?? ""),
+    sourceType,
+    applicationUrl,
     dedupeKey: shortHash(
       `${sourceUrl}::${title.toLowerCase()}::${compactWhitespace(rawDescription).toLowerCase()}`,
     ),
     parseVersion: "v1b",
-    parseStatus: "parsed" as CanonicalJobParseStatus,
-    reviewState: resolveCanonicalJobReviewState(reviewItems),
+    parseStatus: (
+      rawDescription ? "parsed" : "imported"
+    ) as CanonicalJobParseStatus,
+    reviewState: rawDescription
+      ? resolveCanonicalJobReviewState(reviewItems)
+      : "needs_review",
     title,
     company: structuredCompany || extractCompany(rawDescription),
     location: structuredLocation || extractLocation(rawDescription),
     rawDescription,
-    rawLanguageDetected: detectJobPostingLanguage(`${title}\n${rawDescription}`),
+    rawLanguageDetected: detectJobPostingLanguage(
+      `${title}\n${extractionText}`,
+    ),
     summary: summaryExtraction.value || title,
     summaryExtraction,
     responsibilities: flattenExtractionValues(responsibilitiesExtraction),
@@ -913,17 +1316,27 @@ export function buildCanonicalJobDraftFromSource(args: {
     status: "active",
     archivedAt: null as number | null,
     reviewItems,
+    inputKind: normalizedInput.value.kind,
+    unmappedStructuredFields:
+      normalizedInput.value.unmappedStructuredFields,
   };
 }
 
-function inferRequirementType(value: string): NormalizedJobExtraction["requirements"][number]["type"] {
+export function inferRequirementType(value: string): NormalizedJobExtraction["requirements"][number]["type"] {
   if (/\b(certifi(?:ed|cation)|license[ds]?|guard card|permit)\b/i.test(value)) {
     return "certification";
   }
   if (/\b(degree|diploma|bachelor|master|education)\b/i.test(value)) {
     return "education";
   }
-  if (/\b(language|english|french|spanish|german|italian|portuguese)\b/i.test(value)) {
+  const normalizedLanguageRequirement = value
+    .normalize("NFKD")
+    .replace(/\p{Mark}+/gu, "");
+  if (
+    /\b(language|langue|idioma|lingua|sprache|sprachkenntnisse|bilingual|bilingue|zweisprachig|english|anglais|ingles|inglese|englisch|french|francais|francaise|frances|francese|franzosisch|spanish|espagnol|espagnole|espanol|espanola|spagnolo|spagnola|spanisch|german|allemand|allemande|aleman|alemana|alemao|tedesco|tedesca|deutsch|italian|italien|italienne|italiano|italiana|italienisch|portuguese|portugais|portugaise|portugues|portuguesa|portoghese|portugiesisch)\b/i.test(
+      normalizedLanguageRequirement,
+    )
+  ) {
     return "language";
   }
   if (/\b(shift|schedule|weekend|onsite|standing|availability)\b/i.test(value)) {

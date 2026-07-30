@@ -155,8 +155,18 @@ export function buildResumeVariantArtifactSections(
   const itemsBySection = new Map<ResumeVariantArtifactSectionKindV1, ResumeVariantArtifactItemV1[]>();
 
   const artifactItems = [
-    ...input.resumeVariantPlan.items.map((item) => buildArtifactItemFromPlanItem(item, input)),
-    ...input.reviewCockpit.items.map((item) => buildArtifactItemFromReviewItem(item, input, planItemsById)),
+    ...input.resumeVariantPlan.items
+      .filter((item) => item.reviewState !== "rejected")
+      .map((item) => buildArtifactItemFromPlanItem(item, input)),
+    ...input.reviewCockpit.items
+      .filter(
+        (item) =>
+          findMatchingPlanItemForReviewItem(item, input, planItemsById)
+            ?.reviewState !== "rejected",
+      )
+      .map((item) =>
+        buildArtifactItemFromReviewItem(item, input, planItemsById),
+      ),
   ].map(normalizeArtifactItemIds);
 
   for (const item of artifactItems) {
@@ -397,6 +407,7 @@ function deriveArtifactItemKindFromPlanItem(
   }
   if (
     planItem.action === "needs_review" ||
+    planItem.reviewState === "pending" ||
     planItem.reviewState === "needs_review" ||
     planItem.reviewState === "blocked"
   ) {
@@ -432,9 +443,7 @@ function isSafeSourceBackedPlanItem(
     return false;
   }
   if (
-    planItem.reviewState === "blocked" ||
-    planItem.reviewState === "needs_review" ||
-    planItem.reviewState === "rejected"
+    planItem.reviewState !== "accepted"
   ) {
     return false;
   }
@@ -462,14 +471,34 @@ function findMatchingPlanItemForReviewItem(
   if (reviewItem.planItemId) {
     return planItemsById.get(reviewItem.planItemId);
   }
-  return input.resumeVariantPlan.items.find((planItem) => {
-    return Boolean(
-      (reviewItem.allowedClaimId && planItem.allowedClaimIds.includes(reviewItem.allowedClaimId)) ||
-        (reviewItem.demandId && planItem.demandIds.includes(reviewItem.demandId)) ||
-        (reviewItem.evidenceMatchId && planItem.evidenceMatchIds.includes(reviewItem.evidenceMatchId)) ||
-        reviewItem.sourceFactIds.some((factId) => planItem.candidateFactIds.includes(factId)),
-    );
-  });
+  return input.resumeVariantPlan.items
+    .map((planItem) => ({
+      planItem,
+      score:
+        (reviewItem.allowedClaimId &&
+        planItem.allowedClaimIds.includes(reviewItem.allowedClaimId)
+          ? 8
+          : 0) +
+        (reviewItem.evidenceMatchId &&
+        planItem.evidenceMatchIds.includes(reviewItem.evidenceMatchId)
+          ? 4
+          : 0) +
+        (reviewItem.sourceFactIds.some((factId) =>
+          planItem.candidateFactIds.includes(factId),
+        )
+          ? 2
+          : 0) +
+        (reviewItem.demandId &&
+        planItem.demandIds.includes(reviewItem.demandId)
+          ? 1
+          : 0),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.planItem.id.localeCompare(right.planItem.id),
+    )[0]?.planItem;
 }
 
 function buildArtifactSection(

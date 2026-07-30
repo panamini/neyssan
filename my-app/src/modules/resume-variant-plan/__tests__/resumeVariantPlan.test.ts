@@ -151,6 +151,51 @@ describe("resume-variant-plan artifact", () => {
     );
   });
 
+  it("uses include only when an allowed fact is bound to a stable source CV item", async () => {
+    const plan = await buildResumeVariantPlan(
+      await planInput({
+        sourceCvId: "cv-source-1",
+        sourceCvFactBindings: [
+          {
+            candidateFactId: "candidate-fact:typescript",
+            sourceCvItemReferenceId:
+              "candidate-cv-item:v1:cv-source-1:skill:section-skills:skill-typescript",
+          },
+        ],
+      }),
+    );
+
+    expect(plan.sourceCvId).toBe("cv-source-1");
+    expect(plan.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "include",
+          reviewState: "pending",
+          sourceCvItemReferenceIds: [
+            "candidate-cv-item:v1:cv-source-1:skill:section-skills:skill-typescript",
+          ],
+        }),
+      ]),
+    );
+  });
+
+  it("fails closed on duplicate source CV fact bindings", async () => {
+    const binding = {
+      candidateFactId: "candidate-fact:typescript",
+      sourceCvItemReferenceId:
+        "candidate-cv-item:v1:cv-source-1:skill:section-skills:skill-typescript",
+    };
+
+    await expect(
+      buildResumeVariantPlan(
+        await planInput({
+          sourceCvId: "cv-source-1",
+          sourceCvFactBindings: [binding, binding],
+        }),
+      ),
+    ).rejects.toThrow(/duplicate.*source CV fact binding/i);
+  });
+
   it("plan item maps to allowedClaimIds and candidateFactIds", async () => {
     const plan = await buildResumeVariantPlan(await planInput());
     const item = plan.items.find((candidate) => candidate.allowedClaimIds.length > 0);

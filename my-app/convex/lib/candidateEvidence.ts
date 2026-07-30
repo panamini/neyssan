@@ -57,6 +57,7 @@ export const candidateImportBatchStatusValidator = v.union(
 export const candidateSourceDocumentFields = {
   id: v.string(),
   userId: v.string(),
+  canonicalCvId: v.optional(v.string()),
   sourceType: candidateSourceDocumentTypeValidator,
   title: v.optional(v.string()),
   originalFilename: v.optional(v.string()),

@@ -7,6 +7,7 @@ import {
   bestEffortMaterializeMcpReadSideForStoredProposal,
   materializeMcpReadSideForStoredProposal,
 } from "../mcpReadSideMaterialization";
+import { buildApplicationContextV1FromExistingData } from "../lib/applicationContextBuilder";
 import { deleteProposal, storeProposal, updateProposal } from "../proposals";
 
 const NOW = Date.UTC(2026, 6, 2, 12, 0, 0, 0);
@@ -287,6 +288,52 @@ describe("MCP read-side materialization from proposal persistence", () => {
     assertNoRawText(tables.applicationPackages);
   });
 
+  it("materializes the authoritative canonical Job Brief demand hash", async () => {
+    const storedJob = job({
+      mustHaves: ["Customer service"],
+      responsibilities: ["Operate the checkout"],
+      keywords: ["retail"],
+    });
+    const storedProfile = profile();
+    const { ctx, tables } = makeCtx({
+      jobs: [storedJob],
+      userProfiles: [storedProfile],
+    });
+    const expected = await buildApplicationContextV1FromExistingData({
+      userId: "profile_storage_id_DO_NOT_ECHO",
+      job: {
+        _id: storedJob._id,
+        rawDescription: storedJob.rawDescription,
+        mustHaves: storedJob.mustHaves,
+        responsibilities: storedJob.responsibilities,
+        keywords: storedJob.keywords,
+      },
+      candidateProfile: {
+        ...storedProfile,
+        _id: "profile_storage_id_DO_NOT_ECHO",
+      },
+      settings: {
+        selectedLanguage: "en",
+      },
+      now: NOW,
+    });
+
+    const result = await materializeMcpReadSideForStoredProposal(
+      ctx as any,
+      proposal(),
+    );
+
+    expect(result.status).toBe("materialized");
+    expect(tables.applicationContexts).toHaveLength(1);
+    expect(tables.applicationContexts[0]).toMatchObject({
+      id: expected.context.id,
+      contextHash: expected.context.contextHash,
+      job: {
+        jobBriefHash: expected.jobBriefHash,
+      },
+    });
+  });
+
   it("reuses the same context and package for the same proposal input", async () => {
     const { ctx, tables } = makeCtx();
 
@@ -399,6 +446,60 @@ describe("MCP read-side materialization from proposal persistence", () => {
     expect(tables.applicationContexts).toHaveLength(1);
     expect((tables.applicationContexts[0].candidate as any).cvId).toBe(
       "profile_storage_id_DO_NOT_ECHO",
+    );
+    assertNoRawText(tables.applicationContexts);
+  });
+
+  it("materializes the canonical CvDocument identity without changing the MCP surface", async () => {
+    const canonicalCvId = "canonical_cv_document_DO_NOT_ECHO";
+    const { ctx, tables } = makeCtx({
+      userProfiles: [
+        profile({
+          cvDocument: {
+            id: canonicalCvId,
+            sections: [{ id: "summary", content: "RAW_CV_TEXT_DO_NOT_ECHO" }],
+          },
+        }),
+      ],
+    });
+
+    await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+
+    expect(tables.applicationContexts).toHaveLength(1);
+    expect((tables.applicationContexts[0].candidate as any).cvId).toBe(canonicalCvId);
+    expect(tables.applicationContexts[0].sourceRefs).toContainEqual(
+      expect.objectContaining({
+        sourceType: "cv",
+        sourceId: canonicalCvId,
+      }),
+    );
+    assertNoRawText(tables.applicationContexts);
+  });
+
+  it("rematerializes safely when a canonical CvDocument identity replaces the legacy fallback", async () => {
+    const { ctx, tables } = makeCtx();
+    await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+    const legacyContextId = String(tables.applicationContexts[0].id);
+
+    tables.userProfiles[0].cvDocument = {
+      id: "canonical_cv_document_DO_NOT_ECHO",
+      sections: [{ id: "summary", content: "RAW_CV_TEXT_DO_NOT_ECHO" }],
+    };
+    const result = await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+
+    expect(result).toMatchObject({
+      status: "materialized",
+      contextReused: false,
+      packageReused: true,
+    });
+    expect(result.applicationContextId).not.toBe(legacyContextId);
+    expect(tables.applicationContexts).toHaveLength(1);
+    expect((tables.applicationContexts[0].candidate as any).cvId).toBe(
+      "canonical_cv_document_DO_NOT_ECHO",
+    );
+    expect(tables.applicationPackages).toHaveLength(1);
+    expect(tables.applicationPackages[0].applicationContextId).toBe(
+      result.applicationContextId,
     );
     assertNoRawText(tables.applicationContexts);
   });

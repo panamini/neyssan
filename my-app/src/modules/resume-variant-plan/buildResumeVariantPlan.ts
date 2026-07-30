@@ -58,6 +58,7 @@ export async function buildResumeVariantPlan(
     evidenceGraphId: input.evidenceGraph.id,
     evidenceGraphHash: extractEvidenceGraphHash(input.evidenceGraph),
     targetDocumentKind: input.targetDocumentKind,
+    sourceCvId: input.sourceCvId,
     language: input.language,
     market: input.market,
     items,
@@ -101,6 +102,10 @@ export function buildResumeVariantPlanHash(
         language: inputOrPlan.language,
         market: inputOrPlan.market,
         evidenceGraph: inputOrPlan.evidenceGraph,
+        sourceCvId: inputOrPlan.sourceCvId,
+        sourceCvFactBindings: sortSourceCvFactBindings(
+          inputOrPlan.sourceCvFactBindings,
+        ),
         createdAt: inputOrPlan.createdAt,
         updatedAt: inputOrPlan.updatedAt,
       },
@@ -138,21 +143,35 @@ export function buildResumeVariantPlanItems(
     const candidateFactIds = sortUniqueStrings(acceptedMatches.map((match) => match.candidateFactId));
     const demandIds = sortUniqueStrings(acceptedMatches.map((match) => match.demandId));
     const evidenceMatchIds = sortUniqueStrings(acceptedMatches.map((match) => match.id));
+    const sourceCvItemReferenceIds = collectSourceCvItemReferenceIds(
+      candidateFactIds,
+      input.sourceCvFactBindings,
+    );
+    const action =
+      sourceCvItemReferenceIds.length > 0
+        ? "include"
+        : "add_from_allowed_claim";
 
     items.push({
-      id: ["resume-variant-plan-item", section, "add-from-allowed-claim", claim.id]
+      id: ["resume-variant-plan-item", section, action, claim.id]
         .map(normalizePlanIdSegment)
         .join(":"),
       section,
-      action: "add_from_allowed_claim",
+      action,
       priority: priorityFromDemandIds(demandIds, graph.demands),
       reviewState: "pending",
+      ...(sourceCvItemReferenceIds.length > 0
+        ? { sourceCvItemReferenceIds }
+        : {}),
       allowedClaimIds: [claim.id],
       candidateFactIds,
       evidenceMatchIds,
       demandIds,
       riskFlagIds: [],
-      reason: `Add source-backed ${section} claim to ${section} section.`,
+      reason:
+        action === "include"
+          ? `Include source CV ${section} item in ${section} section.`
+          : `Add source-backed ${section} claim to ${section} section.`,
       version: 1,
     });
   }
@@ -165,7 +184,7 @@ export function buildResumeVariantPlanItems(
     items.push(buildRiskFlagItem(riskFlag, graph));
   }
 
-  return items.sort((a, b) => a.id.localeCompare(b.id));
+  return items.sort((a, b) => compareResumeVariantPlanItems(a, b, input));
 }
 
 export function buildResumeVariantPlanWarnings(
@@ -236,6 +255,14 @@ export function assertResumeVariantPlanEvidenceBacked(
 
     if (item.candidateFactIds.length === 0) {
       throw new Error(`Claim-backed plan item lacks candidateFactIds: ${item.id}`);
+    }
+    if (
+      item.action === "include" &&
+      (!plan.sourceCvId || !item.sourceCvItemReferenceIds?.length)
+    ) {
+      throw new Error(
+        `Included plan item lacks stable source CV references: ${item.id}`,
+      );
     }
 
     const claimFactIds = new Set<string>();
@@ -478,6 +505,50 @@ function collectClaimIds(items: readonly ResumeVariantPlanItemV1[]): readonly st
   return sortUniqueStrings(items.flatMap((item) => item.allowedClaimIds));
 }
 
+function collectSourceCvItemReferenceIds(
+  candidateFactIds: readonly string[],
+  bindings: BuildResumeVariantPlanInputV1["sourceCvFactBindings"],
+): readonly string[] {
+  if (!bindings?.length) {
+    return [];
+  }
+
+  const referenceIdByCandidateFactId = new Map(
+    bindings.map((binding) => [
+      binding.candidateFactId,
+      binding.sourceCvItemReferenceId,
+    ]),
+  );
+  const referenceIds = sortUniqueStrings(
+    candidateFactIds
+      .map((candidateFactId) =>
+        referenceIdByCandidateFactId.get(candidateFactId),
+      )
+      .filter(
+        (referenceId): referenceId is string =>
+          typeof referenceId === "string",
+      ),
+  );
+
+  return referenceIds.length === new Set(candidateFactIds).size
+    ? referenceIds
+    : [];
+}
+
+function sortSourceCvFactBindings(
+  bindings: BuildResumeVariantPlanInputV1["sourceCvFactBindings"],
+): BuildResumeVariantPlanInputV1["sourceCvFactBindings"] {
+  return bindings
+    ? [...bindings].sort(
+        (left, right) =>
+          left.candidateFactId.localeCompare(right.candidateFactId) ||
+          left.sourceCvItemReferenceId.localeCompare(
+            right.sourceCvItemReferenceId,
+          ),
+      )
+    : undefined;
+}
+
 function collectRiskIds(
   items: readonly ResumeVariantPlanItemV1[],
   warnings: readonly ResumeVariantPlanWarningV1[],
@@ -524,6 +595,103 @@ function sortRiskFlags(riskFlags: readonly EvidenceRiskFlagV1[]): readonly Evide
   return [...riskFlags].sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function compareResumeVariantPlanItems(
+  left: ResumeVariantPlanItemV1,
+  right: ResumeVariantPlanItemV1,
+  input: BuildResumeVariantPlanInputV1,
+): number {
+  if (!input.sourceCvId) {
+    return left.id.localeCompare(right.id);
+  }
+
+  const leftClaimBacked = isClaimBackedResumeVariantPlanAction(left.action);
+  const rightClaimBacked = isClaimBackedResumeVariantPlanAction(right.action);
+  if (leftClaimBacked !== rightClaimBacked) {
+    return leftClaimBacked ? -1 : 1;
+  }
+  if (!leftClaimBacked) {
+    return left.id.localeCompare(right.id);
+  }
+
+  const priorityDelta =
+    planPriorityRank(left.priority) - planPriorityRank(right.priority);
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  const matchDelta =
+    bestEvidenceMatchRank(left, input.evidenceGraph) -
+    bestEvidenceMatchRank(right, input.evidenceGraph);
+  if (matchDelta !== 0) {
+    return matchDelta;
+  }
+
+  const coverageDelta =
+    new Set(right.demandIds).size - new Set(left.demandIds).size;
+  if (coverageDelta !== 0) {
+    return coverageDelta;
+  }
+
+  const referenceDelta = (
+    left.sourceCvItemReferenceIds?.[0] ?? left.id
+  ).localeCompare(right.sourceCvItemReferenceIds?.[0] ?? right.id);
+  return referenceDelta !== 0
+    ? referenceDelta
+    : left.id.localeCompare(right.id);
+}
+
+function planPriorityRank(priority: ResumeVariantPlanPriorityV1): number {
+  switch (priority) {
+    case "required":
+      return 0;
+    case "recommended":
+      return 1;
+    case "optional":
+      return 2;
+  }
+}
+
+function bestEvidenceMatchRank(
+  item: ResumeVariantPlanItemV1,
+  evidenceGraph: EvidenceGraphV1,
+): number {
+  const evidenceMatchIds = new Set(item.evidenceMatchIds);
+  const ranks = evidenceGraph.matches
+    .filter((match) => evidenceMatchIds.has(match.id))
+    .map(
+      (match) =>
+        evidenceMatchTypeRank(match.matchType) * 10 +
+        evidenceMatchStrengthRank(match.strength),
+    );
+  return ranks.length > 0 ? Math.min(...ranks) : Number.MAX_SAFE_INTEGER;
+}
+
+function evidenceMatchTypeRank(
+  matchType: EvidenceMatchV1["matchType"],
+): number {
+  switch (matchType) {
+    case "direct":
+      return 0;
+    case "adjacent":
+      return 1;
+    case "inferred":
+      return 2;
+  }
+}
+
+function evidenceMatchStrengthRank(
+  strength: EvidenceMatchV1["strength"],
+): number {
+  switch (strength) {
+    case "strong":
+      return 0;
+    case "medium":
+      return 1;
+    case "weak":
+      return 2;
+  }
+}
+
 function isBuildResumeVariantPlanInput(
   value: BuildResumeVariantPlanInputV1 | ResumeVariantPlanV1,
 ): value is BuildResumeVariantPlanInputV1 {
@@ -545,6 +713,40 @@ function assertResumeVariantPlanInput(input: BuildResumeVariantPlanInputV1): voi
 
   if (!input.evidenceGraph?.id) {
     throw new TypeError("ResumeVariantPlan input requires an EvidenceGraph");
+  }
+
+  if (input.sourceCvFactBindings?.length && !input.sourceCvId) {
+    throw new TypeError(
+      "ResumeVariantPlan source CV fact bindings require sourceCvId",
+    );
+  }
+  const boundCandidateFactIds = new Set<string>();
+  const graphCandidateFactIds = new Set([
+    ...input.evidenceGraph.matches.map((match) => match.candidateFactId),
+    ...input.evidenceGraph.allowedClaims.flatMap(
+      (claim) => claim.candidateFactIds,
+    ),
+  ]);
+  for (const binding of input.sourceCvFactBindings ?? []) {
+    if (
+      !binding?.candidateFactId?.trim() ||
+      !binding.sourceCvItemReferenceId?.trim()
+    ) {
+      throw new TypeError(
+        "ResumeVariantPlan source CV fact bindings require stable IDs",
+      );
+    }
+    if (boundCandidateFactIds.has(binding.candidateFactId)) {
+      throw new TypeError(
+        `duplicate ResumeVariantPlan source CV fact binding: ${binding.candidateFactId}`,
+      );
+    }
+    if (!graphCandidateFactIds.has(binding.candidateFactId)) {
+      throw new TypeError(
+        `ResumeVariantPlan source CV fact binding references unknown fact: ${binding.candidateFactId}`,
+      );
+    }
+    boundCandidateFactIds.add(binding.candidateFactId);
   }
 
   if (!Number.isFinite(input.createdAt) || !Number.isFinite(input.updatedAt)) {

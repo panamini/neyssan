@@ -4,7 +4,9 @@ import {
   createOrReuseCandidateFact,
   createOrReuseCandidateImportBatch,
   createOrReuseCandidateSourceDocument,
+  getCandidateSourceDocumentById,
   listCandidateFactsForSourceDocument,
+  listCandidateSourceDocumentsForCanonicalCv,
   patchCandidateFactReviewState,
   patchCandidateFactVisibility,
   patchCandidateImportBatchStatus,
@@ -13,6 +15,8 @@ import { stableSerialize } from "../../src/modules/application-harness/fingerpri
 import {
   buildCandidateFactHash,
   buildCandidateImportBatchHash,
+  buildCandidateSourceDocumentHash,
+  buildCandidateSourceDocumentTextHash,
 } from "../../src/modules/candidate-evidence/fingerprints";
 import type {
   CandidateFactV1,
@@ -54,6 +58,30 @@ function buildSourceDocumentFixture(
     version: 1,
     ...overrides,
   };
+}
+
+async function buildCanonicalSourceDocumentFixture(
+  canonicalCvId?: string,
+  userId = "user_123",
+): Promise<CandidateSourceDocumentV1> {
+  const text = "Equivalent historical and linked source material.";
+  const sourceHash = await buildCandidateSourceDocumentHash({
+    userId,
+    sourceType: "pasted_text",
+    text,
+    title: "Pasted profile notes",
+    originalFilename: "profile-notes.txt",
+    mimeType: "text/plain",
+    ...(canonicalCvId ? { canonicalCvId } : {}),
+  });
+
+  return buildSourceDocumentFixture({
+    id: `candidate-source-document:${sourceHash}`,
+    userId,
+    sourceHash,
+    textHash: await buildCandidateSourceDocumentTextHash(text),
+    ...(canonicalCvId ? { canonicalCvId } : {}),
+  });
 }
 
 async function buildFactFixture(
@@ -218,6 +246,7 @@ function makeCtx() {
             take: async (limit: number) => matching.slice(0, limit),
           }),
           take: async (limit: number) => matching.slice(0, limit),
+          collect: async () => matching,
         };
       },
     }),
@@ -277,6 +306,197 @@ describe("candidate evidence Convex shadow persistence", () => {
 
     expect(firstId).toBe(secondId);
     expect(tables.candidateSourceDocuments).toHaveLength(1);
+  });
+
+  it("creates and reuses a source document linked to one canonical CV", async () => {
+    const { ctx, tables } = makeCtx();
+    const sourceDocument = buildSourceDocumentFixture({
+      canonicalCvId: "cv-canonical-1",
+    });
+
+    const firstId = await createOrReuseCandidateSourceDocument._handler(
+      ctx as any,
+      { sourceDocument },
+    );
+    const secondId = await createOrReuseCandidateSourceDocument._handler(
+      ctx as any,
+      { sourceDocument },
+    );
+
+    expect(secondId).toBe(firstId);
+    expect(tables.candidateSourceDocuments).toHaveLength(1);
+    expect(tables.candidateSourceDocuments[0].canonicalCvId).toBe(
+      "cv-canonical-1",
+    );
+  });
+
+  it("keeps historical unlinked material while creating a separate linked identity", async () => {
+    const { ctx, tables } = makeCtx();
+    const historical = await buildCanonicalSourceDocumentFixture();
+    const linked = await buildCanonicalSourceDocumentFixture(
+      "cv-canonical-1",
+    );
+
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: historical,
+    });
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: linked,
+    });
+
+    expect(linked.id).not.toBe(historical.id);
+    expect(linked.sourceHash).not.toBe(historical.sourceHash);
+    expect(tables.candidateSourceDocuments).toHaveLength(2);
+    expect(tables.candidateSourceDocuments[0]).not.toHaveProperty(
+      "canonicalCvId",
+    );
+    expect(tables.candidateSourceDocuments[1]).toMatchObject({
+      id: linked.id,
+      canonicalCvId: "cv-canonical-1",
+    });
+  });
+
+  it("rejects changing or implicitly backfilling a source document canonical CV", async () => {
+    const { ctx, tables } = makeCtx();
+    const unlinked = buildSourceDocumentFixture();
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: unlinked,
+    });
+
+    await expect(
+      createOrReuseCandidateSourceDocument._handler(ctx as any, {
+        sourceDocument: {
+          ...unlinked,
+          canonicalCvId: "cv-canonical-1",
+        },
+      }),
+    ).rejects.toThrow(/canonical CV identity/);
+    expect(tables.candidateSourceDocuments[0]).not.toHaveProperty(
+      "canonicalCvId",
+    );
+
+    const linked = buildSourceDocumentFixture({
+      id: "candidate-source-document:source_hash_b",
+      sourceHash: "source_hash_b",
+      textHash: "text_hash_b",
+      canonicalCvId: "cv-canonical-1",
+    });
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: linked,
+    });
+    await expect(
+      createOrReuseCandidateSourceDocument._handler(ctx as any, {
+        sourceDocument: {
+          ...linked,
+          canonicalCvId: "cv-canonical-2",
+        },
+      }),
+    ).rejects.toThrow(/canonical CV identity/);
+    await expect(
+      createOrReuseCandidateSourceDocument._handler(ctx as any, {
+        sourceDocument: {
+          ...linked,
+          canonicalCvId: undefined,
+        },
+      }),
+    ).rejects.toThrow(/canonical CV identity/);
+  });
+
+  it("lists multiple linked sources by owner and canonical CV without unlinked documents", async () => {
+    const { ctx } = makeCtx();
+    const linkedA = buildSourceDocumentFixture({
+      canonicalCvId: "cv-canonical-1",
+    });
+    const linkedB = buildSourceDocumentFixture({
+      id: "candidate-source-document:source_hash_b",
+      sourceHash: "source_hash_b",
+      textHash: "text_hash_b",
+      canonicalCvId: "cv-canonical-1",
+    });
+    const unlinked = buildSourceDocumentFixture({
+      id: "candidate-source-document:source_hash_unlinked",
+      sourceHash: "source_hash_unlinked",
+      textHash: "text_hash_unlinked",
+    });
+
+    for (const sourceDocument of [linkedA, linkedB, unlinked]) {
+      await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+        sourceDocument,
+      });
+    }
+
+    const linked = await listCandidateSourceDocumentsForCanonicalCv._handler(
+      ctx as any,
+      {
+        userId: "user_123",
+        canonicalCvId: "cv-canonical-1",
+      },
+    );
+    const historical = await getCandidateSourceDocumentById._handler(
+      ctx as any,
+      {
+        userId: "user_123",
+        id: unlinked.id,
+      },
+    );
+
+    expect(linked.map((document: CandidateSourceDocumentV1) => document.id)).toEqual([
+      linkedA.id,
+      linkedB.id,
+    ]);
+    expect(historical).toMatchObject({ id: unlinked.id });
+    expect(historical).not.toHaveProperty("canonicalCvId");
+  });
+
+  it("isolates the same canonical CV identifier between users", async () => {
+    const { ctx } = makeCtx();
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: buildSourceDocumentFixture({
+        canonicalCvId: "cv-shared-name",
+      }),
+    });
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: buildSourceDocumentFixture({
+        userId: "user_456",
+        canonicalCvId: "cv-shared-name",
+      }),
+    });
+
+    const ownerSources =
+      await listCandidateSourceDocumentsForCanonicalCv._handler(ctx as any, {
+        userId: "user_123",
+        canonicalCvId: "cv-shared-name",
+      });
+
+    expect(ownerSources).toHaveLength(1);
+    expect(ownerSources[0].userId).toBe("user_123");
+  });
+
+  it("does not mutate CandidateFacts while linking or listing source documents", async () => {
+    const { ctx, tables, patches } = makeCtx();
+    const fact = await buildFactFixture({
+      reviewState: "approved",
+      visibility: "use_in_applications",
+    });
+    await createOrReuseCandidateFact._handler(ctx as any, { fact });
+    const before = JSON.stringify(tables.candidateFacts);
+
+    await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument: buildSourceDocumentFixture({
+        canonicalCvId: "cv-canonical-1",
+      }),
+    });
+    await listCandidateSourceDocumentsForCanonicalCv._handler(ctx as any, {
+      userId: "user_123",
+      canonicalCvId: "cv-canonical-1",
+    });
+
+    expect(JSON.stringify(tables.candidateFacts)).toBe(before);
+    expect(tables.candidateFacts[0]).toMatchObject({
+      reviewState: "approved",
+      visibility: "use_in_applications",
+    });
+    expect(patches).toEqual([]);
   });
 
   it("same sourceHash for different users does not collide", async () => {

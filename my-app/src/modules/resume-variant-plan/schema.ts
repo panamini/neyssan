@@ -32,12 +32,18 @@ export type ResumeVariantPlanReviewStateV1 =
   | "blocked"
   | "needs_review";
 
+export type ResumeVariantPlanSourceCvFactBindingV1 = Readonly<{
+  candidateFactId: string;
+  sourceCvItemReferenceId: string;
+}>;
+
 export type ResumeVariantPlanItemV1 = Readonly<{
   id: string;
   section: ResumeVariantPlanSectionV1;
   action: ResumeVariantPlanActionV1;
   priority: ResumeVariantPlanPriorityV1;
   reviewState: ResumeVariantPlanReviewStateV1;
+  sourceCvItemReferenceIds?: readonly string[];
   allowedClaimIds: readonly string[];
   candidateFactIds: readonly string[];
   evidenceMatchIds: readonly string[];
@@ -79,6 +85,7 @@ export type ResumeVariantPlanV1 = Readonly<{
   evidenceGraphId: string;
   evidenceGraphHash: string;
   targetDocumentKind: ResumeVariantPlanTargetDocumentKindV1;
+  sourceCvId?: string;
   language?: string;
   market?: string;
   items: readonly ResumeVariantPlanItemV1[];
@@ -107,6 +114,8 @@ export type BuildResumeVariantPlanInputV1 = Readonly<{
   language?: string;
   market?: string;
   evidenceGraph: EvidenceGraphV1;
+  sourceCvId?: string;
+  sourceCvFactBindings?: readonly ResumeVariantPlanSourceCvFactBindingV1[];
   createdAt: number;
   updatedAt: number;
 }>;

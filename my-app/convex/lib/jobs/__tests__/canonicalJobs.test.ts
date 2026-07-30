@@ -4,6 +4,7 @@ import {
   buildCanonicalJobDraftFromSource,
   detectJobPostingLanguage,
   flattenExtractionValues,
+  normalizeJobBriefInput,
   resolveReparsedCompany,
   resolveReparsedLocation,
   resolveReviewItemsAfterFieldUpdate,
@@ -326,5 +327,250 @@ describe("canonicalJobs", () => {
         parsedCompany: reparsedDraft.company,
       }),
     ).toBe("Studio North");
+  });
+
+  it("normalizes a real structured pasted offer into the existing editable Job Brief fields", () => {
+    const pastedPayload = JSON.stringify({
+      job_title: "#TDFE 2026 Vendeur / Vendeuse en boulangerie-pâtisserie (H/F)",
+      employer: "Le Moulin de Flor",
+      source_url:
+        "candidat.francetravail.fr/offres/recherche/detail/211QFFX",
+      date_checked: "2026-07-28",
+      normalized_job_brief: {
+        location: "Cagnes-sur-Mer, France",
+        contract: {
+          type: "CDI",
+          hours_per_week: 35,
+          working_days: "6 days per week",
+          weekends_and_public_holidays: true,
+        },
+        salary: "1 900 EUR gross per month over 12 months",
+        responsibilities: [
+          "Welcome and advise customers",
+          "Develop sales",
+          "Operate the checkout",
+        ],
+        must_have_requirements: [
+          "Apply hygiene and safety procedures",
+        ],
+        nice_to_haves: ["Not stated"],
+        language_requirements: "Not stated",
+        strongest_factual_matches: [
+          "Bakery experience",
+          "Customer service experience",
+        ],
+        gaps_and_uncertainties: [
+          "Checkout experience is not stated",
+        ],
+      },
+      facts_that_must_not_be_used: [
+        "Software development",
+      ],
+      application_language: "not stated",
+      questions_before_drafting: [
+        "Can you work six days weekly?",
+      ],
+    });
+
+    const normalized = normalizeJobBriefInput({
+      title: "",
+      rawDescription: pastedPayload,
+      sourceType: "chatgpt",
+    });
+
+    expect(normalized).toMatchObject({
+      ok: true,
+      value: {
+        kind: "structured_payload",
+        title:
+          "#TDFE 2026 Vendeur / Vendeuse en boulangerie-pâtisserie (H/F)",
+        company: "Le Moulin de Flor",
+        location: "Cagnes-sur-Mer, France",
+        sourceUrl:
+          "https://candidat.francetravail.fr/offres/recherche/detail/211QFFX",
+        sourceDomain: "candidat.francetravail.fr",
+        rawDescription: pastedPayload,
+        structuredBrief: {
+          responsibilities: [
+            "Welcome and advise customers",
+            "Develop sales",
+            "Operate the checkout",
+          ],
+          mustHaves: ["Apply hygiene and safety procedures"],
+          niceToHaves: ["Not stated"],
+          factualCvMatches: [
+            "Bakery experience",
+            "Customer service experience",
+          ],
+          gapsAndUncertainties: [
+            "Checkout experience is not stated",
+          ],
+          excludedCvFacts: ["Software development"],
+          questionsBeforeDrafting: ["Can you work six days weekly?"],
+        },
+      },
+    });
+
+    if (!normalized.ok) {
+      throw new Error("expected structured payload to normalize");
+    }
+
+    expect(normalized.value.unmappedStructuredFields).toEqual(
+      expect.arrayContaining([
+        "dateChecked",
+        "contract",
+        "salary",
+        "niceToHaves",
+        "languageRequirements",
+        "factualCvMatches",
+        "gapsAndUncertainties",
+        "excludedCvFacts",
+        "applicationLanguage",
+        "questionsBeforeDrafting",
+      ]),
+    );
+
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "",
+      rawDescription: pastedPayload,
+      sourceType: "chatgpt",
+    });
+
+    expect(draft.title).toBe(
+      "#TDFE 2026 Vendeur / Vendeuse en boulangerie-pâtisserie (H/F)",
+    );
+    expect(draft.company).toBe("Le Moulin de Flor");
+    expect(draft.location).toBe("Cagnes-sur-Mer, France");
+    expect(draft.sourceUrl).toBe(
+      "https://candidat.francetravail.fr/offres/recherche/detail/211QFFX",
+    );
+    expect(draft.rawDescription).toBe(pastedPayload);
+    expect(draft.responsibilities).toEqual([
+      "Welcome and advise customers",
+      "Develop sales",
+      "Operate the checkout",
+    ]);
+    expect(draft.mustHaves).toEqual([
+      "Apply hygiene and safety procedures",
+    ]);
+    expect(draft.keywords).not.toEqual(
+      expect.arrayContaining(["not", "stated"]),
+    );
+    expect(draft.parseStatus).toBe("parsed");
+    expect(draft.reviewState).toBe("needs_review");
+  });
+
+  it("does not extract placeholder-only structured values as job keywords", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "",
+      sourceType: "chatgpt",
+      rawDescription: JSON.stringify({
+        job_title: "Shop assistant",
+        normalized_job_brief: {
+          responsibilities: [],
+          must_have_requirements: [],
+          nice_to_haves: ["Not stated"],
+          language_requirements: "Not stated",
+        },
+      }),
+    });
+
+    expect(draft.keywords).not.toEqual(
+      expect.arrayContaining(["not", "stated"]),
+    );
+  });
+
+  it("marks a structured metadata-only job ready when there is nothing actionable to review", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "",
+      sourceType: "chatgpt",
+      rawDescription: JSON.stringify({
+        job_title: "Shop assistant",
+        normalized_job_brief: {
+          salary: "Not disclosed",
+          responsibilities: [],
+          must_have_requirements: [],
+          nice_to_haves: ["Not stated"],
+          language_requirements: "Not stated",
+        },
+      }),
+    });
+
+    expect(draft.reviewItems).toEqual([]);
+    expect(draft.reviewState).toBe("ready");
+  });
+
+  it("preserves application URL fragments while canonicalizing source URLs", () => {
+    expect(
+      normalizeJobBriefInput({
+        title: "Sales associate",
+        rawDescription: "Welcome customers and operate the checkout.",
+        sourceUrl: "https://www.example.com/jobs/123#tracking",
+        applicationUrl: "https://www.example.com/apply#step=contact",
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        sourceUrl: "https://www.example.com/jobs/123",
+        applicationUrl: "https://www.example.com/apply#step=contact",
+      },
+    });
+  });
+
+  it("normalizes URL-only, empty, and malformed job inputs without inventing job text", () => {
+    expect(
+      normalizeJobBriefInput({
+        title: "",
+        rawDescription: "",
+        sourceUrl: "www.example.com/jobs/123#apply",
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        kind: "url_only",
+        title: "Job from example.com",
+        rawDescription: "",
+        sourceUrl: "https://www.example.com/jobs/123",
+        sourceDomain: "example.com",
+      },
+    });
+
+    expect(
+      normalizeJobBriefInput({
+        title: "",
+        rawDescription: "",
+      }),
+    ).toEqual({
+      ok: false,
+      code: "job_input_required",
+      message: "Paste a job offer or provide a valid job URL.",
+    });
+
+    expect(
+      normalizeJobBriefInput({
+        title: "",
+        rawDescription: "",
+        sourceUrl: "javascript:alert(1)",
+      }),
+    ).toEqual({
+      ok: false,
+      code: "invalid_job_url",
+      message: "Job URL must use http or https.",
+    });
+
+    expect(
+      normalizeJobBriefInput({
+        title: "Sales associate",
+        rawDescription: "Welcome customers and operate the checkout.",
+        sourceUrl: "not a valid url",
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        kind: "pasted_text",
+        sourceUrl: "",
+        sourceDomain: "",
+      },
+    });
   });
 });

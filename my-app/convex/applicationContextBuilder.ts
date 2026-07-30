@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import { applicationHarnessContextValidator } from "./lib/applicationHarness";
 import { buildApplicationContextV1FromExistingData } from "./lib/applicationContextBuilder";
+import { persistApplicationContext } from "./lib/applicationContextPersistence";
 
 const buildSettingsValidator = v.object({
   selectedLanguage: v.optional(v.string()),
@@ -64,55 +65,15 @@ export const buildAndPersistFromJobAndProfile = internalMutation({
       now: Date.now(),
     });
     const contextForWrite = projectApplicationContext(result.context);
-
-    const existingById = await ctx.db
-      .query("applicationContexts")
-      .withIndex("by_user_id", (q) =>
-        q.eq("userId", contextForWrite.userId).eq("id", contextForWrite.id),
-      )
-      .unique();
-
-    if (existingById) {
-      if (existingById.contextHash !== contextForWrite.contextHash) {
-        throw new Error("ApplicationContext builder stable id collision");
-      }
-
-      return {
-        contextStorageId: existingById._id,
-        context: projectApplicationContext(existingById),
-        reused: true,
-        hashes: projectHashes(result),
-      };
-    }
-
-    const existingByHash = await ctx.db
-      .query("applicationContexts")
-      .withIndex("by_user_context_hash", (q) =>
-        q
-          .eq("userId", contextForWrite.userId)
-          .eq("contextHash", contextForWrite.contextHash),
-      )
-      .unique();
-
-    if (existingByHash) {
-      if (existingByHash.id !== contextForWrite.id) {
-        throw new Error("ApplicationContext builder contextHash collision with different stable id");
-      }
-
-      return {
-        contextStorageId: existingByHash._id,
-        context: projectApplicationContext(existingByHash),
-        reused: true,
-        hashes: projectHashes(result),
-      };
-    }
-
-    const contextStorageId = await ctx.db.insert("applicationContexts", contextForWrite);
+    const persisted = await persistApplicationContext(
+      ctx.db,
+      contextForWrite,
+    );
 
     return {
-      contextStorageId,
-      context: contextForWrite,
-      reused: false,
+      contextStorageId: persisted.contextStorageId,
+      context: projectApplicationContext(persisted.context),
+      reused: persisted.reused,
       hashes: projectHashes(result),
     };
   },

@@ -1926,6 +1926,7 @@ export const createOrReuseFromSource = mutation({
   handler: async (ctx, args) => {
     const profile = await requireCanonicalUserProfile(ctx);
     const draft = buildCanonicalJobDraftFromSource(args);
+    const shouldParse = Boolean(draft.rawDescription);
 
     await archiveActiveSampleJobsForProfile(ctx, String(profile._id));
 
@@ -1961,37 +1962,39 @@ export const createOrReuseFromSource = mutation({
       applicationUrl: draft.applicationUrl,
       dedupeKey: draft.dedupeKey,
       parseVersion: draft.parseVersion,
-      parseStatus: "parsing",
-      reviewState: "pending",
+      parseStatus: shouldParse ? "parsing" : draft.parseStatus,
+      reviewState: shouldParse ? "pending" : draft.reviewState,
       title: draft.title,
       company: draft.company,
       location: draft.location,
       rawDescription: draft.rawDescription,
       rawLanguageDetected: draft.rawLanguageDetected,
-      summary: "",
-      responsibilities: [],
-      keywords: [],
-      mustHaves: [],
-      toneCues: [],
+      summary: shouldParse ? "" : draft.summary,
+      responsibilities: shouldParse ? [] : draft.responsibilities,
+      keywords: shouldParse ? [] : draft.keywords,
+      mustHaves: shouldParse ? [] : draft.mustHaves,
+      toneCues: shouldParse ? [] : draft.toneCues,
       contacts: [],
       isSample: false,
       isFavorite: false,
       status: draft.status,
       archivedAt: draft.archivedAt,
-      reviewItems: [],
+      reviewItems: shouldParse ? [] : draft.reviewItems,
     });
 
-    await ctx.scheduler.runAfter(
-      0,
-      (internal as any).jobsPublic.parseCreatedJob,
-      { jobId: String(jobId) },
-    );
+    if (shouldParse) {
+      await ctx.scheduler.runAfter(
+        0,
+        (internal as any).jobsPublic.parseCreatedJob,
+        { jobId: String(jobId) },
+      );
+    }
 
     return {
       jobId: String(jobId),
       dedupeHit: false,
-      parseStatus: "parsing",
-      reviewState: "pending",
+      parseStatus: shouldParse ? "parsing" : draft.parseStatus,
+      reviewState: shouldParse ? "pending" : draft.reviewState,
     };
   },
 });
@@ -3488,13 +3491,13 @@ export const parseCreatedJob = internalMutation({
         toneCuesExtraction: draft.toneCuesExtraction,
         contacts: draft.contacts,
         parseVersion: draft.parseVersion,
-        parseStatus: "parsed",
+        parseStatus: draft.parseStatus,
         reviewState: draft.reviewState,
         reviewItems: draft.reviewItems,
         updatedAt: Date.now(),
       });
 
-      if (isJobLlmExtractionShadowEnabled()) {
+      if (draft.rawDescription && isJobLlmExtractionShadowEnabled()) {
         // Pass 2 guardrail: keep any future visible_source_decision stable per job.
         // Shadow output must not flip UI/source behavior after the heuristic parse is shown.
         await ctx.scheduler.runAfter(
