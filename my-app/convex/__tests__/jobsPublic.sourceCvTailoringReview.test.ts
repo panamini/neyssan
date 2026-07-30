@@ -18,7 +18,10 @@ type StoredRow = Record<string, unknown> & {
 
 function sourceCv(
   id = PROFILE_ID,
-  options: Readonly<{ legacyIds?: boolean }> = {},
+  options: Readonly<{
+    legacyIds?: boolean;
+    skillNames?: readonly string[];
+  }> = {},
 ) {
   return {
     id,
@@ -46,6 +49,21 @@ function sourceCv(
           },
         ],
       },
+      ...(options.skillNames?.length
+        ? [
+            {
+              id: "section-skills",
+              title: "Skills",
+              type: "skills",
+              blocks: [],
+              structuredContent: options.skillNames.map((name, index) => ({
+                id: `skill-${index + 1}`,
+                name,
+                level: "Advanced",
+              })),
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -70,6 +88,8 @@ function makeContext(overrides: {
   legacyCvIds?: boolean;
   siblingAttachedCv?: boolean;
   mustHaves?: readonly string[];
+  skillNames?: readonly string[];
+  keywords?: readonly string[];
 } = {}) {
   const attachedProfileId = overrides.siblingAttachedCv
     ? SIBLING_PROFILE_ID
@@ -84,6 +104,7 @@ function makeContext(overrides: {
     name: "Owner",
     cvDocument: sourceCv(canonicalCvId, {
       legacyIds: overrides.legacyCvIds,
+      skillNames: overrides.skillNames,
     }),
     createdAt: T,
     updatedAt: T,
@@ -122,7 +143,7 @@ function makeContext(overrides: {
     rawDescription: "Customer service in a bakery.",
     mustHaves: [...(overrides.mustHaves ?? ["Customer service"])],
     responsibilities: ["Customer service"],
-    keywords: [],
+    keywords: [...(overrides.keywords ?? [])],
     createdAt: T,
     updatedAt: T,
   };
@@ -358,6 +379,98 @@ describe("authenticated source CV tailoring review boundary", () => {
 
     expect(fixture.tables.applicationArtifacts).toHaveLength(1);
     expect(fixture.tables.applicationArtifacts[0]?.status).toBe("blocked");
+  });
+
+  it("blocks the reviewed result when the only item covering a required demand is rejected", async () => {
+    const fixture = makeContext();
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!prepared.plan) {
+      throw new Error("Expected automatic plan");
+    }
+
+    const reviewed = await submitCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: prepared.plan.id,
+      decisions: [
+        {
+          planItemId: prepared.plan.items[0].id,
+          reviewState: "rejected",
+        },
+      ],
+    });
+
+    expect(reviewed.plan?.blocked).toBe(true);
+    expect(reviewed.plan?.blockedReason).toMatch(/required.*accepted/i);
+    expect(fixture.tables.applicationArtifacts[0]?.status).toBe("blocked");
+
+    const resumed = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    expect(resumed.plan?.blocked).toBe(true);
+    expect(resumed.plan?.items[0]?.reviewState).toBe("rejected");
+  });
+
+  it("keeps required demand coverage when one matching item is accepted and another is rejected", async () => {
+    const fixture = makeContext({
+      skillNames: ["Customer service"],
+      keywords: ["Sales associate"],
+    });
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+    if (!prepared.plan) {
+      throw new Error("Expected automatic plan");
+    }
+    const experienceItem = prepared.plan.items.find(
+      (item) => item.section === "experience",
+    );
+    const skillItem = prepared.plan.items.find(
+      (item) => item.section === "skills",
+    );
+    if (!experienceItem || !skillItem) {
+      throw new Error("Expected matching experience and skill items");
+    }
+
+    const reviewed = await submitCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: prepared.plan.id,
+      decisions: [
+        {
+          planItemId: experienceItem.id,
+          reviewState: "rejected",
+        },
+        {
+          planItemId: skillItem.id,
+          reviewState: "accepted",
+        },
+      ],
+    });
+
+    expect(reviewed.plan?.blocked).toBe(false);
+    expect(fixture.tables.applicationArtifacts[0]?.status).toBe("approved");
+  });
+
+  it("matches exact short and punctuated technical skills before token filtering", async () => {
+    const technicalSkills = ["C", "R", "C++", "C#"];
+    const fixture = makeContext({
+      mustHaves: technicalSkills,
+      skillNames: technicalSkills,
+    });
+
+    const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+    });
+
+    expect(prepared.plan?.blocked).toBe(false);
+    expect(prepared.plan?.warnings).toEqual([]);
+    expect(
+      prepared.plan?.items.filter(
+        (item) =>
+          item.section === "skills" && item.priority === "required",
+      ),
+    ).toHaveLength(technicalSkills.length);
   });
 
   it("rejects unauthenticated, foreign, archived, unready, detached, and mismatched CV requests before persistence", async () => {

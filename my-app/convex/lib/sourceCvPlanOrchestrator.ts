@@ -377,11 +377,21 @@ function resolveMatchingDemands(
   item: unknown,
   demands: readonly JobDemandV1[],
 ): readonly JobDemandV1[] {
+  const exactItemValues = collectNormalizedComparableValues(item);
   const itemTokens = normalizeComparableTokens(
     JSON.stringify(item),
   );
   return demands
     .filter((demand) => {
+      const normalizedDemandLabel = normalizeComparableText(
+        demand.label,
+      );
+      if (
+        normalizedDemandLabel &&
+        exactItemValues.has(normalizedDemandLabel)
+      ) {
+        return true;
+      }
       const demandTokens = normalizeComparableTokens(demand.label);
       return (
         demandTokens.size > 0 &&
@@ -389,6 +399,43 @@ function resolveMatchingDemands(
       );
     })
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function collectNormalizedComparableValues(
+  value: unknown,
+  values = new Set<string>(),
+): ReadonlySet<string> {
+  if (typeof value === "string") {
+    const normalized = normalizeComparableText(value);
+    if (normalized) {
+      values.add(normalized);
+    }
+    return values;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectNormalizedComparableValues(item, values);
+    }
+    return values;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
+      if (key !== "id") {
+        collectNormalizedComparableValues(entry, values);
+      }
+    }
+  }
+  return values;
+}
+
+function normalizeComparableText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 function normalizeComparableTokens(value: string): ReadonlySet<string> {

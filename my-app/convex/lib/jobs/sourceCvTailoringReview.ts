@@ -16,6 +16,7 @@ import {
 import { buildSourceCvPlanPersistence } from "../sourceCvPlanPersistence";
 import {
   loadPersistedSourceCvPlanReview,
+  resolveApplicationScopedSourceCvReviewOutcome,
   reviewAndPersistSourceCvPlan,
 } from "../sourceCvPlanReviewPersistence";
 import { resolveResumeProfileById } from "./matchRead";
@@ -233,14 +234,19 @@ function projectCvTailoringReview(
       plan: null,
     };
   }
+  const reviewOutcome =
+    resolveApplicationScopedSourceCvReviewOutcome(
+      composition.plan,
+      composition.evidenceGraph,
+    );
   return {
     mode: "auto_recommended",
     sourceCv,
     plan: {
       id: composition.plan.id,
-      blocked: composition.plan.blocked,
-      ...(composition.plan.blockedReason
-        ? { blockedReason: composition.plan.blockedReason }
+      blocked: reviewOutcome.status === "blocked",
+      ...(reviewOutcome.blockedReason
+        ? { blockedReason: reviewOutcome.blockedReason }
         : {}),
       items: composition.plan.items.map((item) => ({
         id: item.id,

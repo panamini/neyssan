@@ -6,6 +6,7 @@ import type {
   ResumeVariantPlanReviewDecisionV1,
 } from "../../src/modules/resume-variant-plan/reviewResumeVariantPlan";
 import type { ResumeVariantPlanV1 } from "../../src/modules/resume-variant-plan/schema";
+import type { EvidenceGraphV1 } from "../../src/modules/evidence-graph/schema";
 import { buildReviewCockpitSummary } from "../../src/modules/review-cockpit/buildReviewCockpit";
 
 const REVIEW_ARTIFACT_ID_PREFIX =
@@ -100,7 +101,10 @@ export async function reviewAndPersistSourceCvPlan(
         updatedAt: input.updatedAt,
       });
   const status = applicationScopedPlan
-    ? resolveApplicationScopedReviewStatus(reviewedPlan)
+    ? resolveApplicationScopedSourceCvReviewOutcome(
+        reviewedPlan,
+        input.composition.evidenceGraph,
+      ).status
     : (() => {
         const summary = buildReviewCockpitSummary({
           userId: input.composition.userId,
@@ -261,22 +265,67 @@ async function reviewApplicationScopedSourceCvSelectionPlan(input: {
   };
 }
 
-function resolveApplicationScopedReviewStatus(
+export function resolveApplicationScopedSourceCvReviewOutcome(
   plan: ResumeVariantPlanV1,
-): "approved" | "blocked" | "needs_review" {
+  evidenceGraph: EvidenceGraphV1,
+): Readonly<{
+  status: "approved" | "blocked" | "needs_review";
+  blockedReason?: string;
+}> {
+  if (
+    evidenceGraph.id !== plan.evidenceGraphId ||
+    evidenceGraph.userId !== plan.userId ||
+    evidenceGraph.applicationContextId !== plan.applicationContextId
+  ) {
+    throw new TypeError(
+      "application-scoped review EvidenceGraph does not match the plan",
+    );
+  }
   if (
     plan.blocked ||
     plan.items.some((item) => item.reviewState === "blocked")
   ) {
-    return "blocked";
+    return {
+      status: "blocked",
+      ...(plan.blockedReason
+        ? { blockedReason: plan.blockedReason }
+        : {}),
+    };
   }
-  return plan.items.some(
-    (item) =>
-      item.reviewState === "pending" ||
-      item.reviewState === "needs_review",
-  )
-    ? "needs_review"
-    : "approved";
+  if (
+    plan.items.some(
+      (item) =>
+        item.reviewState === "pending" ||
+        item.reviewState === "needs_review",
+    )
+  ) {
+    return { status: "needs_review" };
+  }
+
+  const requiredDemandIds = new Set(
+    evidenceGraph.demands
+      .filter((demand) => demand.required === "required")
+      .map((demand) => demand.id),
+  );
+  const acceptedDemandIds = new Set(
+    plan.items
+      .filter((item) => item.reviewState === "accepted")
+      .flatMap((item) => item.demandIds),
+  );
+  const uncoveredRequiredDemandIds = [...requiredDemandIds].filter(
+    (demandId) => !acceptedDemandIds.has(demandId),
+  );
+  if (uncoveredRequiredDemandIds.length > 0) {
+    return {
+      status: "blocked",
+      blockedReason:
+        "Every required Job Brief demand needs at least one accepted source CV item.",
+    };
+  }
+
+  return {
+    status: "approved",
+  };
 }
 
 function buildReviewArtifactId(pendingPlanId: string): string {
