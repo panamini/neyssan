@@ -268,6 +268,76 @@ describe("persisted source CV plan review wiring", () => {
     },
   );
 
+  it("treats an equivalent stale replay as desired-state idempotent without another write", async () => {
+    const { composition, context } = await compositionFixture();
+    const { db, writes } = makeDatabase(context);
+    const selectedItem = composition.plan.items[0];
+    const decision = {
+      planItemId: selectedItem.id,
+      reviewState: "accepted" as const,
+    };
+
+    const reviewed = await reviewAndPersistSourceCvPlan({
+      db,
+      composition,
+      requestedJobId: JOB_ID,
+      expectedPlanId: composition.plan.id,
+      decisions: [decision],
+      updatedAt: T + 100,
+    });
+    const writesAfterFirstReview = [...writes];
+
+    const replayed = await reviewAndPersistSourceCvPlan({
+      db,
+      composition,
+      requestedJobId: JOB_ID,
+      expectedPlanId: composition.plan.id,
+      decisions: [decision],
+      updatedAt: T + 200,
+    });
+
+    expect(replayed).toEqual(reviewed);
+    expect(writes).toEqual(writesAfterFirstReview);
+  });
+
+  it("fails closed on a conflicting stale replay without another write", async () => {
+    const { composition, context } = await compositionFixture();
+    const { db, writes } = makeDatabase(context);
+    const selectedItem = composition.plan.items[0];
+
+    await reviewAndPersistSourceCvPlan({
+      db,
+      composition,
+      requestedJobId: JOB_ID,
+      expectedPlanId: composition.plan.id,
+      decisions: [
+        {
+          planItemId: selectedItem.id,
+          reviewState: "accepted",
+        },
+      ],
+      updatedAt: T + 100,
+    });
+    const writesAfterFirstReview = [...writes];
+
+    await expect(
+      reviewAndPersistSourceCvPlan({
+        db,
+        composition,
+        requestedJobId: JOB_ID,
+        expectedPlanId: composition.plan.id,
+        decisions: [
+          {
+            planItemId: selectedItem.id,
+            reviewState: "rejected",
+          },
+        ],
+        updatedAt: T + 200,
+      }),
+    ).rejects.toThrow(/stale ResumeVariantPlan review/);
+    expect(writes).toEqual(writesAfterFirstReview);
+  });
+
   it("fails closed on a mismatched review context without persisting an artifact", async () => {
     const { composition, context } = await compositionFixture();
     const mismatchedContext = {

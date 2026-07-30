@@ -1,6 +1,22 @@
 import type { CvDocument } from "../../src/types/cvDocument";
 import type { ApplicationContextV1 } from "../../src/modules/application-harness/schema";
-import type { AutoRecommendedSourceCvApplicationCompositionResultV1 } from "../../src/modules/application-harness/sourceCvApplicationComposition";
+import type {
+  AutoRecommendedSourceCvApplicationCompositionResultV1,
+  SourceCvApplicationCompositionResultV1,
+} from "../../src/modules/application-harness/sourceCvApplicationComposition";
+import {
+  buildCandidateCvItemReferences,
+  resolveCandidateCvItemReference,
+} from "../../src/modules/candidate-evidence/cvItemReferences";
+import { buildEvidenceGraph } from "../../src/modules/evidence-graph/buildEvidenceGraph";
+import type { JobDemandV1 } from "../../src/modules/evidence-graph/schema";
+import { buildResumeVariantPlanHash } from "../../src/modules/resume-variant-plan/buildResumeVariantPlan";
+import type {
+  ResumeVariantPlanItemV1,
+  ResumeVariantPlanSectionV1,
+  ResumeVariantPlanV1,
+} from "../../src/modules/resume-variant-plan/schema";
+import { composeSourceCvVariantPlan } from "../../src/modules/application-harness/sourceCvComposition";
 import {
   buildApplicationContextV1FromExistingData,
   type ApplicationContextBuilderCandidateProfile,
@@ -55,12 +71,16 @@ export type BuildSourceCvPlanFromPersistenceInputV1 = Readonly<{
   callerUserId: string;
   applicationContextId: string;
   requestedJobId: string;
+  mode?: "auto_recommended" | "full_source_cv";
+  sourceAuthorization?:
+    | "persisted_candidate_evidence"
+    | "attached_source_cv";
   now: number;
 }>;
 
 export async function buildSourceCvPlanFromPersistence(
   input: BuildSourceCvPlanFromPersistenceInputV1,
-): Promise<AutoRecommendedSourceCvApplicationCompositionResultV1> {
+): Promise<SourceCvApplicationCompositionResultV1> {
   const callerUserId = requireString(input?.callerUserId, "caller user");
   const applicationContextId = requireString(
     input?.applicationContextId,
@@ -69,6 +89,20 @@ export async function buildSourceCvPlanFromPersistence(
   const requestedJobId = requireString(input?.requestedJobId, "requested job");
   if (!Number.isFinite(input?.now)) {
     throw new TypeError("source CV plan orchestrator requires a numeric timestamp");
+  }
+  if (
+    input.mode !== undefined &&
+    input.mode !== "auto_recommended" &&
+    input.mode !== "full_source_cv"
+  ) {
+    throw new TypeError("unsupported source CV plan mode");
+  }
+  if (
+    input.sourceAuthorization !== undefined &&
+    input.sourceAuthorization !== "persisted_candidate_evidence" &&
+    input.sourceAuthorization !== "attached_source_cv"
+  ) {
+    throw new TypeError("unsupported source CV authorization");
   }
 
   const applicationContext =
@@ -155,12 +189,30 @@ export async function buildSourceCvPlanFromPersistence(
   });
   assertCurrentContext(applicationContext, rebuilt.context);
 
+  if (input.mode === "full_source_cv") {
+    return composeSourceCvVariantPlan({
+      mode: "full_source_cv",
+      callerUserId,
+      applicationContext,
+      sourceCv,
+    });
+  }
+
   const demands = await buildJobDemandsFromCanonicalJobBrief({
     jobId: applicationContext.job.jobId,
     mustHaves: readStringArray(job.mustHaves),
     responsibilities: readStringArray(job.responsibilities),
     keywords: readStringArray(job.keywords),
   });
+
+  if (input.sourceAuthorization === "attached_source_cv") {
+    return buildApplicationScopedSourceCvComposition({
+      callerUserId,
+      applicationContext,
+      sourceCv,
+      demands,
+    });
+  }
 
   return buildSourceCvCandidateFactApplicationComposition({
     persistence: input.persistence,
@@ -172,6 +224,161 @@ export async function buildSourceCvPlanFromPersistence(
     createdAt: applicationContext.createdAt,
     updatedAt: applicationContext.updatedAt,
   });
+}
+
+async function buildApplicationScopedSourceCvComposition(input: Readonly<{
+  callerUserId: string;
+  applicationContext: ApplicationContextV1;
+  sourceCv: Readonly<CvDocument>;
+  demands: readonly JobDemandV1[];
+}>): Promise<AutoRecommendedSourceCvApplicationCompositionResultV1> {
+  if (input.callerUserId !== input.applicationContext.userId) {
+    throw new TypeError(
+      "application-scoped source CV caller does not own the context",
+    );
+  }
+  const cvItemReferences = buildCandidateCvItemReferences(input.sourceCv).sort(
+    (left, right) => left.id.localeCompare(right.id),
+  );
+  const evidenceGraph = await buildEvidenceGraph({
+    userId: input.applicationContext.userId,
+    applicationContextId: input.applicationContext.id,
+    demands: input.demands,
+    candidateFacts: [],
+    careerKnowledgeRules: [],
+    createdAt: input.applicationContext.createdAt,
+  });
+  const items = cvItemReferences.map((reference) => {
+    const resolved = resolveCandidateCvItemReference(
+      input.sourceCv,
+      reference,
+    );
+    const matchingDemands = resolveMatchingDemands(
+      resolved.item,
+      input.demands,
+    );
+    return buildApplicationScopedPlanItem(reference, matchingDemands);
+  });
+  const planWithoutStableId: ResumeVariantPlanV1 = {
+    id: "resume-variant-plan:pending-hash",
+    userId: input.applicationContext.userId,
+    applicationContextId: input.applicationContext.id,
+    evidenceGraphId: evidenceGraph.id,
+    evidenceGraphHash: requireEvidenceGraphHash(evidenceGraph.id),
+    targetDocumentKind: "cv",
+    sourceCvId: input.sourceCv.id,
+    ...(input.applicationContext.candidate.selectedLanguage
+      ? { language: input.applicationContext.candidate.selectedLanguage }
+      : {}),
+    ...(input.applicationContext.candidate.market
+      ? { market: input.applicationContext.candidate.market }
+      : {}),
+    items,
+    warnings: [],
+    blockedClaimIds: [],
+    sourceFactIds: [],
+    allowedClaimIds: [],
+    riskFlagIds: [],
+    blocked: false,
+    createdAt: input.applicationContext.createdAt,
+    updatedAt: input.applicationContext.updatedAt,
+    version: 1,
+  };
+  const plan: ResumeVariantPlanV1 = {
+    ...planWithoutStableId,
+    id: `resume-variant-plan:${await buildResumeVariantPlanHash(
+      planWithoutStableId,
+    )}`,
+  };
+
+  return {
+    mode: "auto_recommended",
+    userId: input.applicationContext.userId,
+    applicationContextId: input.applicationContext.id,
+    sourceCvId: input.sourceCv.id,
+    sourceCvContextHash: input.applicationContext.candidate.candidateHash,
+    cvItemReferences,
+    candidateFacts: [],
+    evidenceGraph,
+    plan,
+  };
+}
+
+function buildApplicationScopedPlanItem(
+  reference: ReturnType<typeof buildCandidateCvItemReferences>[number],
+  matchingDemands: readonly JobDemandV1[],
+): ResumeVariantPlanItemV1 {
+  const requiredMatch = matchingDemands.some(
+    (demand) => demand.required === "required",
+  );
+  return {
+    id: `resume-variant-plan-item:source-cv:${reference.id}`,
+    section: mapReferenceSection(reference.sectionType),
+    action: "include",
+    priority: requiredMatch
+      ? "required"
+      : matchingDemands.length > 0
+        ? "recommended"
+        : "optional",
+    reviewState: "pending",
+    sourceCvItemReferenceIds: [reference.id],
+    allowedClaimIds: [],
+    candidateFactIds: [],
+    evidenceMatchIds: [],
+    demandIds: matchingDemands.map((demand) => demand.id).sort(),
+    riskFlagIds: [],
+    reason:
+      matchingDemands.length > 0
+        ? `Current source CV item overlaps ${matchingDemands.length} canonical Job Brief demand(s).`
+        : "Current source CV item is available for this application-specific review.",
+    version: 1,
+  };
+}
+
+function mapReferenceSection(
+  sectionType: "experience" | "education" | "skill",
+): ResumeVariantPlanSectionV1 {
+  if (sectionType === "skill") {
+    return "skills";
+  }
+  return sectionType;
+}
+
+function resolveMatchingDemands(
+  item: unknown,
+  demands: readonly JobDemandV1[],
+): readonly JobDemandV1[] {
+  const itemTokens = normalizeComparableTokens(
+    JSON.stringify(item),
+  );
+  return demands
+    .filter((demand) => {
+      const demandTokens = normalizeComparableTokens(demand.label);
+      return (
+        demandTokens.size > 0 &&
+        [...demandTokens].every((token) => itemTokens.has(token))
+      );
+    })
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function normalizeComparableTokens(value: string): ReadonlySet<string> {
+  return new Set(
+    value
+      .normalize("NFKC")
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2),
+  );
+}
+
+function requireEvidenceGraphHash(id: string): string {
+  const prefix = "evidence-graph:";
+  if (!id.startsWith(prefix) || id.length === prefix.length) {
+    throw new TypeError("application-scoped EvidenceGraph lacks a stable hash");
+  }
+  return id.slice(prefix.length);
 }
 
 function projectCurrentJobForStoredContext(

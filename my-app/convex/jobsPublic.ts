@@ -67,6 +67,10 @@ import {
   type StructuredMatchReviewLabel,
 } from "./lib/jobs/structuredMatchReview";
 import { buildLiveMatchReviewRecord } from "./lib/jobs/liveMatchReviewExport";
+import {
+  prepareOwnedCvTailoringReview,
+  submitOwnedCvTailoringReview,
+} from "./lib/jobs/sourceCvTailoringReview";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -76,6 +80,95 @@ const JOB_LIST_LINKED_PROPOSALS_LIMIT = 20;
 const JOB_LIST_SHADOW_ROWS_LIMIT = 1;
 const JOB_LIST_DEFAULT_LIMIT = 80;
 const JOB_LIST_MAX_LIMIT = 120;
+const cvTailoringReviewModeValidator = v.union(
+  v.literal("auto_recommended"),
+  v.literal("full_source_cv"),
+);
+const cvTailoringReviewDecisionValidator = v.object({
+  planItemId: v.string(),
+  reviewState: v.union(v.literal("accepted"), v.literal("rejected")),
+});
+const cvTailoringReviewPlanItemValidator = v.object({
+  id: v.string(),
+  section: v.union(
+    v.literal("profile"),
+    v.literal("summary"),
+    v.literal("skills"),
+    v.literal("experience"),
+    v.literal("education"),
+    v.literal("languages"),
+    v.literal("certifications"),
+    v.literal("achievements"),
+    v.literal("projects"),
+    v.literal("portfolio"),
+    v.literal("other"),
+  ),
+  action: v.union(
+    v.literal("include"),
+    v.literal("exclude"),
+    v.literal("reorder"),
+    v.literal("emphasize"),
+    v.literal("deemphasize"),
+    v.literal("add_from_allowed_claim"),
+    v.literal("needs_review"),
+    v.literal("block"),
+  ),
+  priority: v.union(
+    v.literal("required"),
+    v.literal("recommended"),
+    v.literal("optional"),
+  ),
+  reviewState: v.union(
+    v.literal("pending"),
+    v.literal("accepted"),
+    v.literal("rejected"),
+    v.literal("blocked"),
+    v.literal("needs_review"),
+  ),
+  sourceCvItemReferenceIds: v.array(v.string()),
+  reason: v.string(),
+});
+const cvTailoringReviewWarningValidator = v.object({
+  id: v.string(),
+  category: v.union(
+    v.literal("missing_evidence"),
+    v.literal("blocked_claim"),
+    v.literal("unsupported_claim"),
+    v.literal("private_fact"),
+    v.literal("never_use_fact"),
+    v.literal("generated_text_as_fact"),
+    v.literal("source_truth"),
+    v.literal("other"),
+  ),
+  severity: v.union(
+    v.literal("info"),
+    v.literal("warning"),
+    v.literal("blocker"),
+  ),
+  reason: v.string(),
+});
+const cvTailoringReviewSourceCvValidator = v.object({
+  id: v.string(),
+  contextHash: v.string(),
+});
+const cvTailoringReviewResultValidator = v.union(
+  v.object({
+    mode: v.literal("auto_recommended"),
+    sourceCv: cvTailoringReviewSourceCvValidator,
+    plan: v.object({
+      id: v.string(),
+      blocked: v.boolean(),
+      blockedReason: v.optional(v.string()),
+      items: v.array(cvTailoringReviewPlanItemValidator),
+      warnings: v.array(cvTailoringReviewWarningValidator),
+    }),
+  }),
+  v.object({
+    mode: v.literal("full_source_cv"),
+    sourceCv: cvTailoringReviewSourceCvValidator,
+    plan: v.null(),
+  }),
+);
 const jobExtractionShadowValidationStatus = v.union(
   v.literal("valid"),
   v.literal("invalid_json"),
@@ -2857,6 +2950,29 @@ export const loadForUser = mutation({
   handler: async (ctx) => {
     const profile = await requireCanonicalUserProfile(ctx);
     return listProjectedJobsForProfile(ctx, profile, { trackMatchRead: true });
+  },
+});
+
+export const prepareCvTailoringReview = mutation({
+  args: {
+    jobId: v.string(),
+    mode: v.optional(cvTailoringReviewModeValidator),
+  },
+  returns: cvTailoringReviewResultValidator,
+  handler: async (ctx, args) => {
+    return await prepareOwnedCvTailoringReview(ctx, args);
+  },
+});
+
+export const submitCvTailoringReview = mutation({
+  args: {
+    jobId: v.string(),
+    expectedPlanId: v.string(),
+    decisions: v.array(cvTailoringReviewDecisionValidator),
+  },
+  returns: cvTailoringReviewResultValidator,
+  handler: async (ctx, args) => {
+    return await submitOwnedCvTailoringReview(ctx, args);
   },
 });
 
