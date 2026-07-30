@@ -174,6 +174,7 @@ function makePersistence(
   options: {
     leakContextAcrossUsers?: boolean;
     leakCandidateEvidenceScope?: boolean;
+    forbidCandidateEvidenceReads?: boolean;
   } = {},
 ) {
   const operations: Array<{
@@ -208,6 +209,9 @@ function makePersistence(
       return scope.jobId === value.currentJob._id ? value.currentJob : null;
     },
     async listSourceDocumentsForCanonicalCv(scope) {
+      if (options.forbidCandidateEvidenceReads) {
+        throw new Error("candidate evidence read was not expected");
+      }
       operations.push({
         operation: "listSourceDocumentsForCanonicalCv",
         scope: { ...scope },
@@ -221,6 +225,9 @@ function makePersistence(
         : [];
     },
     async listFactsForSourceDocument(scope) {
+      if (options.forbidCandidateEvidenceReads) {
+        throw new Error("candidate evidence read was not expected");
+      }
       operations.push({
         operation: "listFactsForSourceDocument",
         scope: { ...scope },
@@ -252,6 +259,66 @@ function orchestratorInput(
 }
 
 describe("source CV plan orchestrator", () => {
+  it("uses the attached canonical CV only for the current application without reading or mutating CandidateEvidence", async () => {
+    const value = await fixture();
+    const beforeCv = structuredClone(value.currentCv);
+    const beforeFacts = structuredClone(value.facts);
+    const { operations, persistence } = makePersistence(value, {
+      forbidCandidateEvidenceReads: true,
+    });
+
+    const result = await buildSourceCvPlanFromPersistence({
+      ...orchestratorInput(persistence, value),
+      sourceAuthorization: "attached_source_cv",
+    });
+
+    expect(result.mode).toBe("auto_recommended");
+    expect(result.plan.items.length).toBeGreaterThan(0);
+    expect(
+      result.plan.items.every((item) => item.reviewState === "pending"),
+    ).toBe(true);
+    expect(result.plan.sourceFactIds).toEqual([]);
+    expect(
+      result.plan.items.every(
+        (item) =>
+          item.action === "include" &&
+          item.sourceCvItemReferenceIds?.length === 1 &&
+          item.candidateFactIds.length === 0 &&
+          item.allowedClaimIds.length === 0 &&
+          item.evidenceMatchIds.length === 0,
+      ),
+    ).toBe(true);
+    expect(
+      operations.some((operation) =>
+        operation.operation.startsWith("list"),
+      ),
+    ).toBe(false);
+    expect(value.currentCv).toEqual(beforeCv);
+    expect(value.facts).toEqual(beforeFacts);
+  });
+
+  it("returns a verified full-source-CV reference without a plan or CandidateEvidence reads", async () => {
+    const value = await fixture();
+    const beforeCv = structuredClone(value.currentCv);
+    const { persistence } = makePersistence(value, {
+      forbidCandidateEvidenceReads: true,
+    });
+
+    const result = await buildSourceCvPlanFromPersistence({
+      ...orchestratorInput(persistence, value),
+      mode: "full_source_cv",
+      sourceAuthorization: "attached_source_cv",
+    });
+
+    expect(result).toMatchObject({
+      mode: "full_source_cv",
+      sourceCvId: value.currentCv.id,
+      sourceCvContextHash: value.context.candidate.candidateHash,
+      plan: null,
+    });
+    expect(value.currentCv).toEqual(beforeCv);
+  });
+
   it("loads the owning context, current job/CV, and scoped facts into a pending plan without mutation", async () => {
     const value = await fixture();
     const beforeCv = JSON.stringify(value.currentCv);
