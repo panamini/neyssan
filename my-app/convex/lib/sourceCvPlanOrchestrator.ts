@@ -141,7 +141,7 @@ export async function buildSourceCvPlanFromPersistence(
 
   const rebuilt = await buildApplicationContextV1FromExistingData({
     userId: callerUserId,
-    job,
+    job: projectCurrentJobForStoredContext(job, applicationContext),
     candidateProfile,
     settings: {
       ...(applicationContext.candidate.selectedLanguage
@@ -172,6 +172,28 @@ export async function buildSourceCvPlanFromPersistence(
     createdAt: applicationContext.createdAt,
     updatedAt: applicationContext.updatedAt,
   });
+}
+
+function projectCurrentJobForStoredContext(
+  currentJob: ApplicationContextBuilderJob,
+  storedContext: ApplicationContextV1,
+): ApplicationContextBuilderJob {
+  return {
+    _id: currentJob._id,
+    rawDescription: currentJob.rawDescription,
+    mustHaves: currentJob.mustHaves,
+    responsibilities: currentJob.responsibilities,
+    keywords: currentJob.keywords,
+    ...(storedContext.job.sourceUrl !== undefined
+      ? { sourceUrl: currentJob.sourceUrl }
+      : {}),
+    ...(storedContext.job.title !== undefined
+      ? { title: currentJob.title }
+      : {}),
+    ...(storedContext.job.company !== undefined
+      ? { company: currentJob.company }
+      : {}),
+  };
 }
 
 function assertCurrentContext(

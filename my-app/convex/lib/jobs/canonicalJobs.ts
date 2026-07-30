@@ -1292,9 +1292,7 @@ export function buildCanonicalJobDraftFromSource(args: {
       rawDescription ? "parsed" : "imported"
     ) as CanonicalJobParseStatus,
     reviewState: rawDescription
-      ? structuredBrief
-        ? "needs_review"
-        : resolveCanonicalJobReviewState(reviewItems)
+      ? resolveCanonicalJobReviewState(reviewItems)
       : "needs_review",
     title,
     company: structuredCompany || extractCompany(rawDescription),

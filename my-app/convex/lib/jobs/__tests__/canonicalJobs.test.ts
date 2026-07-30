@@ -480,6 +480,26 @@ describe("canonicalJobs", () => {
     );
   });
 
+  it("marks a structured metadata-only job ready when there is nothing actionable to review", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "",
+      sourceType: "chatgpt",
+      rawDescription: JSON.stringify({
+        job_title: "Shop assistant",
+        normalized_job_brief: {
+          salary: "Not disclosed",
+          responsibilities: [],
+          must_have_requirements: [],
+          nice_to_haves: ["Not stated"],
+          language_requirements: "Not stated",
+        },
+      }),
+    });
+
+    expect(draft.reviewItems).toEqual([]);
+    expect(draft.reviewState).toBe("ready");
+  });
+
   it("preserves application URL fragments while canonicalizing source URLs", () => {
     expect(
       normalizeJobBriefInput({

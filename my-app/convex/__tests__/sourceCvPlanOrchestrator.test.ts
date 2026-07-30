@@ -286,6 +286,34 @@ describe("source CV plan orchestrator", () => {
     expect(JSON.stringify(value)).toBe(beforeFixture);
   });
 
+  it("accepts a current MCP-safe context projection with canonical Job Brief demands", async () => {
+    const value = await fixture();
+    const built = await buildApplicationContextV1FromExistingData({
+      userId: USER_ID,
+      job: {
+        _id: value.currentJob._id,
+        rawDescription: value.currentJob.rawDescription,
+        mustHaves: value.currentJob.mustHaves,
+        responsibilities: value.currentJob.responsibilities,
+        keywords: value.currentJob.keywords,
+      },
+      candidateProfile: value.currentProfile,
+      now: T,
+    });
+    const projectedValue = {
+      ...value,
+      context: built.context,
+    };
+    const { persistence } = makePersistence(projectedValue);
+
+    const result = await buildSourceCvPlanFromPersistence(
+      orchestratorInput(persistence, projectedValue),
+    );
+
+    expect(result.mode).toBe("auto_recommended");
+    expect(result.plan.items.length).toBeGreaterThan(0);
+  });
+
   it("rejects a context returned outside the caller scope before loading profile or evidence", async () => {
     const value = await fixture();
     const { operations, persistence } = makePersistence(value, {

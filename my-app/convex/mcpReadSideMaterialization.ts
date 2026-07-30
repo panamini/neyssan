@@ -185,6 +185,9 @@ async function buildAndPersistApplicationContext(
     job: {
       _id: readString(input.job._id) ?? readString(input.proposal.jobId),
       rawDescription: readString(input.job.rawDescription) ?? "",
+      mustHaves: input.job.mustHaves,
+      responsibilities: input.job.responsibilities,
+      keywords: input.job.keywords,
     },
     candidateProfile: {
       ...input.profile,

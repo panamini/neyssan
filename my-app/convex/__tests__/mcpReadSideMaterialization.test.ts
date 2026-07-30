@@ -7,6 +7,7 @@ import {
   bestEffortMaterializeMcpReadSideForStoredProposal,
   materializeMcpReadSideForStoredProposal,
 } from "../mcpReadSideMaterialization";
+import { buildApplicationContextV1FromExistingData } from "../lib/applicationContextBuilder";
 import { deleteProposal, storeProposal, updateProposal } from "../proposals";
 
 const NOW = Date.UTC(2026, 6, 2, 12, 0, 0, 0);
@@ -285,6 +286,52 @@ describe("MCP read-side materialization from proposal persistence", () => {
     ).toBe(false);
     assertNoRawText(tables.applicationContexts);
     assertNoRawText(tables.applicationPackages);
+  });
+
+  it("materializes the authoritative canonical Job Brief demand hash", async () => {
+    const storedJob = job({
+      mustHaves: ["Customer service"],
+      responsibilities: ["Operate the checkout"],
+      keywords: ["retail"],
+    });
+    const storedProfile = profile();
+    const { ctx, tables } = makeCtx({
+      jobs: [storedJob],
+      userProfiles: [storedProfile],
+    });
+    const expected = await buildApplicationContextV1FromExistingData({
+      userId: "profile_storage_id_DO_NOT_ECHO",
+      job: {
+        _id: storedJob._id,
+        rawDescription: storedJob.rawDescription,
+        mustHaves: storedJob.mustHaves,
+        responsibilities: storedJob.responsibilities,
+        keywords: storedJob.keywords,
+      },
+      candidateProfile: {
+        ...storedProfile,
+        _id: "profile_storage_id_DO_NOT_ECHO",
+      },
+      settings: {
+        selectedLanguage: "en",
+      },
+      now: NOW,
+    });
+
+    const result = await materializeMcpReadSideForStoredProposal(
+      ctx as any,
+      proposal(),
+    );
+
+    expect(result.status).toBe("materialized");
+    expect(tables.applicationContexts).toHaveLength(1);
+    expect(tables.applicationContexts[0]).toMatchObject({
+      id: expected.context.id,
+      contextHash: expected.context.contextHash,
+      job: {
+        jobBriefHash: expected.jobBriefHash,
+      },
+    });
   });
 
   it("reuses the same context and package for the same proposal input", async () => {
