@@ -29,7 +29,7 @@ type StoredRow = Record<string, unknown> & {
   _creationTime: number;
 };
 
-function sourceCv(): CvDocument {
+function sourceCv(options: { includeInventorySkill?: boolean } = {}): CvDocument {
   return {
     id: "cv-source-1",
     title: "Source CV",
@@ -54,6 +54,23 @@ function sourceCv(): CvDocument {
           },
         ],
       },
+      ...(options.includeInventorySkill
+        ? [
+            {
+              id: "section-skills",
+              title: "Skills",
+              type: "skills" as const,
+              blocks: [],
+              structuredContent: [
+                {
+                  id: "skill-inventory",
+                  name: "Inventory",
+                  level: "Advanced",
+                },
+              ],
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -87,7 +104,9 @@ function applicationContext(): ApplicationContextV1 {
   };
 }
 
-function demands(): readonly JobDemandV1[] {
+function demands(
+  options: { includeInventorySkill?: boolean } = {},
+): readonly JobDemandV1[] {
   return [
     {
       id: "demand:customer-service",
@@ -98,15 +117,30 @@ function demands(): readonly JobDemandV1[] {
       sourcePath: "job.mustHaves",
       version: 1,
     },
+    ...(options.includeInventorySkill
+      ? [
+          {
+            id: "demand:inventory",
+            kind: "skill" as const,
+            label: "Inventory",
+            required: "preferred" as const,
+            source: "job" as const,
+            sourcePath: "job.niceToHaves",
+            version: 1 as const,
+          },
+        ]
+      : []),
   ];
 }
 
-async function compositionFixture(): Promise<{
+async function compositionFixture(
+  options: { includeInventorySkill?: boolean } = {},
+): Promise<{
   composition: AutoRecommendedSourceCvApplicationCompositionResultV1;
   context: ApplicationContextV1;
 }> {
   const context = applicationContext();
-  const document = sourceCv();
+  const document = sourceCv(options);
   const references = buildCandidateCvItemReferences(document);
   const composition = await buildSourceCvApplicationComposition({
     mode: "auto_recommended",
@@ -114,7 +148,7 @@ async function compositionFixture(): Promise<{
     applicationContext: context,
     sourceCv: document,
     sourceDocumentId: "candidate-source-document:source-cv-1",
-    demands: demands(),
+    demands: demands(options),
     authorizedCvItemReferenceIds: references.map((reference) => reference.id),
     careerKnowledgeRules: [],
     createdAt: T,
@@ -297,6 +331,114 @@ describe("persisted source CV plan review wiring", () => {
     });
 
     expect(replayed).toEqual(reviewed);
+    expect(writes).toEqual(writesAfterFirstReview);
+  });
+
+  it("applies pending decisions from a cumulative submission while treating matching reviewed decisions as no-ops", async () => {
+    const { composition, context } = await compositionFixture({
+      includeInventorySkill: true,
+    });
+    const { db, writes } = makeDatabase(context);
+    const [firstItem, secondItem] = composition.plan.items;
+    if (!firstItem || !secondItem) {
+      throw new Error("Expected two selectable source CV plan items");
+    }
+
+    const firstReview = await reviewAndPersistSourceCvPlan({
+      db,
+      composition,
+      requestedJobId: JOB_ID,
+      expectedPlanId: composition.plan.id,
+      decisions: [
+        {
+          planItemId: firstItem.id,
+          reviewState: "accepted",
+        },
+      ],
+      updatedAt: T + 100,
+    });
+    const writesAfterFirstReview = [...writes];
+
+    const cumulativeReview = await reviewAndPersistSourceCvPlan({
+      db,
+      composition,
+      requestedJobId: JOB_ID,
+      expectedPlanId: firstReview.plan.id,
+      decisions: [
+        {
+          planItemId: firstItem.id,
+          reviewState: "accepted",
+        },
+        {
+          planItemId: secondItem.id,
+          reviewState: "accepted",
+        },
+      ],
+      updatedAt: T + 200,
+    });
+
+    expect(cumulativeReview.plan.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: firstItem.id,
+          reviewState: "accepted",
+        }),
+        expect.objectContaining({
+          id: secondItem.id,
+          reviewState: "accepted",
+        }),
+      ]),
+    );
+    expect(writes).toEqual([
+      ...writesAfterFirstReview,
+      "patch:applicationArtifacts",
+    ]);
+  });
+
+  it("fails closed when a cumulative submission conflicts with an already reviewed decision", async () => {
+    const { composition, context } = await compositionFixture({
+      includeInventorySkill: true,
+    });
+    const { db, writes } = makeDatabase(context);
+    const [firstItem, secondItem] = composition.plan.items;
+    if (!firstItem || !secondItem) {
+      throw new Error("Expected two selectable source CV plan items");
+    }
+
+    const firstReview = await reviewAndPersistSourceCvPlan({
+      db,
+      composition,
+      requestedJobId: JOB_ID,
+      expectedPlanId: composition.plan.id,
+      decisions: [
+        {
+          planItemId: firstItem.id,
+          reviewState: "accepted",
+        },
+      ],
+      updatedAt: T + 100,
+    });
+    const writesAfterFirstReview = [...writes];
+
+    await expect(
+      reviewAndPersistSourceCvPlan({
+        db,
+        composition,
+        requestedJobId: JOB_ID,
+        expectedPlanId: firstReview.plan.id,
+        decisions: [
+          {
+            planItemId: firstItem.id,
+            reviewState: "rejected",
+          },
+          {
+            planItemId: secondItem.id,
+            reviewState: "accepted",
+          },
+        ],
+        updatedAt: T + 200,
+      }),
+    ).rejects.toThrow(/not selectable/);
     expect(writes).toEqual(writesAfterFirstReview);
   });
 

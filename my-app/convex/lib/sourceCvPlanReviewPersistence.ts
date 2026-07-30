@@ -83,13 +83,21 @@ export async function reviewAndPersistSourceCvPlan(
   if (input.expectedPlanId !== currentPlan.id) {
     throw new TypeError("stale ResumeVariantPlan review");
   }
+  const currentItemsById = new Map(
+    currentPlan.items.map((item) => [item.id, item]),
+  );
+  const decisionsToApply = input.decisions.filter(
+    (decision) =>
+      currentItemsById.get(decision.planItemId)?.reviewState !==
+      decision.reviewState,
+  );
 
   const applicationScopedPlan =
     isApplicationScopedSourceCvSelectionPlan(currentPlan);
   const reviewedPlan = applicationScopedPlan
     ? await reviewApplicationScopedSourceCvSelectionPlan({
         plan: currentPlan,
-        decisions: input.decisions,
+        decisions: decisionsToApply,
         updatedAt: input.updatedAt,
       })
     : await reviewResumeVariantPlan({
@@ -97,7 +105,7 @@ export async function reviewAndPersistSourceCvPlan(
         applicationContextId: input.composition.applicationContextId,
         expectedPlanId: input.expectedPlanId,
         plan: currentPlan,
-        decisions: input.decisions,
+        decisions: decisionsToApply,
         updatedAt: input.updatedAt,
       });
   const status = applicationScopedPlan
