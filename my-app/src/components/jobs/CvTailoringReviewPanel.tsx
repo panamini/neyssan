@@ -246,6 +246,7 @@ export function CvTailoringReviewPanel({
             type="button"
             className="dasti-button dasti-button--pill dasti-button--primary"
             onClick={onContinueToProposal}
+            disabled={isBusy}
           >
             Continue to proposal
           </button>

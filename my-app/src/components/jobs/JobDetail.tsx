@@ -23,6 +23,7 @@ type JobDetailProps = {
   resumePickerRef: React.RefObject<HTMLDivElement>;
   resumePickerOptions: ResumePickerOption[];
   canTailorResume: boolean;
+  canUseFullSourceCv: boolean;
   tailoringUnavailableReason: string | null;
   tailoringActionPending: boolean;
   tailoringActionError: string | null;
@@ -133,6 +134,7 @@ export function JobDetail({
   resumePickerRef,
   resumePickerOptions,
   canTailorResume,
+  canUseFullSourceCv,
   tailoringUnavailableReason,
   tailoringActionPending,
   tailoringActionError,
@@ -376,7 +378,7 @@ export function JobDetail({
                     ? `job-tailoring-help-${selectedJob.id}`
                     : undefined
                 }
-                disabled={!canTailorResume}
+                disabled={!canUseFullSourceCv}
                 onClick={onUseFullSourceCv}
               >
                 <span>Use my complete resume without tailoring</span>
@@ -384,6 +386,7 @@ export function JobDetail({
               <button
                 type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--proposal"
+                disabled={tailoringActionPending}
                 onClick={() => onCreateProposal(selectedJob.id)}
               >
                 <span>Generate proposal</span>

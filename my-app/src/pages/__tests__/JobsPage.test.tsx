@@ -3282,6 +3282,15 @@ describe("JobsPage", () => {
     });
     expect(JSON.stringify(cvLibraryResult.cvs[0])).toBe(sourceCvBefore);
     expect(screen.getByText("Tailored resume ready")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(trackEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "job_decision_made",
+          jobId: "job_alpha",
+          outcome: "resume",
+        }),
+      );
+    });
 
     fireEvent.click(
       screen.getByRole("button", { name: "Continue to proposal" }),
@@ -3470,6 +3479,88 @@ describe("JobsPage", () => {
     expect(screen.getByTestId("jobs-location")).toHaveTextContent(
       "/jobs/job_alpha",
     );
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Process mapping/i }),
+    );
+    expect(screen.getByText(/review changed.*reload/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reload recommendations" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables proposal navigation throughout the tailoring transaction", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
+    let resolveSubmit: (value: typeof reviewedCvTailoringReview) => void = () => {};
+    submitCvTailoringReviewMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create tailored resume" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Generate proposal" }),
+    ).toBeDisabled();
+    resolveSubmit(reviewedCvTailoringReview);
+  });
+
+  it("rejects a reviewed derived attachment as a new tailoring source and labels it in the picker", async () => {
+    selectedJobResult = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume",
+    };
+    cvLibraryResult = {
+      cvs: [
+        {
+          id: "cv_alpha",
+          title: "Primary resume",
+          sections: [],
+        },
+        {
+          id: "source-cv-variant:v1:reviewed",
+          title: "Primary resume",
+          metadata: {
+            createdAt: "2026-07-30T00:00:00.000Z",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+            version: 1,
+            reviewedSourceCvVariant: {
+              sourceCvId: "cv_alpha",
+              sourceCvContextHash: "source-cv-context-alpha",
+            },
+          },
+          sections: [],
+        },
+      ],
+      currentCv: null,
+    };
+
+    renderJobsDetail();
+
+    expect(
+      screen.getByRole("button", { name: "Tailor resume" }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Attach Tailored resume · Primary resume",
+      }),
+    ).toBeInTheDocument();
+    expect(prepareCvTailoringReviewMock).not.toHaveBeenCalled();
   });
 
   it("validates full_source_cv with only prepare and then reuses the existing proposal route", async () => {

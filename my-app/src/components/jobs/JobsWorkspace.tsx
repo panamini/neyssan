@@ -1200,6 +1200,13 @@ function formatCvTailoringError(error: unknown): string {
     : message;
 }
 
+function isCvTailoringReloadRequiredError(message: string | null): boolean {
+  return Boolean(
+    message &&
+      /review changed|reload recommendations|stale|expected plan/i.test(message),
+  );
+}
+
 const CV_TAILORING_SOURCE_CHANGED_MESSAGE =
   "Resume review reset. Prepare recommendations again for the attached resume.";
 const CV_TAILORING_ATTACHMENT_UNCHANGED_MESSAGE =
@@ -1318,19 +1325,28 @@ function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
         : undefined;
   const relativeAge = formatShortRelativeAge(dateSource);
   const exactDate = formatUiDate(dateSource);
+  const reviewedSourceCvVariant = cv.metadata?.reviewedSourceCvVariant;
+  const isReviewedVariant =
+    reviewedSourceCvVariant &&
+    typeof reviewedSourceCvVariant === "object" &&
+    typeof (reviewedSourceCvVariant as { sourceCvId?: unknown }).sourceCvId ===
+      "string";
+  const displayTitle = formatCvDisplayTitle({
+    title: String(cv.title ?? "Untitled CV"),
+    profileName,
+    desiredPosition,
+    email: readCvPickerString(profilePreview?.email),
+    phone: readCvPickerString(profilePreview?.phone),
+    linkedin: readCvPickerString(profilePreview?.linkedin),
+    website: readCvPickerString(profilePreview?.website),
+    location: readCvPickerString(profilePreview?.location),
+  });
 
   return {
     id: String(cv.id),
-    title: formatCvDisplayTitle({
-      title: String(cv.title ?? "Untitled CV"),
-      profileName,
-      desiredPosition,
-      email: readCvPickerString(profilePreview?.email),
-      phone: readCvPickerString(profilePreview?.phone),
-      linkedin: readCvPickerString(profilePreview?.linkedin),
-      website: readCvPickerString(profilePreview?.website),
-      location: readCvPickerString(profilePreview?.location),
-    }),
+    title: isReviewedVariant
+      ? `Tailored resume · ${displayTitle}`
+      : displayTitle,
     dateLabel:
       relativeAge && exactDate
         ? `${relativeAge} · ${exactDate}`
@@ -1804,12 +1820,20 @@ function JobsPageContent(): JSX.Element {
   );
   const selectedJob = optimisticSelectedJob ?? selectedJobRecord ?? null;
   selectedJobResumeIdRef.current = selectedJob?.resumeId ?? null;
-  const cvTailoringUnavailableReason = !selectedJob?.resumeId
+  const cvTailoringContextUnavailableReason = !selectedJob?.resumeId
     ? "Attach a resume to tailor it for this job."
     : selectedJob.parseStatus !== "parsed" ||
         selectedJob.reviewState !== "ready"
       ? "Finish the Job Brief review before tailoring."
       : null;
+  const selectedJobIsReviewedVariant = Boolean(
+    selectedJob?.resumeId?.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX),
+  );
+  const cvTailoringUnavailableReason =
+    cvTailoringContextUnavailableReason ??
+    (selectedJobIsReviewedVariant
+      ? "Restore the complete resume before tailoring again."
+      : null);
   const selectedJobIsFavorite = selectedJob
     ? optimisticFavoriteById[selectedJob.id] ?? selectedJob.isFavorite
     : false;
@@ -1960,6 +1984,12 @@ function JobsPageContent(): JSX.Element {
     ) {
       return;
     }
+    if (job.resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX)) {
+      setCvTailoringLauncherError(
+        "Restore the complete resume before tailoring again.",
+      );
+      return;
+    }
     const requestVersion =
       cvTailoringRequestVersionRef.current + 1;
     cvTailoringRequestVersionRef.current = requestVersion;
@@ -2070,7 +2100,9 @@ function JobsPageContent(): JSX.Element {
         }
         return next;
       });
-      setCvTailoringError(null);
+      setCvTailoringError((current) =>
+        isCvTailoringReloadRequiredError(current) ? current : null,
+      );
     },
     [cvTailoringReview],
   );
@@ -2240,6 +2272,7 @@ function JobsPageContent(): JSX.Element {
         );
       }
       setMaterializedResumeName(materialized.resumeName);
+      recordJobDecision("resume", job.id);
     } catch (error) {
       if (requestIsCurrent()) {
         setCvTailoringError(formatCvTailoringError(error));
@@ -2257,6 +2290,7 @@ function JobsPageContent(): JSX.Element {
     hydrateCvDocument,
     invalidateCvTailoringForSourceChange,
     materializeCvTailoringReview,
+    recordJobDecision,
     selectedJob,
     submitCvTailoringReview,
   ]);
@@ -2935,6 +2969,9 @@ function JobsPageContent(): JSX.Element {
       resumePickerOptions={resumePickerOptions}
       canTailorResume={
         cvTailoringUnavailableReason === null && !cvTailoringBusy
+      }
+      canUseFullSourceCv={
+        cvTailoringContextUnavailableReason === null && !cvTailoringBusy
       }
       tailoringUnavailableReason={cvTailoringUnavailableReason}
       tailoringActionPending={cvTailoringBusy}
