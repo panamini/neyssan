@@ -1311,6 +1311,20 @@ function formatShortRelativeAge(value: string | undefined): string | null {
   return `${Math.max(1, Math.floor(diffMs / day))}d`;
 }
 
+function readReviewedSourceCvId(cv: CvDocument): string | null {
+  const reviewedSourceCvVariant = cv.metadata?.reviewedSourceCvVariant;
+  if (!reviewedSourceCvVariant || typeof reviewedSourceCvVariant !== "object") {
+    return null;
+  }
+
+  const sourceCvId = (
+    reviewedSourceCvVariant as { sourceCvId?: unknown }
+  ).sourceCvId;
+  return typeof sourceCvId === "string" && sourceCvId.trim().length > 0
+    ? sourceCvId.trim()
+    : null;
+}
+
 function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
   const profilePreview = readCvPickerProfilePreview(cv);
   const profileName = readCvPickerString(profilePreview?.name);
@@ -1325,12 +1339,7 @@ function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
         : undefined;
   const relativeAge = formatShortRelativeAge(dateSource);
   const exactDate = formatUiDate(dateSource);
-  const reviewedSourceCvVariant = cv.metadata?.reviewedSourceCvVariant;
-  const isReviewedVariant =
-    reviewedSourceCvVariant &&
-    typeof reviewedSourceCvVariant === "object" &&
-    typeof (reviewedSourceCvVariant as { sourceCvId?: unknown }).sourceCvId ===
-      "string";
+  const isReviewedVariant = readReviewedSourceCvId(cv) !== null;
   const displayTitle = formatCvDisplayTitle({
     title: String(cv.title ?? "Untitled CV"),
     profileName,
@@ -2320,8 +2329,22 @@ function JobsPageContent(): JSX.Element {
 
     try {
       if (job.resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX)) {
-        const sourceCvId = materializedSourceCvId;
-        if (!sourceCvId || sourceCvId === job.resumeId) {
+        const attachedCv =
+          cvs.find((cv) => String(cv.id) === job.resumeId) ?? null;
+        const sourceCvId =
+          materializedSourceCvId ??
+          (attachedCv ? readReviewedSourceCvId(attachedCv) : null);
+        const sourceCv =
+          sourceCvId === null
+            ? null
+            : cvs.find((cv) => String(cv.id) === sourceCvId) ?? null;
+        if (
+          !sourceCvId ||
+          sourceCvId === job.resumeId ||
+          !sourceCv ||
+          sourceCvId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX) ||
+          readReviewedSourceCvId(sourceCv)
+        ) {
           throw new Error(
             "The original resume is unavailable. Attach it again before continuing.",
           );
@@ -2391,6 +2414,7 @@ function JobsPageContent(): JSX.Element {
       }
     }
   }, [
+    cvs,
     handleCreateProposal,
     invalidateCvTailoringForSourceChange,
     materializedSourceCvId,

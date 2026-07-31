@@ -3620,6 +3620,68 @@ describe("JobsPage", () => {
     );
   });
 
+  it("restores the provenance source CV after reloading with a derived attachment", async () => {
+    selectedJobResult = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+    };
+    cvLibraryResult = {
+      cvs: [
+        {
+          id: "cv_alpha",
+          title: "Primary resume",
+          sections: [],
+        },
+        {
+          id: "source-cv-variant:v1:reviewed",
+          title: "Primary resume",
+          metadata: {
+            createdAt: "2026-07-30T00:00:00.000Z",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+            version: 1,
+            reviewedSourceCvVariant: {
+              sourceCvId: "cv_alpha",
+              sourceCvContextHash: "source-cv-context-alpha",
+            },
+          },
+          sections: [],
+        },
+      ],
+      currentCv: null,
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: "cv_alpha",
+        resumeName: "Primary resume",
+      });
+      expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        mode: "full_source_cv",
+      });
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
+    });
+  });
+
   it("reattaches the authoritative source CV before full-source proposal handoff after materialization", async () => {
     selectedJobResult = readyJobWithAttachedResume();
     prepareCvTailoringReviewMock
