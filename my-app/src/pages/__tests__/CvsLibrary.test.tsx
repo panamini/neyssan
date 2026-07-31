@@ -34,6 +34,11 @@ const mockCvLibraryState = {
     metadata: {
       updatedAt: string;
       createdAt: string;
+      reviewedSourceCvVariant?: {
+        sourceCvId: string;
+        jobId: string;
+        reviewedPlanId?: string;
+      };
     };
   }>,
 };
@@ -100,6 +105,33 @@ describe("CvsLibrary", () => {
 
     expect(loadCvMock).toHaveBeenCalledWith("cv_1");
     expect(navigateMock).toHaveBeenCalledWith("/cv?id=cv_1");
+  });
+
+  it("excludes reviewed tailoring variants from the editable CV library", () => {
+    mockCvLibraryState.cvs = [
+      ...mockCvLibraryState.cvs,
+      {
+        id: "source-cv-variant:v1:reviewed",
+        title: "Alpha Resume",
+        sections: [],
+        metadata: {
+          updatedAt: "2026-07-31T08:00:00.000Z",
+          createdAt: "2026-07-31T08:00:00.000Z",
+          reviewedSourceCvVariant: {
+            sourceCvId: "cv_1",
+            jobId: "job_alpha",
+            reviewedPlanId: "plan_alpha",
+          },
+        },
+      },
+    ];
+
+    render(<CvsLibrary />);
+
+    expect(screen.getAllByRole("button", { name: /Alpha Resume/i })).toHaveLength(1);
+    expect(
+      screen.queryByText(/tailored resume/i),
+    ).not.toBeInTheDocument();
   });
 
   it("creates a normal new CV from the main create action", async () => {

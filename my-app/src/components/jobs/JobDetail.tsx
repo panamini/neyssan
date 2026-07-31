@@ -22,6 +22,13 @@ type JobDetailProps = {
   isResumePickerOpen: boolean;
   resumePickerRef: React.RefObject<HTMLDivElement>;
   resumePickerOptions: ResumePickerOption[];
+  canTailorResume: boolean;
+  canUseFullSourceCv: boolean;
+  tailoringUnavailableReason: string | null;
+  tailoringActionPending: boolean;
+  tailoringActionError: string | null;
+  proposalActionDisabled: boolean;
+  tailoringPanel?: React.ReactNode;
   handoffPanel?: React.ReactNode;
   debugPanels?: React.ReactNode;
   onBackToJobs: () => void;
@@ -31,6 +38,8 @@ type JobDetailProps = {
   onAttachResumeToJob: (resumeId: string) => void;
   onDetachResumeFromJob: () => void;
   onCreateProposal: (jobId: string) => void;
+  onTailorResume: () => void;
+  onUseFullSourceCv: () => void;
   onDismissJob: (jobId: string) => void;
   onRefreshSelectedJobMatch: () => void;
   onSaveField: (fieldKey: string, nextValue: string | string[]) => void;
@@ -125,6 +134,13 @@ export function JobDetail({
   isResumePickerOpen,
   resumePickerRef,
   resumePickerOptions,
+  canTailorResume,
+  canUseFullSourceCv,
+  tailoringUnavailableReason,
+  tailoringActionPending,
+  tailoringActionError,
+  proposalActionDisabled,
+  tailoringPanel,
   handoffPanel,
   debugPanels,
   onBackToJobs,
@@ -134,6 +150,8 @@ export function JobDetail({
   onAttachResumeToJob,
   onDetachResumeFromJob,
   onCreateProposal,
+  onTailorResume,
+  onUseFullSourceCv,
   onDismissJob,
   onRefreshSelectedJobMatch,
   onSaveField,
@@ -338,7 +356,39 @@ export function JobDetail({
               </div>
               <button
                 type="button"
+                className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--tailor"
+                aria-describedby={
+                  tailoringUnavailableReason
+                    ? `job-tailoring-help-${selectedJob.id}`
+                    : undefined
+                }
+                disabled={!canTailorResume}
+                onClick={onTailorResume}
+              >
+                <span>
+                  {tailoringActionPending
+                    ? "Preparing…"
+                    : "Tailor resume"}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--full-resume"
+                aria-label="Use my complete resume without tailoring"
+                aria-describedby={
+                  tailoringUnavailableReason
+                    ? `job-tailoring-help-${selectedJob.id}`
+                    : undefined
+                }
+                disabled={!canUseFullSourceCv}
+                onClick={onUseFullSourceCv}
+              >
+                <span>Use my complete resume without tailoring</span>
+              </button>
+              <button
+                type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--proposal"
+                disabled={proposalActionDisabled}
                 onClick={() => onCreateProposal(selectedJob.id)}
               >
                 <span>Generate proposal</span>
@@ -352,6 +402,22 @@ export function JobDetail({
                 <span>Skip</span>
               </button>
             </div>
+            {tailoringUnavailableReason ? (
+              <p
+                id={`job-tailoring-help-${selectedJob.id}`}
+                className="dasti-jobs-detail__tailoring-help"
+              >
+                {tailoringUnavailableReason}
+              </p>
+            ) : null}
+            {tailoringActionError ? (
+              <p
+                className="dasti-jobs-detail__tailoring-error"
+                role="alert"
+              >
+                {tailoringActionError}
+              </p>
+            ) : null}
             {detailStatusLabel || linkedDocumentLabel ? (
               <div className="dasti-jobs-detail__status-line">
                 {detailStatusLabel ? <span>{detailStatusLabel}</span> : null}
@@ -379,6 +445,7 @@ export function JobDetail({
             onRefreshMatch={onRefreshSelectedJobMatch}
           />
         ) : null}
+        {tailoringPanel}
         {handoffPanel}
         <div className="dasti-jobs-detail__content">
           <ProposalBriefCard

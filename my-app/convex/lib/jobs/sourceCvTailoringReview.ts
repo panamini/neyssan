@@ -3,6 +3,9 @@ import {
   materializeSourceCvVariant,
   type ReviewedSourceCvVariantProvenanceV1,
 } from "../../../src/modules/resume-variant-materialization/materializeSourceCvVariant";
+import {
+  resolveReviewableCandidateCvItemReference,
+} from "../../../src/modules/candidate-evidence/cvItemReferences";
 import type { CvDocument } from "../../../src/types/cvDocument";
 import type { ResumeVariantPlanReviewDecisionV1 } from "../../../src/modules/resume-variant-plan/reviewResumeVariantPlan";
 import type {
@@ -45,7 +48,9 @@ type CvTailoringReviewPlanItemDtoV1 = Readonly<{
   action: ResumeVariantPlanActionV1;
   priority: ResumeVariantPlanPriorityV1;
   reviewState: ResumeVariantPlanReviewStateV1;
-  sourceCvItemReferenceIds: readonly string[];
+  displayLabel: string;
+  demandIds: string[];
+  sourceCvItemReferenceIds: string[];
   reason: string;
 }>;
 
@@ -60,8 +65,9 @@ type CvTailoringReviewPlanDtoV1 = Readonly<{
   id: string;
   blocked: boolean;
   blockedReason?: string;
-  items: readonly CvTailoringReviewPlanItemDtoV1[];
-  warnings: readonly CvTailoringReviewWarningDtoV1[];
+  requiredDemandIds: string[];
+  items: CvTailoringReviewPlanItemDtoV1[];
+  warnings: CvTailoringReviewWarningDtoV1[];
 }>;
 
 export type CvTailoringReviewDtoV1 =
@@ -103,14 +109,17 @@ export async function prepareOwnedCvTailoringReview(
     input.mode ?? "auto_recommended",
   );
   if (prepared.composition.mode === "full_source_cv") {
-    return projectCvTailoringReview(prepared.composition);
+    return projectCvTailoringReview(
+      prepared.composition,
+      prepared.sourceCv,
+    );
   }
   const resumed = await loadPersistedSourceCvPlanReview(
     ctx.db,
     prepared.composition,
     prepared.jobId,
   );
-  return projectCvTailoringReview(resumed);
+  return projectCvTailoringReview(resumed, prepared.sourceCv);
 }
 
 export async function submitOwnedCvTailoringReview(
@@ -137,7 +146,7 @@ export async function submitOwnedCvTailoringReview(
     decisions: input.decisions,
     updatedAt: Date.now(),
   });
-  return projectCvTailoringReview(reviewed);
+  return projectCvTailoringReview(reviewed, prepared.sourceCv);
 }
 
 export async function materializeOwnedCvTailoringReview(
@@ -432,6 +441,7 @@ function projectCvTailoringReview(
   composition: Awaited<
     ReturnType<typeof buildSourceCvPlanFromPersistence>
   >,
+  canonicalSourceCv: Readonly<CvDocument>,
 ): CvTailoringReviewDtoV1 {
   const sourceCv = {
     id: composition.sourceCvId,
@@ -449,6 +459,12 @@ function projectCvTailoringReview(
       composition.plan,
       composition.evidenceGraph,
     );
+  const referenceById = new Map(
+    composition.cvItemReferences.map((reference) => [
+      reference.id,
+      reference,
+    ]),
+  );
   return {
     mode: "auto_recommended",
     sourceCv,
@@ -458,17 +474,42 @@ function projectCvTailoringReview(
       ...(reviewOutcome.blockedReason
         ? { blockedReason: reviewOutcome.blockedReason }
         : {}),
-      items: composition.plan.items.map((item) => ({
-        id: item.id,
-        section: item.section,
-        action: item.action,
-        priority: item.priority,
-        reviewState: item.reviewState,
-        sourceCvItemReferenceIds: [
+      requiredDemandIds: composition.evidenceGraph.demands
+        .filter((demand) => demand.required === "required")
+        .map((demand) => demand.id)
+        .sort(),
+      items: composition.plan.items.map((item) => {
+        const sourceCvItemReferenceIds = [
           ...(item.sourceCvItemReferenceIds ?? []),
-        ],
-        reason: item.reason,
-      })),
+        ];
+        const reference = sourceCvItemReferenceIds
+          .map((referenceId) => referenceById.get(referenceId))
+          .find((candidate) => candidate !== undefined);
+        if (!reference) {
+          throw new TypeError(
+            "CV tailoring review item requires an authorized source CV reference",
+          );
+        }
+        const resolved =
+          resolveReviewableCandidateCvItemReference(
+            canonicalSourceCv,
+            reference,
+          );
+        return {
+          id: item.id,
+          section: item.section,
+          action: item.action,
+          priority: item.priority,
+          reviewState: item.reviewState,
+          displayLabel: buildCvTailoringDisplayLabel(
+            resolved.reference.sectionType,
+            resolved.item,
+          ),
+          demandIds: [...item.demandIds].sort(),
+          sourceCvItemReferenceIds,
+          reason: item.reason,
+        };
+      }),
       warnings: composition.plan.warnings.map((warning) => ({
         id: warning.id,
         category: warning.category,
@@ -477,6 +518,41 @@ function projectCvTailoringReview(
       })),
     },
   };
+}
+
+function buildCvTailoringDisplayLabel(
+  sectionType: "experience" | "education" | "skill",
+  item: unknown,
+): string {
+  const record = readRecord(item);
+  const parts =
+    sectionType === "experience"
+      ? [
+          readDisplayLabelPart(record?.position),
+          readDisplayLabelPart(record?.company),
+        ]
+      : sectionType === "education"
+        ? [
+            readDisplayLabelPart(record?.degree) ||
+              readDisplayLabelPart(record?.fieldOfStudy),
+            readDisplayLabelPart(record?.institution),
+          ]
+        : [readDisplayLabelPart(record?.name)];
+  const label = parts.filter(Boolean).join(" · ");
+  if (label) {
+    return label;
+  }
+  return sectionType === "experience"
+    ? "Experience"
+    : sectionType === "education"
+      ? "Education"
+      : "Skill";
+}
+
+function readDisplayLabelPart(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim().replace(/\s+/g, " ").slice(0, 80)
+    : "";
 }
 
 function requireString(value: unknown, label: string): string {
