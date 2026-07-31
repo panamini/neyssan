@@ -57,6 +57,7 @@ type CvTailoringReviewPanelProps = {
   review: AutoCvTailoringReviewDtoV1;
   selectedItemIds: ReadonlySet<string>;
   hasMissingRequiredDemandCoverage: boolean;
+  hasNoSelectedItems: boolean;
   isBusy: boolean;
   errorMessage: string | null;
   materializedResumeName: string | null;
@@ -85,6 +86,7 @@ export function CvTailoringReviewPanel({
   review,
   selectedItemIds,
   hasMissingRequiredDemandCoverage,
+  hasNoSelectedItems,
   isBusy,
   errorMessage,
   materializedResumeName,
@@ -111,6 +113,7 @@ export function CvTailoringReviewPanel({
     isBusy ||
     review.plan.blocked ||
     hasNoItems ||
+    hasNoSelectedItems ||
     hasMissingRequiredDemandCoverage ||
     Boolean(errorMessage);
 
@@ -160,6 +163,12 @@ export function CvTailoringReviewPanel({
       {hasMissingRequiredDemandCoverage ? (
         <p className="dasti-cv-tailoring-review__coverage" role="status">
           Keep at least one recommendation for every required job need.
+        </p>
+      ) : null}
+      {hasNoSelectedItems ? (
+        <p className="dasti-cv-tailoring-review__coverage" role="status">
+          Keep at least one resume item selected before creating the tailored
+          resume.
         </p>
       ) : null}
 

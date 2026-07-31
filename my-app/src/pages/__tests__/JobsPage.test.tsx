@@ -3338,6 +3338,54 @@ describe("JobsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Continue to proposal" }),
     ).not.toBeInTheDocument();
+    const generateProposalButton = screen.getByRole("button", {
+      name: "Generate proposal",
+    });
+    expect(generateProposalButton).toBeDisabled();
+    fireEvent.click(generateProposalButton);
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
+  });
+
+  it("keeps proposal navigation disabled for a summary-only derived attachment", async () => {
+    selectedJobResult = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+    };
+    cvLibraryResult = {
+      cvs: [
+        {
+          id: "cv_alpha",
+          title: "Primary resume",
+          sections: [],
+        },
+        {
+          id: "source-cv-variant:v1:reviewed",
+          title: "Primary resume",
+          metadata: {
+            createdAt: "2026-07-30T00:00:00.000Z",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+            version: 1,
+            librarySummaryOnly: true,
+            reviewedSourceCvVariant: {
+              sourceCvId: "cv_alpha",
+            },
+          },
+          sections: [],
+        },
+      ],
+      currentCv: null,
+    };
+
+    renderJobsDetail();
+
+    const generateProposalButton = await screen.findByRole("button", {
+      name: "Generate proposal",
+    });
+    expect(generateProposalButton).toBeDisabled();
+    fireEvent.click(generateProposalButton);
     expect(screen.getByTestId("jobs-location")).toHaveTextContent(
       "/jobs/job_alpha",
     );
@@ -3361,6 +3409,39 @@ describe("JobsPage", () => {
 
     expect(
       await screen.findByText(/no resume items are available to tailor/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create tailored resume" }),
+    ).toBeDisabled();
+    expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
+    expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks tailoring when every selectable recommendation is unchecked", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      ...pendingCvTailoringReview,
+      plan: {
+        ...pendingCvTailoringReview.plan,
+        requiredDemandIds: [],
+      },
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("checkbox", {
+        name: /Operations Lead · Example Co/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Process mapping/i }),
+    );
+
+    expect(
+      screen.getByText(/keep at least one resume item/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create tailored resume" }),

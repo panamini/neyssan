@@ -1252,6 +1252,18 @@ function getMissingRequiredDemandIds(
   );
 }
 
+function hasSelectedClaimBackedCvItem(
+  review: AutoCvTailoringReviewDtoV1,
+  selectedItemIds: ReadonlySet<string>,
+): boolean {
+  return review.plan.items.some(
+    (item) =>
+      isClaimBackedResumeVariantPlanAction(item.action) &&
+      (item.reviewState === "accepted" ||
+        (item.reviewState === "pending" && selectedItemIds.has(item.id))),
+  );
+}
+
 function readCvPickerProfilePreview(
   cv: CvDocument,
 ): Record<string, unknown> | null {
@@ -1323,6 +1335,13 @@ function readReviewedSourceCvId(cv: CvDocument): string | null {
   return typeof sourceCvId === "string" && sourceCvId.trim().length > 0
     ? sourceCvId.trim()
     : null;
+}
+
+function isHydratedCvLibraryDocument(cv: CvDocument): boolean {
+  return (
+    (cv.metadata as { librarySummaryOnly?: unknown } | undefined)
+      ?.librarySummaryOnly !== true
+  );
 }
 
 function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
@@ -1838,6 +1857,15 @@ function JobsPageContent(): JSX.Element {
   const selectedJobIsReviewedVariant = Boolean(
     selectedJob?.resumeId?.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX),
   );
+  const selectedJobReviewedResumeUnavailable = Boolean(
+    selectedJobIsReviewedVariant &&
+      !materializedResumeName &&
+      !cvs.some(
+        (cv) =>
+          String(cv.id) === selectedJob?.resumeId &&
+          isHydratedCvLibraryDocument(cv),
+      ),
+  );
   const cvTailoringUnavailableReason =
     cvTailoringContextUnavailableReason ??
     (selectedJobIsReviewedVariant
@@ -1932,6 +1960,15 @@ function JobsPageContent(): JSX.Element {
 
   const handleCreateProposal = React.useCallback(
     (jobId: string) => {
+      if (
+        selectedJobIdRef.current === jobId &&
+        selectedJobReviewedResumeUnavailable
+      ) {
+        setCvTailoringLauncherError(
+          "The tailored resume must be loaded before generating a proposal. Reload this job and try again.",
+        );
+        return;
+      }
       recordJobDecision("cover_letter", jobId);
       clearActiveLocalCvId();
       startFreshProposalWorkspace();
@@ -1941,7 +1978,7 @@ function JobsPageContent(): JSX.Element {
         }),
       });
     },
-    [navigate, recordJobDecision],
+    [navigate, recordJobDecision, selectedJobReviewedResumeUnavailable],
   );
 
   const invalidateCvTailoringForSourceChange = React.useCallback(() => {
@@ -2133,6 +2170,10 @@ function JobsPageContent(): JSX.Element {
     if (
       initialReview.plan.blocked ||
       initialReview.plan.items.length === 0 ||
+      !hasSelectedClaimBackedCvItem(
+        initialReview,
+        cvTailoringSelectedItemIds,
+      ) ||
       getMissingRequiredDemandIds(
         initialReview,
         cvTailoringSelectedItemIds,
@@ -2210,6 +2251,14 @@ function JobsPageContent(): JSX.Element {
       if (
         reviewed.plan.blocked ||
         reviewed.plan.items.length === 0 ||
+        !hasSelectedClaimBackedCvItem(
+          reviewed,
+          new Set(
+            reviewed.plan.items
+              .filter((item) => item.reviewState === "accepted")
+              .map((item) => item.id),
+          ),
+        ) ||
         stillPending ||
         getMissingRequiredDemandIds(
           reviewed,
@@ -3000,6 +3049,9 @@ function JobsPageContent(): JSX.Element {
       tailoringUnavailableReason={cvTailoringUnavailableReason}
       tailoringActionPending={cvTailoringBusy}
       tailoringActionError={cvTailoringLauncherError}
+      proposalActionDisabled={
+        cvTailoringBusy || selectedJobReviewedResumeUnavailable
+      }
       onBackToJobs={() => void navigate("/jobs")}
       onSetJobFavorite={(jobId, nextFavorite) => {
         void handleSetJobFavorite(jobId, nextFavorite);
@@ -3044,6 +3096,13 @@ function JobsPageContent(): JSX.Element {
                 cvTailoringReview,
                 cvTailoringSelectedItemIds,
               ).length > 0
+            }
+            hasNoSelectedItems={
+              cvTailoringReview.plan.items.length > 0 &&
+              !hasSelectedClaimBackedCvItem(
+                cvTailoringReview,
+                cvTailoringSelectedItemIds,
+              )
             }
             isBusy={cvTailoringBusy}
             errorMessage={cvTailoringError}

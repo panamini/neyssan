@@ -27,6 +27,7 @@ type JobDetailProps = {
   tailoringUnavailableReason: string | null;
   tailoringActionPending: boolean;
   tailoringActionError: string | null;
+  proposalActionDisabled: boolean;
   tailoringPanel?: React.ReactNode;
   handoffPanel?: React.ReactNode;
   debugPanels?: React.ReactNode;
@@ -138,6 +139,7 @@ export function JobDetail({
   tailoringUnavailableReason,
   tailoringActionPending,
   tailoringActionError,
+  proposalActionDisabled,
   tailoringPanel,
   handoffPanel,
   debugPanels,
@@ -386,7 +388,7 @@ export function JobDetail({
               <button
                 type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--proposal"
-                disabled={tailoringActionPending}
+                disabled={proposalActionDisabled}
                 onClick={() => onCreateProposal(selectedJob.id)}
               >
                 <span>Generate proposal</span>
