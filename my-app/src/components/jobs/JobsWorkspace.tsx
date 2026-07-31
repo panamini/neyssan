@@ -30,6 +30,10 @@ import {
 import { openOnboardingReplay } from "../../lib/onboarding-replay-event";
 import type { CvDocument } from "../../types/cvDocument";
 import { formatUiDate } from "../../lib/ui-date";
+import {
+  REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX,
+  readReviewedSourceCvVariantBinding,
+} from "../../lib/reviewed-source-cv-variant";
 import { isClaimBackedResumeVariantPlanAction } from "../../modules/resume-variant-plan/planRules";
 
 type JobsPageRouteParams = {
@@ -1225,14 +1229,6 @@ const CV_TAILORING_SOURCE_REVIEW_BRIEF_CHANGED_MESSAGE =
   "The Job Brief changed. Prepare recommendations again before tailoring.";
 const CV_TAILORING_DERIVED_LOAD_FAILED_MESSAGE =
   "The tailored resume could not be loaded. Reload this job and try again.";
-const REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX = "source-cv-variant:v1:";
-
-type ReviewedSourceCvVariantBinding = Readonly<{
-  sourceCvId: string;
-  jobId: string;
-  reviewedPlanId: string | null;
-}>;
-
 type ReviewedResumeHydration = Readonly<{
   key: string;
   status: "loading" | "ready" | "error";
@@ -1353,33 +1349,6 @@ function formatShortRelativeAge(value: string | undefined): string | null {
   }
 
   return `${Math.max(1, Math.floor(diffMs / day))}d`;
-}
-
-function readReviewedSourceCvVariantBinding(
-  cv: CvDocument,
-): ReviewedSourceCvVariantBinding | null {
-  const reviewedSourceCvVariant = cv.metadata?.reviewedSourceCvVariant;
-  if (!reviewedSourceCvVariant || typeof reviewedSourceCvVariant !== "object") {
-    return null;
-  }
-
-  const candidate = reviewedSourceCvVariant as {
-    sourceCvId?: unknown;
-    jobId?: unknown;
-    reviewedPlanId?: unknown;
-  };
-  const sourceCvId =
-    typeof candidate.sourceCvId === "string" ? candidate.sourceCvId.trim() : "";
-  const jobId =
-    typeof candidate.jobId === "string" ? candidate.jobId.trim() : "";
-  const reviewedPlanId =
-    typeof candidate.reviewedPlanId === "string" &&
-    candidate.reviewedPlanId.trim().length > 0
-      ? candidate.reviewedPlanId.trim()
-      : null;
-  return sourceCvId && jobId
-    ? { sourceCvId, jobId, reviewedPlanId }
-    : null;
 }
 
 function isHydratedCvLibraryDocument(cv: CvDocument): boolean {
@@ -2871,11 +2840,32 @@ function JobsPageContent(): JSX.Element {
 
     try {
       if (job.resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX)) {
+        proposalHandoffRequestVersionRef.current += 1;
         const attachedCv =
           cvs.find((cv) => String(cv.id) === job.resumeId) ?? null;
-        const attachedBinding = attachedCv
+        let attachedBinding = attachedCv
           ? readReviewedSourceCvVariantBinding(attachedCv)
           : null;
+        if (!materializedSourceCvId && !attachedBinding) {
+          const hydratedAttachedCv = await hydrateCvDocument(job.resumeId);
+          if (!requestIsCurrent()) {
+            if (requestOwnsUi()) {
+              invalidateCvTailoringForSourceChange();
+            }
+            return;
+          }
+          if (
+            !hydratedAttachedCv ||
+            String(hydratedAttachedCv.id) !== job.resumeId ||
+            !isHydratedCvLibraryDocument(hydratedAttachedCv)
+          ) {
+            throw new Error(
+              "The original resume is unavailable. Attach it again before continuing.",
+            );
+          }
+          attachedBinding =
+            readReviewedSourceCvVariantBinding(hydratedAttachedCv);
+        }
         if (attachedBinding && attachedBinding.jobId !== job.id) {
           throw new Error(
             "This tailored resume belongs to another job. Restore the complete resume before continuing.",
@@ -3006,6 +2996,74 @@ function JobsPageContent(): JSX.Element {
     prepareCvTailoringReview,
     selectedJob,
     setJobResume,
+  ]);
+
+  const handleReloadCvTailoringReview = React.useCallback(async () => {
+    const job = selectedJob;
+    if (
+      !job?.id ||
+      !job.resumeId ||
+      !job.resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX) ||
+      materializedSourceCvId === null
+    ) {
+      await handlePrepareCvTailoringReview();
+      return;
+    }
+
+    const resumeId = job.resumeId;
+    const sourceCvId = materializedSourceCvId;
+    const attachmentKey = `${job.id}::${resumeId}`;
+    const requestVersion = cvTailoringRequestVersionRef.current + 1;
+    cvTailoringRequestVersionRef.current = requestVersion;
+    const requestIsCurrent = () =>
+      cvTailoringRequestVersionRef.current === requestVersion &&
+      selectedJobIdRef.current === job.id &&
+      selectedJobResumeIdRef.current === resumeId;
+
+    setCvTailoringBusy(true);
+    setCvTailoringError(null);
+    setCvTailoringLauncherError(null);
+    setReviewedResumeHydration({ key: attachmentKey, status: "loading" });
+
+    try {
+      const hydratedResume = await hydrateCvDocument(resumeId);
+      if (!requestIsCurrent()) {
+        return;
+      }
+      const hydratedBinding = hydratedResume
+        ? readReviewedSourceCvVariantBinding(hydratedResume)
+        : null;
+      if (
+        !hydratedResume ||
+        String(hydratedResume.id) !== resumeId ||
+        !isHydratedCvLibraryDocument(hydratedResume) ||
+        !hydratedBinding ||
+        hydratedBinding.jobId !== job.id ||
+        hydratedBinding.sourceCvId !== sourceCvId
+      ) {
+        throw new Error(
+          "The tailored resume was created but could not be loaded. Reload this job before continuing.",
+        );
+      }
+
+      setReviewedResumeHydration({ key: attachmentKey, status: "ready" });
+      setMaterializedResumeName(job.resumeName ?? "Tailored resume");
+    } catch (error) {
+      if (!requestIsCurrent()) {
+        return;
+      }
+      setReviewedResumeHydration({ key: attachmentKey, status: "error" });
+      setCvTailoringError(formatCvTailoringError(error));
+    } finally {
+      if (requestIsCurrent()) {
+        setCvTailoringBusy(false);
+      }
+    }
+  }, [
+    handlePrepareCvTailoringReview,
+    hydrateCvDocument,
+    materializedSourceCvId,
+    selectedJob,
   ]);
 
   const handleRefreshSelectedJobMatch = React.useCallback(async () => {
@@ -3798,7 +3856,7 @@ function JobsPageContent(): JSX.Element {
               void handleCreateTailoredResume();
             }}
             onReload={() => {
-              void handlePrepareCvTailoringReview();
+              void handleReloadCvTailoringReview();
             }}
             onClose={handleCloseCvTailoringReview}
             onContinueToProposal={() => {

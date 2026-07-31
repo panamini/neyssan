@@ -11,6 +11,7 @@ import {
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { formatUiDate } from "../lib/ui-date";
 import { translateUi } from "../lib/i18n";
+import { isReviewedSourceCvVariant } from "../lib/reviewed-source-cv-variant";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 import type {
   CvDocument,
@@ -108,11 +109,15 @@ export function CvsLibrary(): JSX.Element {
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const pendingOpenNavigationRef = React.useRef<string | null>(null);
 
+  const editableCvs = React.useMemo(
+    () => cvs.filter((cv) => !isReviewedSourceCvVariant(cv)),
+    [cvs],
+  );
   const sorted = React.useMemo(
     () => {
       const normalizedQuery = searchQuery.trim().toLowerCase();
 
-      return [...cvs]
+      return [...editableCvs]
         .filter((cv) => {
           if (!normalizedQuery) {
             return true;
@@ -162,7 +167,7 @@ export function CvsLibrary(): JSX.Element {
           return bTime - aTime;
         });
     },
-    [cvs, searchQuery, sortOrder],
+    [editableCvs, searchQuery, sortOrder],
   );
   const visibleCvs = React.useMemo(
     () => sorted.slice(0, visibleCvCount),
@@ -259,7 +264,7 @@ export function CvsLibrary(): JSX.Element {
           </div>
         </div>
 
-        {cvs.length > 0 ? (
+        {editableCvs.length > 0 ? (
           <>
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">

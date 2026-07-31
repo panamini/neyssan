@@ -18,6 +18,10 @@ import FloatingAiToolbar, {
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
+  isReviewedSourceCvVariant,
+  isReviewedSourceCvVariantId,
+} from "../lib/reviewed-source-cv-variant";
+import {
   useForgeTemplatePanel,
   useRegisterForgePanel,
   useRegisterForgeTemplates,
@@ -3071,6 +3075,10 @@ export function CvForge(): JSX.Element {
     loadCv,
     hydrateCvDocument,
   } = useCvLibrary();
+  const editableCvs = React.useMemo(
+    () => cvs.filter((cv) => !isReviewedSourceCvVariant(cv)),
+    [cvs],
+  );
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     const handleResize = () => {
@@ -3594,6 +3602,23 @@ export function CvForge(): JSX.Element {
   const jobDetailRoute = requestedJobId
     ? `/jobs/${encodeURIComponent(requestedJobId)}`
     : null;
+  const requestedCvIsReviewedVariant = Boolean(
+    requestedCvId &&
+      (isReviewedSourceCvVariantId(requestedCvId) ||
+        (currentCv !== null &&
+          String(currentCv.id) === requestedCvId &&
+          isReviewedSourceCvVariant(currentCv)) ||
+        cvs.some(
+          (cv) =>
+            String(cv.id) === requestedCvId && isReviewedSourceCvVariant(cv),
+        )),
+  );
+  React.useEffect(() => {
+    if (!requestedCvIsReviewedVariant) {
+      return;
+    }
+    void navigate("/cvs", { replace: true });
+  }, [navigate, requestedCvIsReviewedVariant]);
   React.useEffect(() => {
     if (
       remoteSaveStatus.status !== "failed" ||
@@ -3627,7 +3652,11 @@ export function CvForge(): JSX.Element {
   }, [entryPickerTransitionCvId, requestedCvId]);
 
   React.useEffect(() => {
-    if (!requestedCvId || requestedCvId === String(currentCvId ?? "")) {
+    if (
+      !requestedCvId ||
+      requestedCvIsReviewedVariant ||
+      requestedCvId === String(currentCvId ?? "")
+    ) {
       return;
     }
     const pendingTransitionId =
@@ -3642,7 +3671,13 @@ export function CvForge(): JSX.Element {
       return;
     }
     loadCv(requestedCvId);
-  }, [currentCvId, entryPickerTransitionCvId, loadCv, requestedCvId]);
+  }, [
+    currentCvId,
+    entryPickerTransitionCvId,
+    loadCv,
+    requestedCvId,
+    requestedCvIsReviewedVariant,
+  ]);
 
   React.useEffect(() => {
     setCvRailAiSuggestion(null);
@@ -3732,7 +3767,7 @@ export function CvForge(): JSX.Element {
 
   const resumeOptions = React.useMemo(
     () =>
-      cvs.map((cv) => {
+      editableCvs.map((cv) => {
         const cvId = String(cv.id);
         const sectionCount = Array.isArray(cv.sections)
           ? cv.sections.length
@@ -3750,7 +3785,7 @@ export function CvForge(): JSX.Element {
           selected: cvId === String(currentCvId ?? ""),
         };
       }),
-    [currentCvId, cvs],
+    [currentCvId, editableCvs],
   );
 
   const handlePickResume = React.useCallback(
@@ -4432,7 +4467,9 @@ export function CvForge(): JSX.Element {
     const confirmed = window.confirm("Delete CV?");
     if (!confirmed) return;
 
-    const nextCv = cvs.find((cv) => String(cv.id) !== String(currentCvId));
+    const nextCv = editableCvs.find(
+      (cv) => String(cv.id) !== String(currentCvId),
+    );
     deleteCv(currentCvId);
     if (nextCv?.id) {
       const nextCvId = String(nextCv.id);
@@ -4440,7 +4477,7 @@ export function CvForge(): JSX.Element {
       return;
     }
     void clearSelectedCvRoute();
-  }, [clearSelectedCvRoute, currentCvId, cvs, deleteCv, selectCvById]);
+  }, [clearSelectedCvRoute, currentCvId, deleteCv, editableCvs, selectCvById]);
   const topbarNewCvRef = React.useRef<() => void>(() => {});
   const topbarImportCvRef = React.useRef<() => void>(() => {});
   const handleTopbarNewCv = React.useCallback(() => {
@@ -6426,12 +6463,13 @@ export function CvForge(): JSX.Element {
   const cvLibraryDrawerItems = React.useMemo(
     () =>
       buildWorkLibraryModel({
-        cvs,
-        currentCv,
+        cvs: editableCvs,
+        currentCv:
+          currentCv && !isReviewedSourceCvVariant(currentCv) ? currentCv : null,
         currentCvId,
         proposals: cvForgeLibraryProposals,
       }).items,
-    [currentCv, currentCvId, cvForgeLibraryProposals, cvs],
+    [currentCv, currentCvId, cvForgeLibraryProposals, editableCvs],
   );
   const handleSelectCvFromLibraryDrawer = React.useCallback(
     (cvId: string) => {

@@ -52,6 +52,10 @@ vi.mock("convex/react", () => ({
       return undefined;
     }
 
+    if (reference === "proposalsPublic.default") {
+      return [];
+    }
+
     if (args && typeof args === "object" && "jobId" in (args as Record<string, unknown>)) {
       return {
         id: "job_123",
@@ -112,7 +116,10 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
     cvs: [],
     isLibraryHydrated: true,
     lastLibraryFetchFailed: false,
+    isVisualRestorePending: false,
+    remoteSaveStatus: { status: "idle" },
     loadCv: vi.fn(() => true),
+    hydrateCvDocument: vi.fn(async () => null),
     ...overrides,
   };
 }
@@ -160,6 +167,25 @@ function buildProfileCv(
         ],
       },
     ],
+  };
+}
+
+function buildReviewedVariantCv() {
+  const variant = buildProfileCv(
+    "source-cv-variant:v1:reviewed",
+    "Ada Lovelace",
+    "Product Designer",
+  );
+  return {
+    ...variant,
+    metadata: {
+      ...variant.metadata,
+      reviewedSourceCvVariant: {
+        sourceCvId: "cv_source",
+        jobId: "job_alpha",
+        reviewedPlanId: "plan_alpha",
+      },
+    },
   };
 }
 
@@ -253,6 +279,28 @@ describe("CvForge entry picker", () => {
     expect(screen.getByText("Choose your CV")).toBeInTheDocument();
     expect(screen.queryByText("Mock profile editor none")).not.toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+  });
+
+  it("redirects a direct reviewed-variant route away from the editor", async () => {
+    const reviewedVariant = buildReviewedVariantCv();
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: reviewedVariant,
+        currentCvId: reviewedVariant.id,
+        cvs: [reviewedVariant],
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={[`/cv?id=${reviewedVariant.id}`]}>
+        <CvForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/cvs");
+    });
   });
 
   it("does not auto-launch after a blank CV has already been created", () => {
