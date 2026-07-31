@@ -2405,11 +2405,15 @@ function JobsPageContent(): JSX.Element {
           resumeId: sourceCvId,
           resumeName: sourceOption?.title ?? null,
         });
-        if (!requestIsCurrent()) {
+        if (!requestOwnsUi()) {
           return;
         }
         expectedResumeId = sourceCvId;
         selectedJobResumeIdRef.current = sourceCvId;
+        if (!requestIsCurrent()) {
+          invalidateCvTailoringForSourceChange();
+          return;
+        }
         setSelectedJobRefreshKey((key) => key + 1);
         setOptimisticSelectedJob((current) =>
           current && current.id === job.id

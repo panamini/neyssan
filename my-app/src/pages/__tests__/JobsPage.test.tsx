@@ -41,6 +41,7 @@ const convexClientMock = {
 const windowOpenMock = vi.fn();
 const showToastMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+let rerenderJobsDetail: (() => void) | null = null;
 
 const jobsList = [
   {
@@ -460,7 +461,7 @@ function readyJobWithAttachedResume() {
 function renderJobsDetail(
   initialEntry = "/jobs/job_alpha",
 ): ReturnType<typeof render> {
-  return render(
+  const element = (
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route
@@ -483,8 +484,11 @@ function renderJobsDetail(
         />
         <Route path="/proposal" element={<LocationProbe />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+  const result = render(element);
+  rerenderJobsDetail = () => result.rerender(element);
+  return result;
 }
 
 function enableJobsMatchDebug(): void {
@@ -528,6 +532,7 @@ function buildStructuredShadowSummary(
 
 describe("JobsPage", () => {
   beforeEach(() => {
+    rerenderJobsDetail = null;
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
     archiveJobMock.mockClear();
@@ -3753,6 +3758,72 @@ describe("JobsPage", () => {
         resumeId: "cv_alpha",
         resumeName: "Primary resume",
       });
+      expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        mode: "full_source_cv",
+      });
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
+    });
+  });
+
+  it("continues full-source validation when restoring the source refreshes the selected job", async () => {
+    selectedJobResult = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+    };
+    cvLibraryResult = {
+      cvs: [
+        {
+          id: "cv_alpha",
+          title: "Primary resume",
+          sections: [],
+        },
+        {
+          id: "source-cv-variant:v1:reviewed",
+          title: "Primary resume",
+          metadata: {
+            createdAt: "2026-07-30T00:00:00.000Z",
+            updatedAt: "2026-07-30T00:00:00.000Z",
+            version: 1,
+            reviewedSourceCvVariant: {
+              sourceCvId: "cv_alpha",
+              sourceCvContextHash: "source-cv-context-alpha",
+            },
+          },
+          sections: [],
+        },
+      ],
+      currentCv: null,
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+    setJobResumeMock.mockImplementationOnce(async () => {
+      selectedJobResult = {
+        ...selectedJobResult,
+        resumeId: "cv_alpha",
+        resumeName: "Primary resume",
+        resumeSource: "job",
+      };
+      rerenderJobsDetail?.();
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+
+    await waitFor(() => {
       expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
         jobId: "job_alpha",
         mode: "full_source_cv",
