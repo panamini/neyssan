@@ -1824,6 +1824,114 @@ describe("JobsPage", () => {
     });
   });
 
+  it("hydrates a tailored resume before proposal-selection navigation", async () => {
+    const hydration = createDeferred<ReturnType<typeof reviewedVariantCv>>();
+    listResult = jobsList.map((job) =>
+      job.id === "job_alpha"
+        ? {
+            ...job,
+            resumeId: "source-cv-variant:v1:reviewed",
+            resumeName: "Primary resume · Operations Associate",
+          }
+        : job,
+    );
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        reviewedVariantCv({ summaryOnly: true }),
+      ],
+      currentCv: null,
+    };
+    hydrateCvDocumentMock.mockReturnValueOnce(hydration.promise);
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?selectFor=proposal"]}>
+        <Routes>
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/proposal" element={<LocationProbe />} />
+          <Route path="/jobs/:jobId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
+
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledWith(
+        "source-cv-variant:v1:reviewed",
+      );
+    });
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs?selectFor=proposal",
+    );
+
+    hydration.resolve(reviewedVariantCv());
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
+    });
+  });
+
+  it("blocks proposal-selection navigation for another job's tailored resume", async () => {
+    listResult = jobsList.map((job) =>
+      job.id === "job_alpha"
+        ? {
+            ...job,
+            resumeId: "source-cv-variant:v1:reviewed",
+            resumeName: "Primary resume · Other job",
+          }
+        : job,
+    );
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        reviewedVariantCv({ jobId: "job_beta" }),
+      ],
+      currentCv: null,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?selectFor=proposal"]}>
+        <Routes>
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/proposal" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
+
+    await waitFor(() => {
+      expect(showToastMock).toHaveBeenCalledWith(
+        expect.stringMatching(/belongs to another job/i),
+        { variant: "error" },
+      );
+    });
+    expect(hydrateCvDocumentMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs?selectFor=proposal",
+    );
+  });
+
   it("keeps normal job card clicks opening job detail outside proposal selection mode", async () => {
     render(
       <MemoryRouter initialEntries={["/jobs"]}>
@@ -3337,9 +3445,11 @@ describe("JobsPage", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Continue to proposal" }),
     );
-    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-      "/proposal?jobId=job_alpha&drawer=proposal-draft",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
+    });
 
     for (const [input] of [
       ...prepareCvTailoringReviewMock.mock.calls,
@@ -3388,6 +3498,15 @@ describe("JobsPage", () => {
     expect(screen.getByTestId("jobs-location")).toHaveTextContent(
       "/jobs/job_alpha",
     );
+    await waitFor(() => {
+      expect(trackEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "job_decision_made",
+          jobId: "job_alpha",
+          outcome: "resume",
+        }),
+      );
+    });
   });
 
   it("keeps proposal navigation disabled for a summary-only derived attachment", async () => {
@@ -3846,6 +3965,102 @@ describe("JobsPage", () => {
     expect(submitCvTailoringReviewMock).not.toHaveBeenCalled();
     expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
     expect(JSON.stringify(cvLibraryResult.cvs[0])).toBe(sourceCvBefore);
+  });
+
+  it("hydrates a summary-only complete resume before full-source proposal handoff", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    const hydration = createDeferred<{
+      id: string;
+      title: string;
+      sections: unknown[];
+    }>();
+    cvLibraryResult = {
+      cvs: [
+        {
+          id: "cv_alpha",
+          title: "Primary resume",
+          metadata: { librarySummaryOnly: true },
+          sections: [],
+        },
+      ],
+      currentCv: null,
+    };
+    hydrateCvDocumentMock.mockReturnValueOnce(hydration.promise);
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        mode: "full_source_cv",
+      });
+      expect(hydrateCvDocumentMock).toHaveBeenCalledWith("cv_alpha");
+    });
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
+
+    hydration.resolve({
+      id: "cv_alpha",
+      title: "Primary resume",
+      sections: [],
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
+    });
+  });
+
+  it("keeps full-source proposal handoff blocked when the complete resume cannot hydrate", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    cvLibraryResult = {
+      cvs: [
+        {
+          id: "cv_alpha",
+          title: "Primary resume",
+          metadata: { librarySummaryOnly: true },
+          sections: [],
+        },
+      ],
+      currentCv: null,
+    };
+    hydrateCvDocumentMock.mockResolvedValueOnce(null);
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+
+    expect(
+      await screen.findByText(/complete resume could not be loaded/i),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
   });
 
   it("fails closed when a derived attachment has no available source provenance", async () => {

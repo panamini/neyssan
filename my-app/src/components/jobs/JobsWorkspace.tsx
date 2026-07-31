@@ -1505,6 +1505,7 @@ function JobsPageContent(): JSX.Element {
     React.useState<string | null>(null);
   const cvTailoringRequestVersionRef = React.useRef(0);
   const reviewedResumeHydrationVersionRef = React.useRef(0);
+  const proposalHandoffRequestVersionRef = React.useRef(0);
   const jobBriefMutationVersionRef = React.useRef(0);
   const jobBriefMutationRecoveryRef = React.useRef<{
     jobId: string;
@@ -1619,6 +1620,8 @@ function JobsPageContent(): JSX.Element {
     selectedJobId,
     selectedJobRefreshKey,
   });
+  const jobsRef = React.useRef(jobs);
+  jobsRef.current = jobs;
   const selectedJobRecord = selectedJobRecordFromQuery as
     | JobsPageDetail
     | undefined;
@@ -2148,8 +2151,94 @@ function JobsPageContent(): JSX.Element {
     [navigate, recordJobDecision],
   );
 
+  const ensureProposalResumeReady = React.useCallback(
+    async (
+      jobId: string,
+      resumeId: string | null,
+      options: { requireSourceCv?: boolean } = {},
+    ): Promise<boolean> => {
+      if (!resumeId) {
+        return true;
+      }
+
+      const attachmentKey = `${jobId}::${resumeId}`;
+      if (attachmentKey === briefInvalidatedAttachmentKey) {
+        throw new Error(CV_TAILORING_BRIEF_CHANGED_MESSAGE);
+      }
+
+      const attachedCv = cvs.find((cv) => String(cv.id) === resumeId) ?? null;
+      const initialBinding = attachedCv
+        ? readReviewedSourceCvVariantBinding(attachedCv)
+        : null;
+      const isReviewedVariant =
+        resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX) ||
+        initialBinding !== null;
+      if (
+        options.requireSourceCv
+          ? isReviewedVariant
+          : isReviewedVariant &&
+            initialBinding !== null &&
+            initialBinding.jobId !== jobId
+      ) {
+        throw new Error(
+          options.requireSourceCv
+            ? "The original resume could not be loaded. Attach it again before continuing."
+            : "This tailored resume belongs to another job. Restore the complete resume before continuing.",
+        );
+      }
+
+      const requestVersion = proposalHandoffRequestVersionRef.current + 1;
+      proposalHandoffRequestVersionRef.current = requestVersion;
+      const hydratedCv = await hydrateCvDocument(resumeId);
+      if (proposalHandoffRequestVersionRef.current !== requestVersion) {
+        return false;
+      }
+
+      const currentResumeId =
+        selectedJobIdRef.current === jobId
+          ? selectedJobResumeIdRef.current
+          : (() => {
+              const currentJob = jobsRef.current?.find(
+                (candidate) => candidate.id === jobId,
+              );
+              const candidateResumeId = currentJob?.resumeId;
+              return typeof candidateResumeId === "string"
+                ? candidateResumeId
+                : null;
+            })();
+      if (currentResumeId !== resumeId) {
+        return false;
+      }
+
+      const hydratedBinding = hydratedCv
+        ? readReviewedSourceCvVariantBinding(hydratedCv)
+        : null;
+      const hydratedIsReviewedVariant =
+        resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX) ||
+        hydratedBinding !== null;
+      if (
+        !hydratedCv ||
+        String(hydratedCv.id) !== resumeId ||
+        !isHydratedCvLibraryDocument(hydratedCv) ||
+        (options.requireSourceCv
+          ? hydratedIsReviewedVariant
+          : hydratedIsReviewedVariant &&
+            (!hydratedBinding || hydratedBinding.jobId !== jobId))
+      ) {
+        throw new Error(
+          options.requireSourceCv
+            ? "The complete resume could not be loaded. Try again before continuing."
+            : CV_TAILORING_DERIVED_LOAD_FAILED_MESSAGE,
+        );
+      }
+
+      return true;
+    },
+    [briefInvalidatedAttachmentKey, cvs, hydrateCvDocument],
+  );
+
   const handleCreateProposal = React.useCallback(
-    (jobId: string) => {
+    async (jobId: string) => {
       if (
         selectedJobIdRef.current === jobId &&
         selectedJobReviewedResumeUnavailable
@@ -2165,12 +2254,36 @@ function JobsPageContent(): JSX.Element {
         );
         return;
       }
-      navigateToProposalWorkspace(jobId);
+
+      const currentResumeId =
+        selectedJobIdRef.current === jobId
+          ? selectedJobResumeIdRef.current
+          : (() => {
+              const currentJob = jobsRef.current?.find(
+                (candidate) => candidate.id === jobId,
+              );
+              const candidateResumeId = currentJob?.resumeId;
+              return typeof candidateResumeId === "string"
+                ? candidateResumeId
+                : null;
+            })();
+      try {
+        if (!(await ensureProposalResumeReady(jobId, currentResumeId))) {
+          return;
+        }
+        navigateToProposalWorkspace(jobId);
+      } catch (error) {
+        const message = formatCvTailoringError(error);
+        setCvTailoringLauncherError(message);
+        showToast(message, { variant: "error" });
+      }
     },
     [
+      ensureProposalResumeReady,
       navigateToProposalWorkspace,
       selectedJobReviewedResumeReadiness,
       selectedJobReviewedResumeUnavailable,
+      showToast,
     ],
   );
 
@@ -2540,6 +2653,7 @@ function JobsPageContent(): JSX.Element {
         invalidateCvTailoringForSourceChange();
         return;
       }
+      recordJobDecision("resume", job.id);
       expectedResumeId = materialized.resumeId;
       selectedJobResumeIdRef.current = materialized.resumeId;
       setSelectedJobRefreshKey((key) => key + 1);
@@ -2591,7 +2705,6 @@ function JobsPageContent(): JSX.Element {
         status: "ready",
       });
       setMaterializedResumeName(materialized.resumeName);
-      recordJobDecision("resume", job.id);
     } catch (error) {
       if (requestIsCurrent()) {
         setCvTailoringError(formatCvTailoringError(error));
@@ -2722,6 +2835,19 @@ function JobsPageContent(): JSX.Element {
           "The complete resume response did not match the attached resume.",
         );
       }
+      if (
+        !(await ensureProposalResumeReady(job.id, expectedResumeId, {
+          requireSourceCv: true,
+        }))
+      ) {
+        return;
+      }
+      if (!requestIsCurrent()) {
+        if (requestOwnsUi()) {
+          invalidateCvTailoringForSourceChange();
+        }
+        return;
+      }
       navigateToProposalWorkspace(job.id);
     } catch (error) {
       if (requestIsCurrent()) {
@@ -2738,6 +2864,7 @@ function JobsPageContent(): JSX.Element {
     }
   }, [
     cvs,
+    ensureProposalResumeReady,
     invalidateCvTailoringForSourceChange,
     materializedSourceCvId,
     navigateToProposalWorkspace,
@@ -3475,7 +3602,9 @@ function JobsPageContent(): JSX.Element {
       onDetachResumeFromJob={() => {
         void handleDetachResumeFromJob();
       }}
-      onCreateProposal={handleCreateProposal}
+      onCreateProposal={(jobId) => {
+        void handleCreateProposal(jobId);
+      }}
       onTailorResume={() => {
         void handlePrepareCvTailoringReview();
       }}
@@ -3527,7 +3656,7 @@ function JobsPageContent(): JSX.Element {
             }}
             onClose={handleCloseCvTailoringReview}
             onContinueToProposal={() => {
-              handleCreateProposal(selectedJob.id);
+              void handleCreateProposal(selectedJob.id);
             }}
           />
         ) : null
@@ -3650,13 +3779,13 @@ function JobsPageContent(): JSX.Element {
                 onRemoteOnlyChange={setRemoteOnly}
                 onSeniorOnlyChange={setSeniorOnly}
                 onViewChange={(view) => void navigate(buildJobsListRoute(view))}
-                onSelectJob={(jobId) =>
-                  void navigate(
-                    isProposalSelectionMode
-                      ? buildProposalRoute(jobId)
-                      : buildJobsRoute(jobId),
-                  )
-                }
+                onSelectJob={(jobId) => {
+                  if (isProposalSelectionMode) {
+                    void handleCreateProposal(jobId);
+                    return;
+                  }
+                  void navigate(buildJobsRoute(jobId));
+                }}
                 isProposalSelectionMode={isProposalSelectionMode}
                 onCancelProposalSelection={() => void navigate("/proposal")}
                 onOpenJobSource={handleOpenJobSource}
