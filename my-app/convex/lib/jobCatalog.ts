@@ -8,10 +8,9 @@ import {
   buildJobMatchReviewFromStructuredDebug,
   buildStructuredMatchReadDebug,
   buildStructuredPendingMatchRead,
+  STRUCTURED_MATCH_SHADOW_WINDOW,
   type JobMatchReviewVerdict,
 } from "./jobs/structuredMatchRead";
-
-const JOB_CATALOG_SHADOW_ROWS_LIMIT = 1;
 
 type JobCatalogMatchReview = {
   verdict: JobMatchReviewVerdict;
@@ -250,10 +249,10 @@ export async function syncJobCatalogById(ctx: any, jobId: any): Promise<void> {
       : shadowQuery;
   const shadowRows =
     typeof orderedShadowQuery.take === "function"
-      ? await orderedShadowQuery.take(JOB_CATALOG_SHADOW_ROWS_LIMIT)
+      ? await orderedShadowQuery.take(STRUCTURED_MATCH_SHADOW_WINDOW)
       : (await orderedShadowQuery.collect()).slice(
           0,
-          JOB_CATALOG_SHADOW_ROWS_LIMIT,
+          STRUCTURED_MATCH_SHADOW_WINDOW,
         );
   const matchReview = buildJobMatchReviewFromStructuredDebug(
     buildStructuredMatchReadDebug({
@@ -307,17 +306,27 @@ async function getJobProposalStats(ctx: any, jobId: string) {
     .first();
 }
 
-export async function resetJobProposalStats(ctx: any, jobId: string) {
+const JOB_PROPOSAL_MATERIALIZATION_VERSION = 1;
+
+export async function ensureJobProposalStatsMaterialization(
+  ctx: any,
+  jobId: string,
+) {
   const existing = await getJobProposalStats(ctx, jobId);
+  if (existing?.materializationVersion === JOB_PROPOSAL_MATERIALIZATION_VERSION) {
+    return existing;
+  }
   const value = {
     jobId,
     linkedDocumentCount: 0,
     latestProposalAt: 0,
+    materializationVersion: JOB_PROPOSAL_MATERIALIZATION_VERSION,
     updatedAt: Date.now(),
   };
   if (existing) await ctx.db.patch(existing._id, value);
   else await ctx.db.insert("jobProposalStats", value);
   await refreshJobCatalogProposalStats(ctx, jobId);
+  return { ...existing, ...value };
 }
 
 async function writeJobProposalStats(
@@ -331,6 +340,7 @@ async function writeJobProposalStats(
     jobId,
     linkedDocumentCount: Math.max(0, count),
     latestProposalAt: Math.max(0, latestProposalAt),
+    materializationVersion: JOB_PROPOSAL_MATERIALIZATION_VERSION,
     updatedAt: Date.now(),
   };
   if (existing) await ctx.db.patch(existing._id, value);
@@ -353,11 +363,30 @@ export async function syncJobProposalStatsDelta(
   before: Record<string, any> | null,
   after: Record<string, any> | null,
 ) {
-  const oldJobId = savedProposalJobId(before);
+  const proposalId = String(after?._id ?? before?._id ?? "");
+  if (!proposalId) return;
+  const materialized = await ctx.db
+    .query("jobProposalMaterializations")
+    .withIndex("by_proposal_id", (q: any) => q.eq("proposalId", proposalId))
+    .first();
+  const observedActivity = proposalActivity(after ?? before);
+  if (materialized && Number(materialized.proposalActivityAt) > observedActivity) {
+    return;
+  }
+  const oldJobId = typeof materialized?.jobId === "string"
+    ? materialized.jobId
+    : null;
   const newJobId = savedProposalJobId(after);
+  if (
+    materialized &&
+    oldJobId === newJobId &&
+    Number(materialized.proposalActivityAt) === observedActivity
+  ) {
+    return;
+  }
   const affected = new Set([oldJobId, newJobId].filter(Boolean) as string[]);
   for (const jobId of affected) {
-    const stats = await getJobProposalStats(ctx, jobId);
+    const stats = await ensureJobProposalStatsMaterialization(ctx, jobId);
     let count = Number(stats?.linkedDocumentCount ?? 0);
     let latest = Number(stats?.latestProposalAt ?? 0);
     if (oldJobId !== newJobId) {
@@ -384,6 +413,14 @@ export async function syncJobProposalStatsDelta(
     }
     await writeJobProposalStats(ctx, jobId, count, latest);
   }
+  const materializedValue = {
+    proposalId,
+    ...(newJobId ? { jobId: newJobId } : {}),
+    proposalActivityAt: observedActivity,
+    updatedAt: Date.now(),
+  };
+  if (materialized) await ctx.db.replace(materialized._id, materializedValue);
+  else await ctx.db.insert("jobProposalMaterializations", materializedValue);
 }
 
 export function toJobListItem(catalog: JobCatalogProjection) {

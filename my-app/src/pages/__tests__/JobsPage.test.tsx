@@ -37,6 +37,7 @@ const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const ensureJobsReadModelPageMock = vi.fn().mockResolvedValue({ done: true });
 const loadMoreJobsMock = vi.fn();
+const loadMoreArchivedJobsMock = vi.fn();
 const debugInspectMatchInputMock = vi.fn();
 const convexClientMock = {
   query: debugInspectMatchInputMock,
@@ -232,6 +233,11 @@ let listPaginationStatus:
   | "LoadingMore"
   | "Exhausted" = "Exhausted";
 let archivedListResult: typeof archivedJobsList | undefined = [];
+let archivedPaginationStatus:
+  | "LoadingFirstPage"
+  | "CanLoadMore"
+  | "LoadingMore"
+  | "Exhausted" = "Exhausted";
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
 let selectedJobResultByRefreshKey: Record<number, typeof selectedJob | null> =
   {};
@@ -264,6 +270,13 @@ vi.mock("convex/react", () => ({
         loadMore: loadMoreJobsMock,
       };
     }
+    if (reference === "jobsPublic.listArchivedForUser") {
+      return {
+        results: archivedListResult,
+        status: archivedPaginationStatus,
+        loadMore: loadMoreArchivedJobsMock,
+      };
+    }
     return { results: undefined, status: "LoadingFirstPage", loadMore: vi.fn() };
   },
   useQuery: (
@@ -272,9 +285,6 @@ vi.mock("convex/react", () => ({
   ) => {
     if (reference === "jobsPublic.jobsReadModelStatus") {
       return jobsReadModelStatusResult;
-    }
-    if (reference === "jobsPublic.listArchivedForUser") {
-      return archivedListResult;
     }
     if (reference === "jobsPublic.getById") {
       if (args === "skip" || !args?.jobId) {
@@ -644,6 +654,8 @@ describe("JobsPage", () => {
     listResult = jobsList;
     listPaginationStatus = "Exhausted";
     loadMoreJobsMock.mockReset();
+    archivedPaginationStatus = "Exhausted";
+    loadMoreArchivedJobsMock.mockReset();
     jobsReadModelStatusResult = {
       ownerKey: "clerk_123",
       ready: true,
@@ -3260,6 +3272,7 @@ describe("JobsPage", () => {
   it("renders archived jobs in a dedicated Archived view", async () => {
     listResult = [jobsList[1]];
     archivedListResult = archivedJobsList;
+    archivedPaginationStatus = "CanLoadMore";
     selectedJobResult = null;
 
     render(
@@ -3283,6 +3296,8 @@ describe("JobsPage", () => {
     );
     expect(screen.getByText("Operations Associate")).toBeInTheDocument();
     expect(screen.queryByText("Support Specialist")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more jobs" }));
+    expect(loadMoreArchivedJobsMock).toHaveBeenCalledWith(36);
   });
 
   it("restores an archived job back to the active list", async () => {

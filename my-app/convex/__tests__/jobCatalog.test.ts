@@ -264,7 +264,7 @@ describe("jobCatalog freshness", () => {
     expect(fixture.getAccountReadModel()).toEqual(
       expect.objectContaining({
         status: "backfilling",
-        version: 3,
+        version: 4,
       }),
     );
     expect(fixture.getAccountReadModel()).not.toHaveProperty("profileCursor");
@@ -325,6 +325,25 @@ describe("jobCatalog freshness", () => {
     );
     expect(item.matchReview).not.toHaveProperty("evidence");
     expect(item.matchReview).not.toHaveProperty("watch_out");
+
+    await storeJobExtractionShadow._handler(fixture.ctx as any, {
+      jobId: fixture.job._id as any,
+      jobTextHash: "synthetic-retry-hash",
+      llmRawOutput: {},
+      llmNormalizedOutput: {},
+      validationStatus: "invalid_json",
+      fallbackUsed: true,
+      model: "ministral-3b-2512",
+      promptVersion: "p9_v2",
+      latencyMs: 1,
+      modelConfidence: null,
+      finalConfidence: null,
+      createdAt: 40,
+    });
+
+    expect(toJobListItem(fixture.getJobCatalog()).matchReview).toEqual(
+      item.matchReview,
+    );
   });
 });
 

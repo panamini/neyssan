@@ -57,6 +57,7 @@ import {
   buildStructuredPendingMatchRead,
   buildStructuredMatchReadDebug,
   isStructuredMatchReadShadowEnabled,
+  STRUCTURED_MATCH_SHADOW_WINDOW,
   type JobMatchReview,
   type StructuredMatchReadDebug,
 } from "./lib/jobs/structuredMatchRead";
@@ -79,7 +80,7 @@ import {
   upsertProfileCatalog,
 } from "./lib/profileCatalog";
 import {
-  resetJobProposalStats,
+  ensureJobProposalStatsMaterialization,
   syncJobProposalStatsDelta,
   syncJobCatalogById,
   toJobListItem,
@@ -89,7 +90,6 @@ import { requireOwnedStoredProposalJobId } from "./lib/proposalJobOwnership";
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
 const JOB_DETAIL_LINKED_PROPOSALS_LIMIT = 12;
-const JOB_DETAIL_SHADOW_ROWS_LIMIT = 8;
 const JOB_LIST_LINKED_PROPOSALS_LIMIT = 20;
 const JOB_LIST_SHADOW_ROWS_LIMIT = 1;
 const JOB_LIST_DEFAULT_LIMIT = 80;
@@ -409,6 +409,35 @@ const listJobMatchReviewValidator = v.union(
     score: v.number(),
   }),
 );
+
+const listJobItemValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  company: v.string(),
+  location: v.string(),
+  sourceLanguage: v.union(v.string(), v.null()),
+  isSample: v.boolean(),
+  isFavorite: v.boolean(),
+  sourceUrl: v.string(),
+  sourceDomain: v.string(),
+  sourceType: v.string(),
+  parseStatus: v.string(),
+  reviewState: v.string(),
+  matchTier: v.union(
+    v.literal("strong"),
+    v.literal("partial"),
+    v.literal("weak"),
+    v.literal("unknown"),
+  ),
+  matchRead: listJobMatchReadValidator,
+  matchReview: listJobMatchReviewValidator,
+  status: v.string(),
+  importedAt: v.number(),
+  updatedAt: v.number(),
+  lastOpenedAt: v.number(),
+  lastActivityAt: v.number(),
+  linkedDocumentCount: v.number(),
+});
 
 const structuredMatchReviewLabelValidator = v.union(
   v.literal("good"),
@@ -1897,6 +1926,18 @@ async function findAccountReadModel(ctx: any, clerkId: string) {
     .first();
 }
 
+function accountReadModelProgressToken(state: Record<string, any>): string {
+  return [
+    state.version ?? 0,
+    state.status ?? "missing",
+    state.phase ?? "none",
+    state.profileCursor ?? "",
+    state.activeProfileId ?? "",
+    state.jobCursor ?? "",
+    state.proposalCursor ?? "",
+  ].join("|");
+}
+
 async function patchJobAndSync(ctx: any, jobId: any, patch: any) {
   await ctx.db.patch(jobId, patch);
   await syncJobCatalogById(ctx, jobId);
@@ -2422,7 +2463,7 @@ export const getById = query({
       .query("job_extraction_shadow")
       .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
       .order("desc")
-      .take(JOB_DETAIL_SHADOW_ROWS_LIMIT);
+      .take(STRUCTURED_MATCH_SHADOW_WINDOW);
     const effectiveRawLanguageDetected =
       resolveEffectiveJobRawLanguageDetected(job);
     const structuredDebug = buildStructuredMatchReadDebug({
@@ -2852,6 +2893,7 @@ export const ensureJobsReadModelPage = mutation({
     done: v.boolean(),
     processedProfiles: v.number(),
     processedJobs: v.number(),
+    progressToken: v.string(),
   }),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -2863,7 +2905,12 @@ export const ensureJobsReadModelPage = mutation({
         ? persistedState
         : null;
     if (state?.status === "ready") {
-      return { done: true, processedProfiles: 0, processedJobs: 0 };
+      return {
+        done: true,
+        processedProfiles: 0,
+        processedJobs: 0,
+        progressToken: accountReadModelProgressToken(state),
+      };
     }
 
     if (!state || state.phase === "profiles") {
@@ -2882,7 +2929,12 @@ export const ensureJobsReadModelPage = mutation({
         };
         if (persistedState) await ctx.db.replace(persistedState._id, jobsPhase);
         else await ctx.db.insert("accountReadModels", jobsPhase);
-        return { done: false, processedProfiles: 0, processedJobs: 0 };
+        return {
+          done: false,
+          processedProfiles: 0,
+          processedJobs: 0,
+          progressToken: accountReadModelProgressToken(jobsPhase),
+        };
       }
       await upsertProfileCatalog(ctx, catalogProfile);
       const nextState = {
@@ -2897,7 +2949,12 @@ export const ensureJobsReadModelPage = mutation({
       };
       if (persistedState) await ctx.db.replace(persistedState._id, nextState);
       else await ctx.db.insert("accountReadModels", nextState);
-      return { done: false, processedProfiles: 1, processedJobs: 0 };
+      return {
+        done: false,
+        processedProfiles: 1,
+        processedJobs: 0,
+        progressToken: accountReadModelProgressToken(nextState),
+      };
     }
 
     if (state?.phase === "proposals") {
@@ -2916,9 +2973,14 @@ export const ensureJobsReadModelPage = mutation({
           };
           if (persistedState) await ctx.db.replace(persistedState._id, readyDoc);
           else await ctx.db.insert("accountReadModels", readyDoc);
-          return { done: true, processedProfiles: 0, processedJobs: 0 };
+          return {
+            done: true,
+            processedProfiles: 0,
+            processedJobs: 0,
+            progressToken: accountReadModelProgressToken(readyDoc),
+          };
         }
-        await ctx.db.replace(persistedState!._id, {
+        const nextState = {
           clerkId,
           status: "backfilling",
           version: JOBS_READ_MODEL_VERSION,
@@ -2928,8 +2990,14 @@ export const ensureJobsReadModelPage = mutation({
             ? { profileCursor: profilePage.continueCursor }
             : {}),
           updatedAt: Date.now(),
-        });
-        return { done: false, processedProfiles: 1, processedJobs: 0 };
+        };
+        await ctx.db.replace(persistedState!._id, nextState);
+        return {
+          done: false,
+          processedProfiles: 1,
+          processedJobs: 0,
+          progressToken: accountReadModelProgressToken(nextState),
+        };
       }
       const proposalPage = await ctx.db
         .query("proposals")
@@ -2948,7 +3016,7 @@ export const ensureJobsReadModelPage = mutation({
           });
         }
       }
-      await ctx.db.replace(persistedState!._id, {
+      const nextState = {
         clerkId,
         status: "backfilling",
         version: JOBS_READ_MODEL_VERSION,
@@ -2961,8 +3029,14 @@ export const ensureJobsReadModelPage = mutation({
             }
           : {}),
         updatedAt: Date.now(),
-      });
-      return { done: false, processedProfiles: 0, processedJobs: 0 };
+      };
+      await ctx.db.replace(persistedState!._id, nextState);
+      return {
+        done: false,
+        processedProfiles: 0,
+        processedJobs: 0,
+        progressToken: accountReadModelProgressToken(nextState),
+      };
     }
 
     let profile: any = null;
@@ -2992,7 +3066,12 @@ export const ensureJobsReadModelPage = mutation({
         };
         if (persistedState) await ctx.db.replace(persistedState._id, proposalPhase);
         else await ctx.db.insert("accountReadModels", proposalPhase);
-        return { done: false, processedProfiles: 0, processedJobs: 0 };
+        return {
+          done: false,
+          processedProfiles: 0,
+          processedJobs: 0,
+          progressToken: accountReadModelProgressToken(proposalPhase),
+        };
       }
       await upsertProfileCatalog(ctx, profile);
       const selectedProfileState = {
@@ -3006,7 +3085,12 @@ export const ensureJobsReadModelPage = mutation({
       if (persistedState)
         await ctx.db.replace(persistedState._id, selectedProfileState);
       else await ctx.db.insert("accountReadModels", selectedProfileState);
-      return { done: false, processedProfiles: 1, processedJobs: 0 };
+      return {
+        done: false,
+        processedProfiles: 1,
+        processedJobs: 0,
+        progressToken: accountReadModelProgressToken(selectedProfileState),
+      };
     }
 
     const jobsPage = await ctx.db
@@ -3020,7 +3104,7 @@ export const ensureJobsReadModelPage = mutation({
     for (const job of jobsPage.page) {
       await ctx.db.patch(job._id, { ownerClerkId: clerkId });
       await syncJobCatalogById(ctx, job._id);
-      await resetJobProposalStats(ctx, String(job._id));
+      await ensureJobProposalStatsMaterialization(ctx, String(job._id));
     }
 
     const nextState = {
@@ -3043,6 +3127,7 @@ export const ensureJobsReadModelPage = mutation({
       done: false,
       processedProfiles: 0,
       processedJobs: jobsPage.page.length,
+      progressToken: accountReadModelProgressToken(nextState),
     };
   },
 });
@@ -3093,8 +3178,8 @@ export const listPageForUser = query({
 
     const page = await ctx.db
       .query("jobCatalog")
-      .withIndex("by_owner_archived_activity", (q: any) =>
-        q.eq("ownerClerkId", identity.subject).eq("archivedAt", null),
+      .withIndex("by_owner_is_archived_activity", (q: any) =>
+        q.eq("ownerClerkId", identity.subject).eq("isArchived", false),
       )
       .order("desc")
       .paginate({
@@ -3216,52 +3301,34 @@ export const exportLiveMatchReviewRecordsForUser = query({
 
 export const listArchivedForUser = query({
   args: {
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(
-    v.object({
-      id: v.string(),
-      title: v.string(),
-      company: v.string(),
-      location: v.string(),
-      sourceLanguage: v.union(v.string(), v.null()),
-      isSample: v.boolean(),
-      isFavorite: v.boolean(),
-      sourceUrl: v.string(),
-      sourceDomain: v.string(),
-      sourceType: v.string(),
-      parseStatus: v.string(),
-      reviewState: v.string(),
-      matchTier: v.union(
-        v.literal("strong"),
-        v.literal("partial"),
-        v.literal("weak"),
-        v.literal("unknown"),
-      ),
-      matchRead: listJobMatchReadValidator,
-      matchReview: listJobMatchReviewValidator,
-      status: v.string(),
-      importedAt: v.number(),
-      updatedAt: v.number(),
-      lastOpenedAt: v.number(),
-      lastActivityAt: v.number(),
-      linkedDocumentCount: v.number(),
-    }),
-  ),
+  returns: v.object({
+    page: v.array(listJobItemValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
     }
 
-    const rows = await ctx.db
+    const page = await ctx.db
       .query("jobCatalog")
       .withIndex("by_owner_is_archived_activity", (q: any) =>
         q.eq("ownerClerkId", identity.subject).eq("isArchived", true),
       )
       .order("desc")
-      .take(normalizeJobListLimit(args.limit));
-    return rows.map(toJobListItem);
+      .paginate({
+        cursor: args.paginationOpts.cursor,
+        numItems: Math.min(args.paginationOpts.numItems, JOB_INBOX_PAGE_SIZE),
+      });
+    return {
+      page: page.page.map(toJobListItem),
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    };
   },
 });
 

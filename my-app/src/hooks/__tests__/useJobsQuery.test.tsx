@@ -5,11 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useJobsQuery } from "../useJobsQuery";
 
 const deferredRuns: Array<{
-  resolve: (value: { done: boolean }) => void;
+  resolve: (value: { done: boolean; progressToken?: string }) => void;
   reject: (error: Error) => void;
 }> = [];
 const ensureReadModelPage = vi.fn();
 const loadMoreJobs = vi.fn();
+const loadMoreArchivedJobs = vi.fn();
 let statusOwnerKey = "clerk_a";
 let readModelReady = false;
 let paginatedResults: Array<{ id: string }> | undefined;
@@ -19,6 +20,8 @@ let paginatedStatus:
   | "LoadingMore"
   | "Exhausted" = "LoadingFirstPage";
 let initialNumItems: number | undefined;
+let archivedResults: Array<{ id: string }> | undefined;
+let archivedStatus: typeof paginatedStatus = "LoadingFirstPage";
 
 vi.mock("convex/react", () => ({
   useQuery: (reference: string) =>
@@ -31,16 +34,22 @@ vi.mock("convex/react", () => ({
       : undefined,
   useMutation: () => ensureReadModelPage,
   usePaginatedQuery: (
-    _reference: string,
+    reference: string,
     _args: Record<string, never> | "skip",
     options: { initialNumItems: number },
   ) => {
     initialNumItems = options.initialNumItems;
-    return {
-      results: paginatedResults,
-      status: paginatedStatus,
-      loadMore: loadMoreJobs,
-    };
+    return reference === "jobsPublic.listArchivedForUser"
+      ? {
+          results: archivedResults,
+          status: archivedStatus,
+          loadMore: loadMoreArchivedJobs,
+        }
+      : {
+          results: paginatedResults,
+          status: paginatedStatus,
+          loadMore: loadMoreJobs,
+        };
   },
 }));
 
@@ -65,6 +74,9 @@ describe("useJobsQuery read-model recovery", () => {
     paginatedStatus = "LoadingFirstPage";
     initialNumItems = undefined;
     loadMoreJobs.mockReset();
+    loadMoreArchivedJobs.mockReset();
+    archivedResults = undefined;
+    archivedStatus = "LoadingFirstPage";
     ensureReadModelPage.mockReset();
     ensureReadModelPage.mockImplementation(
       () =>
@@ -165,5 +177,60 @@ describe("useJobsQuery read-model recovery", () => {
 
     expect(result.current.jobs).toHaveLength(52);
     expect(result.current.canLoadMoreJobs).toBe(false);
+  });
+
+  it("continues past 800 advancing read-model pages and fails repeated stalls", async () => {
+    let call = 0;
+    ensureReadModelPage.mockImplementation(async () => {
+      call += 1;
+      return { done: call === 805, progressToken: `progress-${call}` };
+    });
+    const { result, unmount } = renderHook(() =>
+      useJobsQuery({
+        isLoaded: true,
+        isSignedIn: true,
+        isConvexAuthenticated: true,
+        selectedJobRefreshKey: 0,
+      }),
+    );
+    await waitFor(() => expect(call).toBe(805), { timeout: 5000 });
+    expect(result.current.readModelError).toBeNull();
+    unmount();
+
+    call = 0;
+    ensureReadModelPage.mockResolvedValue({
+      done: false,
+      progressToken: "stalled",
+    });
+    const stalled = renderHook(() =>
+      useJobsQuery({
+        isLoaded: true,
+        isSignedIn: true,
+        isConvexAuthenticated: true,
+        selectedJobRefreshKey: 0,
+      }),
+    );
+    await waitFor(() => expect(stalled.result.current.readModelState).toBe("error"));
+    expect(stalled.result.current.readModelError).toContain("finish preparing");
+  });
+
+  it("exposes independent archived continuation", () => {
+    readModelReady = true;
+    archivedResults = Array.from({ length: 36 }, (_, index) => ({
+      id: `archived_${index}`,
+    }));
+    archivedStatus = "CanLoadMore";
+    const { result } = renderHook(() =>
+      useJobsQuery({
+        isLoaded: true,
+        isSignedIn: true,
+        isConvexAuthenticated: true,
+        selectedJobRefreshKey: 0,
+      }),
+    );
+    expect(result.current.archivedJobs).toHaveLength(36);
+    expect(result.current.canLoadMoreArchivedJobs).toBe(true);
+    act(() => result.current.loadMoreArchivedJobs());
+    expect(loadMoreArchivedJobs).toHaveBeenCalledWith(36);
   });
 });

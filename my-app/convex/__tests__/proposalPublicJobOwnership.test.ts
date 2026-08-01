@@ -4,6 +4,7 @@ import createProposalPublic from "../createProposalPublic";
 import deleteProposalPublic from "../deleteProposalPublic";
 import saveJobAndProposalPublic from "../saveJobAndProposal";
 import updateProposalPublic from "../updateProposalPublic";
+import { syncJobProposalStatsDelta } from "../lib/jobCatalog";
 
 type StoredRow = Record<string, any> & { _id: string };
 
@@ -62,6 +63,20 @@ function createStore(seedProposals: StoredRow[] = []) {
   const proposals = new Map<string, StoredRow>(
     seedProposals.map((proposal) => [proposal._id, { ...proposal }]),
   );
+  const materializations = new Map<string, StoredRow>(
+    seedProposals.map((proposal) => [
+      `materialization_${proposal._id}`,
+      {
+        _id: `materialization_${proposal._id}`,
+        proposalId: proposal._id,
+        ...(proposal.status === "saved" && proposal.jobId
+          ? { jobId: proposal.jobId }
+          : {}),
+        proposalActivityAt: proposal.updatedAt ?? proposal.createdAt ?? 0,
+        updatedAt: 1,
+      },
+    ]),
+  );
   const stats = new Map<string, StoredRow>();
   for (const jobId of jobs.keys()) {
     const linked = [...proposals.values()].filter(
@@ -75,6 +90,7 @@ function createStore(seedProposals: StoredRow[] = []) {
         0,
         ...linked.map((proposal) => proposal.updatedAt ?? proposal.createdAt ?? 0),
       ),
+      materializationVersion: 1,
     });
   }
   const catalogPatches: Array<{ id: string; patch: Record<string, any> }> = [];
@@ -88,6 +104,9 @@ function createStore(seedProposals: StoredRow[] = []) {
     if (table === "jobCatalog") return [...catalogs.values()];
     if (table === "proposals") return [...proposals.values()];
     if (table === "jobProposalStats") return [...stats.values()];
+    if (table === "jobProposalMaterializations") {
+      return [...materializations.values()];
+    }
     return [];
   }
 
@@ -110,6 +129,11 @@ function createStore(seedProposals: StoredRow[] = []) {
       if (table === "jobProposalStats") {
         const id = `stats_${value.jobId}`;
         stats.set(id, { _id: id, ...value });
+        return id;
+      }
+      if (table === "jobProposalMaterializations") {
+        const id = `materialization_${value.proposalId}`;
+        materializations.set(id, { _id: id, ...value });
         return id;
       }
       if (table !== "proposals") {
@@ -140,6 +164,14 @@ function createStore(seedProposals: StoredRow[] = []) {
         return;
       }
       throw new Error(`Unexpected patch id: ${normalizedId}`);
+    },
+    async replace(id: string, value: Record<string, any>) {
+      const normalizedId = String(id);
+      if (materializations.has(normalizedId)) {
+        materializations.set(normalizedId, { _id: normalizedId, ...value });
+        return;
+      }
+      throw new Error(`Unexpected replace id: ${normalizedId}`);
     },
     async delete(id: string) {
       const normalizedId = String(id);
@@ -194,6 +226,8 @@ function createStore(seedProposals: StoredRow[] = []) {
     } as any,
     catalogs,
     proposals,
+    stats,
+    materializations,
     catalogPatches,
     proposalPatches,
     deletedIds,
@@ -225,6 +259,37 @@ function savedProposal(
 describe("public proposal Job ownership and catalog counters", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("materializes repeated and interleaved observations idempotently", async () => {
+    const store = createStore();
+    const proposal = savedProposal("proposal_replayed", "job_old");
+
+    await syncJobProposalStatsDelta(store.ctx, null, proposal);
+    await syncJobProposalStatsDelta(store.ctx, null, proposal);
+    await syncJobProposalStatsDelta(store.ctx, null, proposal);
+
+    expect(store.stats.get("stats_job_old")).toMatchObject({
+      linkedDocumentCount: 1,
+      latestProposalAt: 10,
+      materializationVersion: 1,
+    });
+    expect(store.materializations.size).toBe(1);
+
+    await syncJobProposalStatsDelta(store.ctx, proposal, {
+      ...proposal,
+      title: "Ordinary edit",
+      updatedAt: 20,
+    });
+    expect(store.stats.get("stats_job_old")).toMatchObject({
+      linkedDocumentCount: 1,
+      latestProposalAt: 20,
+    });
+    await syncJobProposalStatsDelta(store.ctx, null, proposal);
+    expect(store.stats.get("stats_job_old")).toMatchObject({
+      linkedDocumentCount: 1,
+      latestProposalAt: 20,
+    });
   });
 
   it("rejects foreign Job IDs before public proposal creation", async () => {

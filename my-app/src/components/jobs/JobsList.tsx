@@ -701,8 +701,7 @@ export function JobsList({
           })}
         </div>
       )}
-      {jobsView === "active" &&
-      (canLoadMoreJobs || isLoadingMoreJobs) ? (
+      {canLoadMoreJobs || isLoadingMoreJobs ? (
         <div className="dasti-jobs-list-pagination" aria-live="polite">
           <button
             type="button"

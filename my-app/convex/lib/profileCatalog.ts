@@ -1,6 +1,6 @@
 type UserProfileId = string;
 
-export const JOBS_READ_MODEL_VERSION = 3;
+export const JOBS_READ_MODEL_VERSION = 4;
 
 export type ProfileCatalogProjection = {
   profileId: UserProfileId;

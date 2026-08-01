@@ -76,13 +76,14 @@ describe("bounded Jobs read model scale", () => {
       done: false,
       processedProfiles: 0,
       processedJobs: 0,
+      progressToken: "4|backfilling|jobs||||",
     });
     expect(replace).toHaveBeenCalledWith(
       "legacy_state",
       expect.objectContaining({
         status: "backfilling",
         phase: "jobs",
-        version: 3,
+        version: 4,
       }),
     );
   });
@@ -147,6 +148,7 @@ describe("bounded Jobs read model scale", () => {
       done: false,
       processedProfiles: 1,
       processedJobs: 0,
+      progressToken: "4|backfilling|profiles|profile_cursor_1|||",
     });
     expect(paginatedQueries).toBe(1);
     expect(insert).toHaveBeenCalledWith(

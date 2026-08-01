@@ -762,7 +762,7 @@ describe("jobsPublic.listForUser", () => {
         clerkId: "clerk_123",
         updatedAt: 300,
         createdAt: 300,
-        version: 3,
+        version: 4,
         skills: ["design"],
         keywords: ["design"],
         defaultResumeId: "cv_default",
@@ -2944,6 +2944,72 @@ describe("jobsPublic.setResumeForJob", () => {
 });
 
 describe("jobsPublic.listArchivedForUser", () => {
+  it("paginates more than 80 archived rows by descending activity", async () => {
+    const rows = Array.from({ length: 90 }, (_, index) => ({
+      jobId: `archived_${index}`,
+      ownerClerkId: "clerk_123",
+      profileId: "profile_primary",
+      title: `Archived ${index}`,
+      company: "Acme",
+      location: "Remote",
+      sourceLanguage: null,
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "",
+      sourceDomain: "",
+      sourceType: "manual",
+      parseStatus: "parsed",
+      reviewState: "ready",
+      matchTier: "unknown",
+      status: "active",
+      importedAt: index,
+      updatedAt: index,
+      lastOpenedAt: index,
+      lastActivityAt: 1000 - index,
+      linkedDocumentCount: 0,
+      archivedAt: index + 1,
+      isArchived: true,
+    }));
+    const ctx = {
+      auth: { getUserIdentity: async () => ({ subject: "clerk_123" }) },
+      db: {
+        query: () => {
+          const chain: any = {
+            withIndex: (_name: string, callback: (q: any) => unknown) => {
+              const q: any = { eq: () => q };
+              callback(q);
+              return chain;
+            },
+            order: () => chain,
+            paginate: async ({ cursor, numItems }: any) => {
+              const offset = Number(cursor ?? 0);
+              const page = rows.slice(offset, offset + numItems);
+              const next = offset + page.length;
+              return {
+                page,
+                isDone: next >= rows.length,
+                continueCursor: String(next),
+              };
+            },
+          };
+          return chain;
+        },
+      },
+    };
+    const first = await (listArchivedForUser as any)._handler(ctx, {
+      paginationOpts: { cursor: null, numItems: 36 },
+    });
+    const second = await (listArchivedForUser as any)._handler(ctx, {
+      paginationOpts: { cursor: first.continueCursor, numItems: 36 },
+    });
+    const third = await (listArchivedForUser as any)._handler(ctx, {
+      paginationOpts: { cursor: second.continueCursor, numItems: 36 },
+    });
+    expect([...first.page, ...second.page, ...third.page]).toHaveLength(90);
+    expect(first.page[0].lastActivityAt).toBe(1000);
+    expect(third.page.at(-1).lastActivityAt).toBe(911);
+  });
+
   it("returns only archived jobs across linked profiles", async () => {
     const linkedProfiles = [
       {
@@ -3056,7 +3122,11 @@ describe("jobsPublic.listArchivedForUser", () => {
                   return chain;
                 },
                 order: () => chain,
-                take: async () => rows,
+                paginate: async () => ({
+                  page: rows,
+                  isDone: true,
+                  continueCursor: "",
+                }),
               };
               return chain;
             }
@@ -3157,10 +3227,10 @@ describe("jobsPublic.listArchivedForUser", () => {
           },
         },
       } as any,
-      {},
+      { paginationOpts: { cursor: null, numItems: 36 } },
     );
 
-    expect(result).toEqual([
+    expect(result.page).toEqual([
       expect.objectContaining({
         id: "job_archived",
         title: "Archived job",

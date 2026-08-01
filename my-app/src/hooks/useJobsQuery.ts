@@ -55,8 +55,9 @@ type UseJobsQueryArgs = {
   selectedJobRefreshKey: number;
 };
 
-const JOBS_READ_MODEL_MAX_BACKFILL_PAGES = 800;
 const JOBS_INBOX_PAGE_SIZE = 36;
+const JOBS_READ_MODEL_STALL_LIMIT = 3;
+const JOBS_READ_MODEL_YIELD_INTERVAL = 25;
 
 type JobsPaginationState = {
   results?: JobsQueryListItem[];
@@ -84,6 +85,9 @@ export function useJobsQuery({
   canLoadMoreJobs: boolean;
   isLoadingMoreJobs: boolean;
   loadMoreJobs: () => void;
+  canLoadMoreArchivedJobs: boolean;
+  isLoadingMoreArchivedJobs: boolean;
+  loadMoreArchivedJobs: () => void;
 } {
   const jobsListReference = React.useMemo(
     () =>
@@ -120,7 +124,7 @@ export function useJobsQuery({
   ) as { ownerKey: string; ready: boolean } | undefined;
   const ensureReadModelPage = useMutation(ensureReadModelReference) as (
     args: Record<string, never>,
-  ) => Promise<{ done: boolean }>;
+  ) => Promise<{ done: boolean; progressToken: string }>;
   const [readModelError, setReadModelError] = React.useState<string | null>(null);
   const [retryToken, setRetryToken] = React.useState(0);
   const backfillRunRef = React.useRef<{
@@ -154,16 +158,24 @@ export function useJobsQuery({
       backfillRunRef.current.ownerKey !== resolvedOwnerKey
     ) {
       const promise = (async () => {
-        for (
-          let page = 0;
-          page < JOBS_READ_MODEL_MAX_BACKFILL_PAGES;
-          page += 1
-        ) {
+        let previousProgress: string | null = null;
+        let repeatedProgress = 0;
+        let page = 0;
+        while (true) {
           if (ownerGenerationRef.current.generation !== generation) return;
           const result = await ensureReadModelPage({});
           if (result.done) return;
+          if (result.progressToken === previousProgress) repeatedProgress += 1;
+          else repeatedProgress = 0;
+          previousProgress = result.progressToken;
+          if (repeatedProgress >= JOBS_READ_MODEL_STALL_LIMIT) {
+            throw new Error("Jobs could not finish preparing. Please retry.");
+          }
+          page += 1;
+          if (page % JOBS_READ_MODEL_YIELD_INTERVAL === 0) {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+          }
         }
-        throw new Error("Jobs are taking too long to prepare. Please retry.");
       })();
       backfillRunRef.current = {
         ownerKey: resolvedOwnerKey,
@@ -208,10 +220,11 @@ export function useJobsQuery({
   const jobsPage = usePaginatedQuery(jobsListReference, queryArgs, {
     initialNumItems: JOBS_INBOX_PAGE_SIZE,
   }) as JobsPaginationState | undefined;
-  const archivedJobs = useQuery(
+  const archivedJobsPage = usePaginatedQuery(
     archivedJobsListReference,
     queryArgs,
-  ) as JobsQueryListItem[] | undefined;
+    { initialNumItems: JOBS_INBOX_PAGE_SIZE },
+  ) as JobsPaginationState | undefined;
   const selectedJobRecord = useQuery(
     jobByIdReference,
     selectedJobId && authenticated
@@ -227,10 +240,15 @@ export function useJobsQuery({
       jobsPage.loadMore(JOBS_INBOX_PAGE_SIZE);
     }
   }, [jobsPage]);
+  const loadMoreArchivedJobs = React.useCallback(() => {
+    if (archivedJobsPage?.status === "CanLoadMore") {
+      archivedJobsPage.loadMore(JOBS_INBOX_PAGE_SIZE);
+    }
+  }, [archivedJobsPage]);
 
   return {
     jobs: jobsPage?.results,
-    archivedJobs,
+    archivedJobs: archivedJobsPage?.results,
     selectedJobRecord,
     readModelState: readModelError
       ? "error"
@@ -242,5 +260,8 @@ export function useJobsQuery({
     canLoadMoreJobs: jobsPage?.status === "CanLoadMore",
     isLoadingMoreJobs: jobsPage?.status === "LoadingMore",
     loadMoreJobs,
+    canLoadMoreArchivedJobs: archivedJobsPage?.status === "CanLoadMore",
+    isLoadingMoreArchivedJobs: archivedJobsPage?.status === "LoadingMore",
+    loadMoreArchivedJobs,
   };
 }

@@ -7,6 +7,8 @@ import {
 import { PROMPT_VERSION, resolveJobExtractionModel } from "./llmExtractJob";
 import { isGenericRequirement } from "./normalizeJobExtraction";
 
+export const STRUCTURED_MATCH_SHADOW_WINDOW = 8;
+
 export type RequirementCategory =
   | "title"
   | "role_alignment"

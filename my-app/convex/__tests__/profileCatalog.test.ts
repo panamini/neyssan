@@ -14,7 +14,7 @@ describe("profileCatalog", () => {
         first: async () =>
           table === "profileCatalog"
             ? null
-            : { _id: "read_model_1", status: "ready", version: 3 },
+            : { _id: "read_model_1", status: "ready", version: 4 },
       }),
     }));
 
@@ -31,7 +31,7 @@ describe("profileCatalog", () => {
 
     expect(replace).toHaveBeenCalledWith(
       "read_model_1",
-      expect.objectContaining({ status: "backfilling", version: 3 }),
+      expect.objectContaining({ status: "backfilling", version: 4 }),
     );
   });
 
@@ -42,7 +42,7 @@ describe("profileCatalog", () => {
       profileId: "canonical-1",
       email: "owner@example.com",
       name: "Owner",
-      version: 3,
+      version: 4,
       updatedAt: 42,
       summary: "Frontend engineer",
       skills: ["React", 7],
@@ -59,7 +59,7 @@ describe("profileCatalog", () => {
       clerkId: "clerk_1",
       externalProfileId: "canonical-1",
       label: "Frontend CV",
-      version: 3,
+      version: 4,
       updatedAt: 42,
       matchFingerprint: expect.stringMatching(/^match-v1-/),
       isReviewedVariant: false,
@@ -121,7 +121,7 @@ describe("profileCatalog", () => {
     expect(replace).toHaveBeenCalledWith("read_model_1", {
       clerkId: "clerk_1",
       status: "backfilling",
-      version: 3,
+      version: 4,
       updatedAt: expect.any(Number),
     });
   });
@@ -144,7 +144,7 @@ describe("profileCatalog", () => {
         first: async () =>
           table === "profileCatalog"
             ? { _id: "catalog_1", ...current }
-            : { _id: "read_model_1", status: "ready", version: 3 },
+            : { _id: "read_model_1", status: "ready", version: 4 },
       }),
     }));
     const replace = vi.fn();
@@ -161,7 +161,7 @@ describe("profileCatalog", () => {
       {
         ...currentProfile,
         name: "After",
-        version: 3,
+        version: 4,
         updatedAt: 20,
       },
     );
@@ -169,7 +169,7 @@ describe("profileCatalog", () => {
     expect(query).toHaveBeenCalledWith("accountReadModels");
     expect(replace).toHaveBeenCalledWith(
       "read_model_1",
-      expect.objectContaining({ status: "backfilling", version: 3 }),
+      expect.objectContaining({ status: "backfilling", version: 4 }),
     );
   });
 
@@ -219,7 +219,7 @@ describe("profileCatalog", () => {
       },
       {
         ...beforeProfile,
-        version: 3,
+        version: 4,
         updatedAt: 20,
         cvDocument: {
           metadata: {
@@ -235,7 +235,7 @@ describe("profileCatalog", () => {
       "read_model_1",
       expect.objectContaining({
         status: "backfilling",
-        version: 3,
+        version: 4,
       }),
     );
   });

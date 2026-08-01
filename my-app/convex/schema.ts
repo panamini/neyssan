@@ -381,8 +381,18 @@ export default defineSchema({
     jobId: v.id("jobs"),
     linkedDocumentCount: v.number(),
     latestProposalAt: v.number(),
+    materializationVersion: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_job_id", ["jobId"]),
+
+  jobProposalMaterializations: defineTable({
+    proposalId: v.id("proposals"),
+    jobId: v.optional(v.id("jobs")),
+    proposalActivityAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_proposal_id", ["proposalId"])
+    .index("by_job_id", ["jobId"]),
 
   accountReadModels: defineTable({
     clerkId: v.string(),

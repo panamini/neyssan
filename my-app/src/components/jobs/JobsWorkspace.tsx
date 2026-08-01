@@ -1613,6 +1613,9 @@ function JobsPageContent(): JSX.Element {
     canLoadMoreJobs,
     isLoadingMoreJobs,
     loadMoreJobs,
+    canLoadMoreArchivedJobs,
+    isLoadingMoreArchivedJobs,
+    loadMoreArchivedJobs,
   } = useJobsQuery({
     isLoaded,
     isSignedIn: Boolean(isSignedIn),
@@ -3979,8 +3982,16 @@ function JobsPageContent(): JSX.Element {
                 selectedJobId={selectedJobId}
                 filteredJobs={filteredJobs}
                 displayedJobsCount={displayedJobs?.length ?? 0}
-                canLoadMoreJobs={canLoadMoreJobs}
-                isLoadingMoreJobs={isLoadingMoreJobs}
+                canLoadMoreJobs={
+                  jobsView === "archived"
+                    ? canLoadMoreArchivedJobs
+                    : canLoadMoreJobs
+                }
+                isLoadingMoreJobs={
+                  jobsView === "archived"
+                    ? isLoadingMoreArchivedJobs
+                    : isLoadingMoreJobs
+                }
                 searchQuery={searchQuery}
                 sortOrder={sortOrder}
                 matchFilter={matchFilter}
@@ -4035,7 +4046,11 @@ function JobsPageContent(): JSX.Element {
                   setConfirmingPermanentDeleteJobId
                 }
                 onImportFirstJob={handleImportFirstJob}
-                onLoadMoreJobs={loadMoreJobs}
+                onLoadMoreJobs={
+                  jobsView === "archived"
+                    ? loadMoreArchivedJobs
+                    : loadMoreJobs
+                }
               />
             ) : null}
 
