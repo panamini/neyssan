@@ -141,6 +141,72 @@ function makeFixture() {
 }
 
 describe("jobCatalog freshness", () => {
+  it("uses the current primary profile default when a legacy Job has no explicit CV", async () => {
+    const ownerClerkId = "clerk_multi_cv";
+    const linkedProfile = {
+      _id: "profile_old_link",
+      clerkId: ownerClerkId,
+      profileId: "cv_old_link",
+      defaultResumeId: "cv_old_link",
+      skills: ["Operations"],
+      keywords: ["operations"],
+      experience: [],
+    };
+    const currentPrimary = {
+      _id: "profile_current_primary",
+      clerkId: ownerClerkId,
+      profileId: "cv_primary",
+      defaultResumeId: "cv_current_default",
+      updatedAt: 30,
+      skills: ["Operations"],
+      keywords: ["operations"],
+      experience: [],
+    };
+    const currentDefault = {
+      _id: "profile_current_default",
+      clerkId: ownerClerkId,
+      profileId: "cv_current_default",
+      updatedAt: 20,
+      skills: ["React"],
+      keywords: ["React"],
+      experience: [],
+    };
+    const fixture = makeResumeSelectionFixture({
+      ownerClerkId,
+      linkedProfile,
+      currentPrimary,
+      profiles: [linkedProfile, currentPrimary, currentDefault],
+    });
+
+    await syncJobCatalogById(fixture.ctx as any, fixture.job._id);
+
+    expect(toJobListItem(fixture.getJobCatalog()).matchTier).toBe("strong");
+  });
+
+  it("fails closed when a Job's explicit CV attachment no longer exists", async () => {
+    const ownerClerkId = "clerk_missing_cv";
+    const linkedProfile = {
+      _id: "profile_owner_strong",
+      clerkId: ownerClerkId,
+      profileId: "cv_owner_strong",
+      defaultResumeId: "cv_owner_strong",
+      skills: ["React"],
+      keywords: ["React"],
+      experience: [],
+    };
+    const fixture = makeResumeSelectionFixture({
+      ownerClerkId,
+      linkedProfile,
+      currentPrimary: linkedProfile,
+      profiles: [linkedProfile],
+      lastResumeId: "cv_deleted",
+    });
+
+    await syncJobCatalogById(fixture.ctx as any, fixture.job._id);
+
+    expect(toJobListItem(fixture.getJobCatalog()).matchTier).toBe("unknown");
+  });
+
   it("invalidates then recomputes the visible tier after an attached CV edit", async () => {
     const fixture = makeFixture();
     await syncJobCatalogById(fixture.ctx as any, fixture.job._id);
@@ -222,3 +288,79 @@ describe("jobCatalog freshness", () => {
     expect(item.matchReview).not.toHaveProperty("watch_out");
   });
 });
+
+function makeResumeSelectionFixture(args: {
+  ownerClerkId: string;
+  linkedProfile: Record<string, any>;
+  currentPrimary: Record<string, any>;
+  profiles: Record<string, any>[];
+  lastResumeId?: string;
+}) {
+  const job = {
+    _id: "job_resume_selection",
+    userId: args.linkedProfile._id,
+    ownerClerkId: args.ownerClerkId,
+    ...(args.lastResumeId ? { lastResumeId: args.lastResumeId } : {}),
+    title: "React Engineer",
+    company: "Synthetic Co",
+    rawDescription: "React is required for this role.",
+    parseStatus: "parsed",
+    mustHaves: ["React"],
+    keywords: ["React"],
+    status: "active",
+    updatedAt: 10,
+  };
+  let jobCatalog: any = null;
+
+  const ctx = {
+    db: {
+      get: vi.fn(async (id: string) => {
+        if (id === job._id) return job;
+        return args.profiles.find((profile) => profile._id === id) ?? null;
+      }),
+      query: vi.fn((table: string) => {
+        let indexName = "";
+        let indexedValue: unknown;
+        const chain: any = {
+          withIndex: (nextIndexName: string, callback: (q: any) => unknown) => {
+            indexName = nextIndexName;
+            const q: any = {
+              eq: (_field: string, value: unknown) => {
+                indexedValue = value;
+                return q;
+              },
+            };
+            callback(q);
+            return chain;
+          },
+          order: () => chain,
+          first: async () => {
+            if (table === "jobCatalog") return jobCatalog;
+            throw new Error(`unexpected first query: ${table}`);
+          },
+          take: async (limit: number) => {
+            if (table === "userProfiles" && indexName === "by_clerk_updated_at") {
+              return [args.currentPrimary].slice(0, limit);
+            }
+            if (table === "userProfiles" && indexName === "by_profileId") {
+              return args.profiles
+                .filter((profile) => profile.profileId === indexedValue)
+                .slice(0, limit);
+            }
+            if (table === "job_extraction_shadow") return [];
+            throw new Error(`unexpected take query: ${table}.${indexName}`);
+          },
+        };
+        return chain;
+      }),
+      insert: vi.fn(async (table: string, value: any) => {
+        if (table !== "jobCatalog") throw new Error(`unexpected insert: ${table}`);
+        jobCatalog = { _id: "job_resume_selection_catalog", ...value };
+        return jobCatalog._id;
+      }),
+      patch: vi.fn(async () => undefined),
+    },
+  };
+
+  return { ctx, job, getJobCatalog: () => jobCatalog };
+}

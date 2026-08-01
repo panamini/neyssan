@@ -1,4 +1,8 @@
-import { buildMatchReadProfile, computeMatchRead } from "./jobs/matchRead";
+import {
+  buildMatchReadProfile,
+  computeMatchRead,
+  resolveMatchReadSourceProfile,
+} from "./jobs/matchRead";
 import { detectJobPostingLanguage } from "./jobs/canonicalJobs";
 import {
   buildJobMatchReviewFromStructuredDebug,
@@ -172,38 +176,64 @@ export async function syncJobCatalogById(ctx: any, jobId: any): Promise<void> {
   if (job.ownerClerkId !== ownerClerkId) {
     await ctx.db.patch(job._id, { ownerClerkId });
   }
-  const resumeId =
-    typeof job.lastResumeId === "string" && job.lastResumeId
-      ? job.lastResumeId
-      : typeof profile?.defaultResumeId === "string"
-        ? profile.defaultResumeId
-        : null;
-  if (resumeId && profile?.profileId !== resumeId) {
+  const primaryQuery = ctx.db
+    .query("userProfiles")
+    .withIndex("by_clerk_updated_at", (q: any) =>
+      q.eq("clerkId", ownerClerkId),
+    );
+  const orderedPrimaryQuery =
+    typeof primaryQuery.order === "function"
+      ? primaryQuery.order("desc")
+      : primaryQuery;
+  const primaryProfiles =
+    typeof orderedPrimaryQuery.take === "function"
+      ? await orderedPrimaryQuery.take(1)
+      : (await orderedPrimaryQuery.collect()).slice(0, 1);
+  const primaryProfile = primaryProfiles[0] ?? profile;
+  const selectedResumeId =
+    typeof job.lastResumeId === "string" && job.lastResumeId.trim()
+      ? job.lastResumeId.trim()
+      : typeof primaryProfile?.defaultResumeId === "string"
+        ? primaryProfile.defaultResumeId.trim()
+        : "";
+  const candidateProfiles = [primaryProfile].filter(Boolean);
+  if (
+    selectedResumeId &&
+    !candidateProfiles.some(
+      (candidate: any) => candidate.profileId === selectedResumeId,
+    )
+  ) {
     const resumeQuery = ctx.db
       .query("userProfiles")
-      .withIndex("by_profileId", (q: any) => q.eq("profileId", resumeId));
+      .withIndex("by_profileId", (q: any) =>
+        q.eq("profileId", selectedResumeId),
+      );
     const candidates =
       typeof resumeQuery.take === "function"
         ? await resumeQuery.take(4)
         : (await resumeQuery.collect()).slice(0, 4);
-    profile =
-      candidates.find((candidate: any) => candidate.clerkId === ownerClerkId) ??
-      profile;
+    const selectedProfile = candidates.find(
+      (candidate: any) => candidate.clerkId === ownerClerkId,
+    );
+    if (selectedProfile) candidateProfiles.unshift(selectedProfile);
   }
-  const matchTier = profile
-    ? computeMatchRead({
-        job: {
-          id: String(job._id),
-          parseVersion: job.parseVersion,
-          parseStatus: job.parseStatus,
-          mustHaves: job.mustHaves,
-          keywords: job.keywords,
-          mustHavesExtraction: job.mustHavesExtraction,
-          keywordsExtraction: job.keywordsExtraction,
-        },
-        profile: buildMatchReadProfile(profile),
-      }).tier
-    : normalizeMatchTier(job.matchTier);
+  profile = resolveMatchReadSourceProfile({
+    job,
+    primaryProfile,
+    profiles: candidateProfiles,
+  });
+  const matchTier = computeMatchRead({
+    job: {
+      id: String(job._id),
+      parseVersion: job.parseVersion,
+      parseStatus: job.parseStatus,
+      mustHaves: job.mustHaves,
+      keywords: job.keywords,
+      mustHavesExtraction: job.mustHavesExtraction,
+      keywordsExtraction: job.keywordsExtraction,
+    },
+    profile: buildMatchReadProfile(profile),
+  }).tier;
   const pendingMatchRead = buildStructuredPendingMatchRead({
     jobId: String(job._id),
     profileId: String(profile?.profileId ?? profile?._id ?? ""),

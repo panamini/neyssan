@@ -1,7 +1,7 @@
 # CHANGE CONTRACT
 
 - ID: CC-20260801-neyssan-bounded-read-models
-- Version: 6
+- Version: 7
 - Operation: IMPLEMENT
 - Authorization basis: direct implementation request in the stabilization delegation
 - Risk: HIGH
@@ -110,6 +110,8 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 | AC-12 | Permanent archived-Job deletion cannot orphan its projection | authenticated mutation regression | the matching `jobCatalog.by_job_id` row and archived Job are deleted in one mutation after ownership validation |
 | AC-13 | Public proposal counters remain exact across create, reassignment, and delete | focused handler regressions | saved proposal create increments the owned Job; reassignment refreshes old and new Jobs; delete refreshes has-docs/no-docs state |
 | AC-14 | Public proposal Job links fail closed across tenants | focused create/update/delete and public save regressions | malformed, missing, or foreign Job IDs are rejected before proposal write/delete/catalog refresh; no foreign catalog row is mutated |
+| AC-15 | A Job without an explicit CV uses the account's current primary/default CV | focused multi-CV regression | an older linked profile cannot override the current primary profile's default resume when computing the projected tier |
+| AC-16 | A missing explicit CV attachment fails closed | focused deleted-CV regression | an unresolved `lastResumeId` produces `profile_missing`/`unknown`; it never falls back to the owner/default profile |
 
 ## 7. FAILURE MODES AND RECOVERY
 
@@ -129,6 +131,7 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - Reviewer focus: pagination semantics, owner isolation, finite/recoverable backfill, no full payload on the Jobs list path, lean CV ownership foundation, and legacy compatibility.
 - v5 reviewer focus: structured verdict precedence with conflicting heuristic tier, shadow-to-catalog freshness, and bounded tier refresh after scoring/default-CV edits.
 - v6 reviewer focus: access to pages after the first 36, archived projection cleanup, and tenant-safe proposal Job-link/counter synchronization across every public write surface.
+- v7 reviewer focus: exact parity with the active resume-source resolver for current-primary defaults and fail-closed missing explicit attachments.
 
 ## 9. VERIFICATION LEDGER
 
@@ -192,3 +195,20 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - Fallow read-only: changed-file audit could not create its temporary worktree and returned exit code 2, so no audit-pass claim is made. The fallback `fallow health --top 20 --explain` completed and surfaced repository-wide complexity hotspots, including the pre-existing `JobsPageContent` function; no finding identifies the small v6 helpers or pagination callback as a new defect, and no automated fix was applied.
 - Pre-stage complete Changeset fingerprint repeated identically at state `db22d8ea94409fbc0a12230d31e9d8008077f3681619a717c257ac6b2b555a51` across 40 publication paths with no hidden index flags. The contract-only ledger update is followed by one final repeated fingerprint before staging.
 - V6 local status before staging: `LOCAL_PASS`. Exact staged review remains required before commit. Remote final-head CI and Codex review remain required before any ready-to-merge claim.
+
+## 12. V7 CORRECTION GATE
+
+- Authorization evidence: controller instruction to correct the two remaining P1 resume-source findings on the same PR before requesting Codex review.
+- Starting head: `ef4b2a45df04858662cded6245f2eb3d64e2ef87` on `codex/neyssan-stabilization-read-models`; base remains exact `21fba4869740938087ca4b44fa18f62b3b12d5c0`.
+- Active failures: a Job without `lastResumeId` derives its tier from the older `jobs.userId` profile instead of the account's current primary/default CV; an unresolved explicit `lastResumeId` silently falls back to that owner profile instead of failing closed.
+- Scope: `my-app/convex/lib/jobCatalog.ts`, its focused regression file, and this contract only. No PR2, merge, deployment, shared-data mutation, or production migration.
+- Required evidence: both regressions RED then green together; directly affected single-process Jobs/jobCatalog tests; TypeScript, targeted lint, diff check, Changeset self-review, read-only Fallow, exact staged/full-diff/sensitive review.
+- Publication boundary: one non-force follow-up push to PR #374 only after local gates pass. Then reply to and resolve the two remaining P1 threads with exact-head evidence, verify all seven threads, and post exactly one top-level `@codex review` for the final head.
+
+### V7 evidence ledger
+
+- Focused resolver and directly affected Jobs batch: PASS, 4 files and 73 tests in one worker. The two new regressions cover an older linked CV versus the current primary default and a deleted explicit attachment; both now use the shared active `resolveMatchReadSourceProfile` semantics.
+- TypeScript remains at the documented PR baseline: 14 errors in six unchanged non-v7 files; neither v7 source nor its test is implicated. Targeted ESLint and `git diff --check`: PASS.
+- Changeset self-review: the exact three-file v7 diff preserves owner derivation, adds one bounded owner-index primary lookup plus at most one bounded exact-resume lookup, keeps the explicit-attachment fail-closed rule, and introduces no response payload or schema change.
+- Fallow read-only audit was attempted with `audit --changed-since` and again could not create its temporary base worktree (exit 2); no audit-pass claim or automated fix is made. The advisory limitation matches v6 and does not replace the focused correctness evidence.
+- V7 local status before exact staged/sensitive review: `LOCAL_PASS`. Remote final-head CI and Codex review remain mandatory before any merge-readiness claim.
