@@ -1,5 +1,6 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { syncProfileCatalogById } from "../lib/profileCatalog";
 
 
 /**
@@ -140,6 +141,7 @@ export const upsertProfile = mutation({
       // Persist merged document using patch (partial update)
       // Cast to any to avoid strict TS structural mismatch — runtime Convex validators are authoritative.
       await ctx.db.patch(existing._id, merged as any);
+      await syncProfileCatalogById(ctx, existing._id);
  
       return { profileId: args.profileId, convexId: existing._id, updatedAt: merged.updatedAt, written: true };
     } else {
@@ -169,8 +171,8 @@ export const upsertProfile = mutation({
       };
  
       const convexId = await ctx.db.insert("userProfiles", doc as any);
+      await syncProfileCatalogById(ctx, convexId);
       return { profileId: args.profileId, convexId, updatedAt: normalizedProfile.updatedAt, written: true };
     }
   },
 });
-

@@ -299,6 +299,70 @@ export default defineSchema({
     name: v.optional(v.string()),
   }).index("by_clerk_id", ["clerkId"]),
 
+  // Lightweight ownership/scoring projection. Full CV documents remain on
+  // userProfiles and are intentionally not part of this read model.
+  profileCatalog: defineTable({
+    profileId: v.id("userProfiles"),
+    clerkId: v.string(),
+    externalProfileId: v.optional(v.string()),
+    label: v.optional(v.string()),
+    version: v.number(),
+    profileCreatedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+    defaultResumeId: v.optional(v.union(v.string(), v.null())),
+    defaultResumeName: v.optional(v.union(v.string(), v.null())),
+  })
+    .index("by_clerk_updated_at", ["clerkId", "updatedAt"])
+    .index("by_profile_id", ["profileId"]),
+
+  // Lightweight Jobs inbox projection. Large descriptions and extraction
+  // payloads remain on jobs and are only loaded by detail/backfill paths.
+  jobCatalog: defineTable({
+    jobId: v.id("jobs"),
+    ownerClerkId: v.string(),
+    profileId: v.id("userProfiles"),
+    title: v.string(),
+    company: v.string(),
+    location: v.string(),
+    sourceLanguage: v.union(v.string(), v.null()),
+    isSample: v.boolean(),
+    isFavorite: v.boolean(),
+    sourceUrl: v.string(),
+    sourceDomain: v.string(),
+    sourceType: v.string(),
+    parseStatus: v.string(),
+    reviewState: v.string(),
+    matchTier: v.union(
+      v.literal("strong"),
+      v.literal("partial"),
+      v.literal("weak"),
+      v.literal("unknown"),
+    ),
+    status: v.string(),
+    importedAt: v.number(),
+    updatedAt: v.number(),
+    lastOpenedAt: v.number(),
+    lastActivityAt: v.number(),
+    linkedDocumentCount: v.number(),
+    archivedAt: v.optional(v.union(v.number(), v.null())),
+  })
+    .index("by_job_id", ["jobId"])
+    .index("by_owner_activity", ["ownerClerkId", "lastActivityAt"])
+    .index("by_owner_archived_activity", [
+      "ownerClerkId",
+      "archivedAt",
+      "lastActivityAt",
+    ]),
+
+  accountReadModels: defineTable({
+    clerkId: v.string(),
+    status: v.union(v.literal("backfilling"), v.literal("ready")),
+    profileCursor: v.optional(v.string()),
+    activeProfileId: v.optional(v.id("userProfiles")),
+    jobCursor: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_clerk_id", ["clerkId"]),
+
   activeCvSnapshots: defineTable({
     clerkId: v.string(),
     title: v.string(),
@@ -449,6 +513,9 @@ export default defineSchema({
 
   jobs: defineTable({
     userId: v.id("userProfiles"),
+    // Additive owner key used by bounded inbox reads. Legacy rows may omit it
+    // until an explicitly authorized backfill has run.
+    ownerClerkId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
     importedAt: v.number(),
@@ -502,7 +569,8 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_dedupe", ["userId", "dedupeKey"])
-    .index("by_user_updated", ["userId", "updatedAt"]),
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_owner_updated", ["ownerClerkId", "updatedAt"]),
 
   job_extraction_shadow: defineTable({
     job_id: v.id("jobs"),

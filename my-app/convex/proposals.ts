@@ -1,5 +1,6 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 import {
@@ -267,6 +268,9 @@ export const storeProposal = internalMutation({
       metadata: sanitizeRemoteMetadataImages(args.metadata) as typeof args.metadata,
     };
     const proposalId = await ctx.db.insert("proposals", proposal);
+    if (proposal.jobId) {
+      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
+    }
     await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
       _id: proposalId,
       ...proposal,
@@ -409,6 +413,9 @@ export const updateProposal = internalMutation({
     const proposal = await ctx.db.get(id);
     if (proposal) {
       await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, proposal);
+      if (proposal.jobId) {
+        await refreshJobCatalogProposalStats(ctx, proposal.jobId);
+      }
     }
   },
 });
@@ -423,6 +430,10 @@ export const deleteProposal = internalMutation({
       await bestEffortDeleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     }
 
-    return ctx.db.delete(args.id);
+    await ctx.db.delete(args.id);
+    if (proposal?.jobId) {
+      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
+    }
+    return null;
   },
 });

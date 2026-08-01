@@ -1,4 +1,5 @@
 import type { Id } from "../_generated/dataModel";
+import { syncProfileCatalogById } from "./profileCatalog";
 
 export type StoredUserProfileExperience = {
   company: string;
@@ -496,6 +497,7 @@ export async function ensureCanonicalProfileForClerk(args: {
       keywords: seededProfile.keywords,
       experience: seededProfile.experience,
     });
+    await syncProfileCatalogById(ctx, insertedProfileId);
 
     const insertedProfile = await ctx.db.get(insertedProfileId);
     if (!insertedProfile) {
@@ -535,6 +537,7 @@ export async function ensureCanonicalProfileForClerk(args: {
     updatedAt: now,
     version: (existingProfile.version ?? 1) + 1,
   });
+  await syncProfileCatalogById(ctx, existingProfile._id);
 
   const patchedProfile = await ctx.db.get(existingProfile._id);
   if (!patchedProfile) {

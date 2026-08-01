@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 import { internalMutation } from './_generated/server';
 import { internal } from './_generated/api';
 import { getPrimaryProfileForClerk } from './lib/userProfiles';
+import { refreshJobCatalogProposalStats } from './lib/jobCatalog';
 
 const savedProposalType = v.optional(
   v.union(
@@ -61,7 +62,7 @@ export const saveJobAndProposal = internalMutation({
       if (!user) throw new Error("Failed to create user profile");
     }
 
-    return ctx.db.insert("proposals", {
+    const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       title: args.jobData.title,
       content: args.proposalText,
@@ -81,6 +82,10 @@ export const saveJobAndProposal = internalMutation({
         proposalType: args.proposalType,
       }),
     });
+    if (args.jobData.jobId) {
+      await refreshJobCatalogProposalStats(ctx, args.jobData.jobId);
+    }
+    return proposalId;
   },
 });
 
@@ -107,7 +112,7 @@ export default mutation({
       throw new Error('User not found');
     }
 
-    return ctx.db.insert("proposals", {
+    const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       title: args.jobData.title,
       content: args.proposalText,
@@ -127,5 +132,9 @@ export default mutation({
         proposalType: args.proposalType,
       }),
     });
+    if (args.jobData.jobId) {
+      await refreshJobCatalogProposalStats(ctx, args.jobData.jobId);
+    }
+    return proposalId;
   },
 });

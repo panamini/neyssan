@@ -1,5 +1,6 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { syncProfileCatalogById } from "../lib/profileCatalog";
 
 /**
  * Mutation: updateUserProfile
@@ -67,6 +68,7 @@ export default mutation({
         updatedAt: now,
       };
       const id = await ctx.db.insert("userProfiles", toInsert);
+      await syncProfileCatalogById(ctx, id);
       return { status: "created", profileId: id.toString() };
     } else {
       // patch only provided fields and bump version/updatedAt
@@ -94,6 +96,7 @@ export default mutation({
       }
 
       await ctx.db.patch(existing._id, updates);
+      await syncProfileCatalogById(ctx, existing._id);
       return { status: "patched", profileId: existing._id.toString() };
     }
   },

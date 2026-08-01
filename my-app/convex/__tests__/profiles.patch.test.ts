@@ -83,7 +83,13 @@ function makePatchCtx(rows: any[]) {
     db: {
       insert,
       patch,
+      get: async (id: string) => rows.find((row) => row._id === id) ?? null,
       query(table: string) {
+        if (table === "profileCatalog") {
+          return {
+            withIndex: () => ({ first: async () => null }),
+          };
+        }
         expect(table).toBe("userProfiles");
         return {
           withIndex(_indexName: string, buildIndex: any) {
@@ -113,6 +119,7 @@ function makeSaveProfileCtx(
   },
 ) {
   const insert = vi.fn(async (_table: string, doc: any) => {
+    if (_table === "profileCatalog") return `catalog_${rows.length + 1}`;
     rows.push({ _id: `profile_${rows.length + 1}`, ...doc });
     return rows.at(-1)._id;
   });
@@ -129,7 +136,13 @@ function makeSaveProfileCtx(
     db: {
       insert,
       patch,
+      get: async (id: string) => rows.find((row) => row._id === id) ?? null,
       query(table: string) {
+        if (table === "profileCatalog") {
+          return {
+            withIndex: () => ({ first: async () => null }),
+          };
+        }
         expect(table).toBe("userProfiles");
         return {
           withIndex(_indexName: string, buildIndex: any) {
@@ -306,7 +319,13 @@ describe("profiles.patch resume scoring sync", () => {
       },
     );
 
-    expect(ctx.db.insert).not.toHaveBeenCalled();
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "profileCatalog",
+      expect.objectContaining({
+        profileId: "profile_doc_id",
+        clerkId: "clerk_123",
+      }),
+    );
     expect(ctx.db.patch).toHaveBeenCalledWith(
       "profile_doc_id",
       expect.objectContaining({

@@ -1,4 +1,6 @@
 import type { MutationCtx } from "../../_generated/server";
+import { syncJobCatalogById } from "../jobCatalog";
+import { syncProfileCatalogById } from "../profileCatalog";
 import {
   materializeSourceCvVariant,
   type ReviewedSourceCvVariantProvenanceV1,
@@ -239,7 +241,7 @@ export async function materializeOwnedCvTailoringReview(
     const scoringFields = buildScoringProfileFieldsFromCvDocument(
       materialized.document,
     );
-    await ctx.db.insert("userProfiles", {
+    const variantProfileId = await ctx.db.insert("userProfiles", {
       profileId: materialized.id,
       clerkId: prepared.clerkId,
       email: requireString(
@@ -274,6 +276,7 @@ export async function materializeOwnedCvTailoringReview(
       updatedAt: attachmentUpdatedAt,
       cvDocument: materialized.document,
     });
+    await syncProfileCatalogById(ctx, variantProfileId);
   }
 
   await ctx.db.patch(prepared.job._id, {
@@ -281,6 +284,7 @@ export async function materializeOwnedCvTailoringReview(
     lastResumeName: resumeName,
     updatedAt: attachmentUpdatedAt,
   });
+  await syncJobCatalogById(ctx, prepared.job._id);
   return {
     jobId: prepared.jobId,
     resumeId: materialized.id,

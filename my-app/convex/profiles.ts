@@ -12,6 +12,10 @@ import {
   sanitizeRemoteCvDocument,
   sanitizeRemoteMetadataImages,
 } from "./lib/documentAssets";
+import {
+  syncProfileCatalogById,
+  upsertProfileCatalog,
+} from "./lib/profileCatalog";
 
 export function resolvePatchProfileRow<T extends { clerkId?: string | undefined }>(
   rows: T[],
@@ -292,13 +296,16 @@ export const upsert = internalMutation({
     const existing = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (existing) {
-      return ctx.db.patch(existing._id, {
+      const updates = {
         preferences: args.preferences,
         version: (existing.version ?? 1) + 1,
         updatedAt: Date.now(),
-      });
+      };
+      await ctx.db.patch(existing._id, updates);
+      await upsertProfileCatalog(ctx, { ...existing, ...updates });
+      return null;
     } else {
-      return ctx.db.insert("userProfiles", {
+      const newProfile = {
         clerkId: identity.subject,
         email: identity.email ?? "unknown@example.com",
         name: identity.name,
@@ -306,7 +313,10 @@ export const upsert = internalMutation({
         version: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      });
+      };
+      const profileId = await ctx.db.insert("userProfiles", newProfile);
+      await upsertProfileCatalog(ctx, { ...newProfile, _id: profileId });
+      return profileId;
     }
   },
 });
@@ -525,6 +535,7 @@ export const patch = mutation({
       }
 
       const convexId = await ctx.db.insert("userProfiles", doc as any);
+      await syncProfileCatalogById(ctx, convexId);
       console.log("[profiles.patch] written", {
         profileId: args.profileId,
         convexId,
@@ -577,6 +588,7 @@ export const patch = mutation({
       }
 
       await ctx.db.patch(existing._id, metadataOnlyUpdates);
+      await syncProfileCatalogById(ctx, existing._id);
 
       console.log("[profiles.patch] written", {
         profileId: existing.profileId ?? args.profileId ?? null,
@@ -633,6 +645,7 @@ export const patch = mutation({
       });
 
       await ctx.db.patch(existing._id, updates);
+      await syncProfileCatalogById(ctx, existing._id);
       console.log("[profiles.patch] written", {
         profileId: existing.profileId ?? args.profileId ?? null,
         convexId: existing._id,
@@ -765,6 +778,7 @@ export const patch = mutation({
       });
 
       await ctx.db.patch(existing._id, updates);
+      await syncProfileCatalogById(ctx, existing._id);
       console.log("[profiles.patch] written", {
         profileId: existing.profileId ?? args.profileId ?? null,
         convexId: existing._id,
@@ -889,6 +903,7 @@ export const saveProfile = mutation({
       };
  
       await ctx.db.patch(existing._id, merged as any);
+      await syncProfileCatalogById(ctx, existing._id);
       return { profileId: args.profileId, convexId: existing._id, updatedAt: merged.updatedAt, written: true };
     } else {
       const doc: any = {
@@ -925,6 +940,7 @@ export const saveProfile = mutation({
         updatedAt: normalizedProfile.updatedAt,
       };
       const convexId = await ctx.db.insert("userProfiles", doc as any);
+      await syncProfileCatalogById(ctx, convexId);
       return { profileId: args.profileId, convexId, updatedAt: normalizedProfile.updatedAt, written: true };
     }
   },

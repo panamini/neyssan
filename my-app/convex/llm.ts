@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { llmConfig } from "../config/llmConfig";
 import runFormatCompleteCV from "./actions/formatCompleteCV";
+import { syncProfileCatalogById } from "./lib/profileCatalog";
 
 // pipeline-note: central entry for Convex LLM orchestration (formatting and
 // section extraction). hybridParser.ts, workerGateway.ts, and canonicalize.ts
@@ -368,6 +369,7 @@ export const startRefineByString = mutation({
           },
         };
         const convexId = await ctx.db.insert("userProfiles", placeholder);
+        await syncProfileCatalogById(ctx, convexId);
         normalizedProfileId = convexId as Id<"userProfiles">;
         console.info(`[startRefineByString] created placeholder userProfiles row for external profileId="${args.profileId}" -> convexId=${String(normalizedProfileId)}`);
       } catch (e) {

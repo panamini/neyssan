@@ -744,6 +744,7 @@ describe("authenticated source CV tailoring review boundary", () => {
     });
     expect(fixture.tables.jobs[0]).toEqual({
       ...jobBefore,
+      ownerClerkId: "clerk-owner",
       lastResumeId: result.resumeId,
       lastResumeName: result.resumeName,
       updatedAt: expect.any(Number),
@@ -753,7 +754,10 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(fixture.tables.applicationArtifacts).toHaveLength(1);
     expect(fixture.writes.slice(writesBeforeMaterialization.length)).toEqual([
       "insert:userProfiles",
+      "insert:profileCatalog",
       "patch:jobs",
+      "patch:jobs",
+      "insert:jobCatalog",
     ]);
     expect(
       fixture.writes.some((write) =>

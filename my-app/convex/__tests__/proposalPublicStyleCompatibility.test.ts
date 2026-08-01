@@ -20,6 +20,11 @@ const STYLE_METADATA = {
 
 function createQuery(profiles: any[]) {
   return (table: string) => {
+    if (table === "jobCatalog") {
+      return {
+        withIndex: () => ({ first: async () => null }),
+      };
+    }
     if (table !== "userProfiles") {
       throw new Error(`Unexpected query table: ${table}`);
     }

@@ -15,6 +15,7 @@ const NOW = Date.UTC(2026, 6, 2, 12, 0, 0, 0);
 type TableName =
   | "userProfiles"
   | "jobs"
+  | "jobCatalog"
   | "proposals"
   | "applicationContexts"
   | "applicationRuns"
@@ -30,6 +31,7 @@ function makeCtx(seed: Partial<Record<TableName, StoredDocument[]>> = {}) {
   const tables: Record<TableName, StoredDocument[]> = {
     userProfiles: [profile()],
     jobs: [job()],
+    jobCatalog: [],
     proposals: [],
     applicationContexts: [],
     applicationRuns: [],

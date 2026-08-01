@@ -5,6 +5,7 @@ import {
   mutation,
   query,
 } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
@@ -72,6 +73,15 @@ import {
   prepareOwnedCvTailoringReview,
   submitOwnedCvTailoringReview,
 } from "./lib/jobs/sourceCvTailoringReview";
+import {
+  syncProfileCatalogById,
+  upsertProfileCatalog,
+} from "./lib/profileCatalog";
+import {
+  refreshJobCatalogProposalStats,
+  syncJobCatalogById,
+  toJobListItem,
+} from "./lib/jobCatalog";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -81,6 +91,8 @@ const JOB_LIST_LINKED_PROPOSALS_LIMIT = 20;
 const JOB_LIST_SHADOW_ROWS_LIMIT = 1;
 const JOB_LIST_DEFAULT_LIMIT = 80;
 const JOB_LIST_MAX_LIMIT = 120;
+const JOB_INBOX_PAGE_SIZE = 36;
+const JOB_READ_MODEL_BACKFILL_BATCH_SIZE = 24;
 const cvTailoringReviewModeValidator = v.union(
   v.literal("auto_recommended"),
   v.literal("full_source_cv"),
@@ -966,7 +978,7 @@ async function archiveActiveSampleJobsForProfile(ctx: any, profileId: string) {
   const now = Date.now();
   await Promise.all(
     activeSampleJobs.map((job: any) =>
-      ctx.db.patch(job._id, {
+      patchJobAndSync(ctx, job._id, {
         archivedAt: now,
         updatedAt: now,
       }),
@@ -1243,6 +1255,7 @@ async function backfillResumeProfileScoringFromCvDocument(
     updatedAt: Date.now(),
     version: (resumeProfile.version ?? 1) + 1,
   });
+  await syncProfileCatalogById(ctx, resumeProfile._id);
 }
 
 function normalizeDecisionOutcome(
@@ -1837,7 +1850,7 @@ function normalizeProjectionProfiles(
   const normalizedProfiles: JobsProjectionProfile[] = [];
 
   for (const profile of profiles) {
-    const profileId = String(profile._id ?? profile.id ?? "");
+    const profileId = String(profile._id ?? profile.id ?? profile.profileId ?? "");
     if (!profileId || seenProfileIds.has(profileId)) {
       continue;
     }
@@ -1857,6 +1870,18 @@ function normalizeJobListLimit(limit: unknown) {
   return Math.max(1, Math.min(JOB_LIST_MAX_LIMIT, numericLimit));
 }
 
+async function findAccountReadModel(ctx: any, clerkId: string) {
+  return ctx.db
+    .query("accountReadModels")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+}
+
+async function patchJobAndSync(ctx: any, jobId: any, patch: any) {
+  await ctx.db.patch(jobId, patch);
+  await syncJobCatalogById(ctx, jobId);
+}
+
 async function listProjectedJobsForProfiles(
   ctx: any,
   profiles: JobsProjectionProfile[],
@@ -1864,6 +1889,7 @@ async function listProjectedJobsForProfiles(
     includeArchived?: boolean;
     trackMatchRead?: boolean;
     limit?: number;
+    providedJobs?: any[];
   },
 ) {
   const normalizedProfiles = normalizeProjectionProfiles(profiles);
@@ -1875,15 +1901,20 @@ async function listProjectedJobsForProfiles(
 
   const projectionLimit =
     typeof options?.limit === "number" ? normalizeJobListLimit(options.limit) : null;
-  const jobGroups = await Promise.all(
-    normalizedProfiles.map((profile) => {
-      const profileId = String(profile._id ?? profile.id ?? "");
-      return projectionLimit === null
-        ? listJobsForProfileId(ctx, profileId)
-        : listRecentJobsForProfileId(ctx, profileId, projectionLimit);
-    }),
-  );
-  const jobs = jobGroups.flat();
+  const jobs = options?.providedJobs
+    ? options.providedJobs
+    : (
+        await Promise.all(
+          normalizedProfiles.map((profile) => {
+            const profileId = String(
+              profile._id ?? profile.id ?? profile.profileId ?? "",
+            );
+            return projectionLimit === null
+              ? listJobsForProfileId(ctx, profileId)
+              : listRecentJobsForProfileId(ctx, profileId, projectionLimit);
+          }),
+        )
+      ).flat();
 
   const visibleJobs = jobs
     .filter((job: any) =>
@@ -2042,7 +2073,7 @@ export const createOrReuseFromSource = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      await patchJobAndSync(ctx, existing._id, {
         lastOpenedAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -2056,6 +2087,7 @@ export const createOrReuseFromSource = mutation({
 
     const jobId = await ctx.db.insert("jobs", {
       userId: profile._id,
+      ...(profile.clerkId ? { ownerClerkId: profile.clerkId } : {}),
       createdAt: draft.createdAt,
       updatedAt: draft.updatedAt,
       importedAt: draft.importedAt,
@@ -2085,6 +2117,7 @@ export const createOrReuseFromSource = mutation({
       archivedAt: draft.archivedAt,
       reviewItems: shouldParse ? [] : draft.reviewItems,
     });
+    await syncJobCatalogById(ctx, jobId);
 
     if (shouldParse) {
       await ctx.scheduler.runAfter(
@@ -2760,14 +2793,194 @@ export const listForUser = query({
       throw new Error("Not authenticated");
     }
 
-    const profiles = await listProfilesForClerk(ctx, identity.subject);
-    if (profiles.length === 0) {
-      return [];
+    const rows = await ctx.db
+      .query("jobCatalog")
+      .withIndex("by_owner_archived_activity", (q: any) =>
+        q.eq("ownerClerkId", identity.subject).eq("archivedAt", null),
+      )
+      .order("desc")
+      .take(normalizeJobListLimit(args.limit));
+    return rows.map(toJobListItem);
+  },
+});
+
+export const jobsReadModelStatus = query({
+  args: {},
+  returns: v.object({
+    ownerKey: v.string(),
+    ready: v.boolean(),
+    status: v.union(
+      v.literal("backfill_required"),
+      v.literal("backfilling"),
+      v.literal("ready"),
+    ),
+  }),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const state = await findAccountReadModel(ctx, identity.subject);
+    return state?.status === "ready"
+      ? { ownerKey: identity.subject, ready: true, status: "ready" as const }
+      : {
+          ownerKey: identity.subject,
+          ready: false,
+          status: state ? ("backfilling" as const) : ("backfill_required" as const),
+        };
+  },
+});
+
+export const ensureJobsReadModelPage = mutation({
+  args: {},
+  returns: v.object({
+    done: v.boolean(),
+    processedProfiles: v.number(),
+    processedJobs: v.number(),
+  }),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const clerkId = identity.subject;
+    const state = await findAccountReadModel(ctx, clerkId);
+    if (state?.status === "ready") {
+      return { done: true, processedProfiles: 0, processedJobs: 0 };
     }
 
-    return listProjectedJobsForProfiles(ctx, profiles, {
-      limit: normalizeJobListLimit(args.limit),
-    });
+    let profile: any = null;
+    let nextProfileCursor = state?.profileCursor;
+    if (state?.activeProfileId) {
+      profile = await ctx.db.get(state.activeProfileId);
+      if (!profile || profile.clerkId !== clerkId) {
+        throw new Error("Jobs read-model profile ownership mismatch");
+      }
+    } else {
+      const profilePage = await ctx.db
+        .query("userProfiles")
+        .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+        .paginate({
+          cursor: state?.profileCursor ?? null,
+          numItems: 1,
+        });
+      profile = profilePage.page[0] ?? null;
+      nextProfileCursor = profilePage.continueCursor;
+      if (!profile) {
+        const readyDoc = {
+          clerkId,
+          status: "ready" as const,
+          updatedAt: Date.now(),
+        };
+        if (state) await ctx.db.replace(state._id, readyDoc);
+        else await ctx.db.insert("accountReadModels", readyDoc);
+        return { done: true, processedProfiles: 0, processedJobs: 0 };
+      }
+      await upsertProfileCatalog(ctx, profile);
+      const selectedProfileState = {
+        clerkId,
+        status: "backfilling" as const,
+        ...(nextProfileCursor ? { profileCursor: nextProfileCursor } : {}),
+        activeProfileId: profile._id,
+        updatedAt: Date.now(),
+      };
+      if (state) await ctx.db.replace(state._id, selectedProfileState);
+      else await ctx.db.insert("accountReadModels", selectedProfileState);
+      return { done: false, processedProfiles: 1, processedJobs: 0 };
+    }
+
+    const jobsPage = await ctx.db
+      .query("jobs")
+      .withIndex("by_user_updated", (q: any) => q.eq("userId", profile._id))
+      .order("desc")
+      .paginate({
+        cursor: state?.activeProfileId ? (state.jobCursor ?? null) : null,
+        numItems: JOB_READ_MODEL_BACKFILL_BATCH_SIZE,
+      });
+    for (const job of jobsPage.page) {
+      await ctx.db.patch(job._id, { ownerClerkId: clerkId });
+      await syncJobCatalogById(ctx, job._id);
+      await refreshJobCatalogProposalStats(ctx, String(job._id));
+    }
+
+    const nextState = {
+      clerkId,
+      status: "backfilling" as const,
+      ...(nextProfileCursor ? { profileCursor: nextProfileCursor } : {}),
+      ...(!jobsPage.isDone
+        ? {
+            activeProfileId: profile._id,
+            jobCursor: jobsPage.continueCursor,
+          }
+        : {}),
+      updatedAt: Date.now(),
+    };
+    if (state) await ctx.db.replace(state._id, nextState);
+    else await ctx.db.insert("accountReadModels", nextState);
+
+    return {
+      done: false,
+      processedProfiles: 0,
+      processedJobs: jobsPage.page.length,
+    };
+  },
+});
+
+export const listPageForUser = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        id: v.string(),
+        title: v.string(),
+        company: v.string(),
+        location: v.string(),
+        sourceLanguage: v.union(v.string(), v.null()),
+        isSample: v.boolean(),
+        isFavorite: v.boolean(),
+        sourceUrl: v.string(),
+        sourceDomain: v.string(),
+        sourceType: v.string(),
+        parseStatus: v.string(),
+        reviewState: v.string(),
+        matchTier: v.union(
+          v.literal("strong"),
+          v.literal("partial"),
+          v.literal("weak"),
+          v.literal("unknown"),
+        ),
+        matchRead: listJobMatchReadValidator,
+        matchReview: v.union(v.null(), jobMatchReviewValidator),
+        status: v.string(),
+        importedAt: v.number(),
+        updatedAt: v.number(),
+        lastOpenedAt: v.number(),
+        lastActivityAt: v.number(),
+        linkedDocumentCount: v.number(),
+      }),
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const page = await ctx.db
+      .query("jobCatalog")
+      .withIndex("by_owner_archived_activity", (q: any) =>
+        q.eq("ownerClerkId", identity.subject).eq("archivedAt", null),
+      )
+      .order("desc")
+      .paginate({
+        cursor: args.paginationOpts.cursor,
+        numItems: Math.min(args.paginationOpts.numItems, JOB_INBOX_PAGE_SIZE),
+      });
+    return {
+      page: page.page.map(toJobListItem),
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    };
   },
 });
 
@@ -2916,15 +3129,14 @@ export const listArchivedForUser = query({
       throw new Error("Not authenticated");
     }
 
-    const profiles = await listProfilesForClerk(ctx, identity.subject);
-    if (profiles.length === 0) {
-      return [];
-    }
-
-    return listProjectedJobsForProfiles(ctx, profiles, {
-      includeArchived: true,
-      limit: normalizeJobListLimit(args.limit),
-    });
+    const rows = await ctx.db
+      .query("jobCatalog")
+      .withIndex("by_owner_archived_activity", (q: any) =>
+        q.eq("ownerClerkId", identity.subject).gt("archivedAt", 0),
+      )
+      .order("desc")
+      .take(normalizeJobListLimit(args.limit));
+    return rows.map(toJobListItem);
   },
 });
 
@@ -3037,7 +3249,7 @@ export const setResumeForJob = mutation({
       await backfillResumeProfileScoringFromCvDocument(ctx, resumeProfile);
     }
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       lastResumeId: args.resumeId ?? null,
       lastResumeName: args.resumeName ?? null,
       updatedAt: Date.now(),
@@ -3077,7 +3289,7 @@ export const setJobFavorite = mutation({
       throw new Error("Job not found");
     }
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       isFavorite: args.isFavorite,
       updatedAt: Date.now(),
     });
@@ -3117,6 +3329,7 @@ export const setDefaultResume = mutation({
       updatedAt: Date.now(),
       version: (primaryProfile.version ?? 1) + 1,
     });
+    await syncProfileCatalogById(ctx, primaryProfile._id);
 
     return null;
   },
@@ -3144,7 +3357,7 @@ export const storeMatchReadSynthesis = internalMutation({
       return null;
     }
 
-    await ctx.db.patch(args.jobId, {
+    await patchJobAndSync(ctx, args.jobId, {
       matchReadSynthesis: {
         cacheKey: args.cacheKey,
         status: args.status,
@@ -3283,7 +3496,7 @@ export const seedSampleJob = mutation({
 
     if (activeSampleJob) {
       const now = Date.now();
-      await ctx.db.patch(activeSampleJob._id, {
+      await patchJobAndSync(ctx, activeSampleJob._id, {
         lastOpenedAt: now,
         updatedAt: now,
       });
@@ -3300,7 +3513,7 @@ export const seedSampleJob = mutation({
 
     if (archivedSampleJob) {
       const now = Date.now();
-      await ctx.db.patch(archivedSampleJob._id, {
+      await patchJobAndSync(ctx, archivedSampleJob._id, {
         archivedAt: null,
         lastOpenedAt: now,
         updatedAt: now,
@@ -3313,8 +3526,10 @@ export const seedSampleJob = mutation({
     const sampleJob = buildSampleJobDraft(now);
     const jobId = await ctx.db.insert("jobs", {
       userId: profile._id,
+      ...(profile.clerkId ? { ownerClerkId: profile.clerkId } : {}),
       ...sampleJob,
     });
+    await syncJobCatalogById(ctx, jobId);
     await scheduleFirstRunPathMetric(ctx, "sample");
     return { jobId: String(jobId) };
   },
@@ -3329,7 +3544,7 @@ export const markOpened = mutation({
     const { normalizedJobId } = await requireJobForLinkedProfile(ctx, args.jobId);
 
     const now = Date.now();
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       lastOpenedAt: now,
       updatedAt: now,
     });
@@ -3404,7 +3619,7 @@ export const updateField = mutation({
       now,
     });
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       [args.fieldKey]: args.value,
       reviewItems,
       reviewState: resolveCanonicalJobReviewState(reviewItems),
@@ -3442,7 +3657,7 @@ export const approveReviewItem = mutation({
       (item) => item.id === args.reviewItemId,
     );
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       ...(approvedItem
         ? {
             [approvedItem.fieldKey]:
@@ -3470,7 +3685,7 @@ export const archiveJob = mutation({
     );
 
     const now = Date.now();
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       archivedAt: now,
       updatedAt: now,
     });
@@ -3490,11 +3705,10 @@ export const restoreArchivedJob = mutation({
       args.jobId,
     );
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobAndSync(ctx, normalizedJobId, {
       archivedAt: null,
       updatedAt: Date.now(),
     });
-
     return null;
   },
 });
@@ -3532,6 +3746,7 @@ export const duplicateJob = mutation({
     const now = Date.now();
     const duplicatedJobId = await ctx.db.insert("jobs", {
       userId: job.userId,
+      ...(job.ownerClerkId ? { ownerClerkId: job.ownerClerkId } : {}),
       createdAt: now,
       updatedAt: now,
       importedAt: now,
@@ -3576,6 +3791,7 @@ export const duplicateJob = mutation({
       archivedAt: null,
       reviewItems: job.reviewItems ?? [],
     });
+    await syncJobCatalogById(ctx, duplicatedJobId);
 
     return { jobId: String(duplicatedJobId) };
   },
@@ -3607,7 +3823,7 @@ export const parseCreatedJob = internalMutation({
         applicationUrl: job.applicationUrl,
       });
 
-      await ctx.db.patch(normalizedJobId, {
+      await patchJobAndSync(ctx, normalizedJobId, {
         company: resolveReparsedCompany({
           existingCompany: job.company,
           parsedCompany: draft.company,
@@ -3646,7 +3862,7 @@ export const parseCreatedJob = internalMutation({
       }
     } catch (error) {
       console.error("[jobsPublic.parseCreatedJob] parse failed", error);
-      await ctx.db.patch(normalizedJobId, {
+      await patchJobAndSync(ctx, normalizedJobId, {
         parseStatus: "failed",
         reviewState: "pending",
         updatedAt: Date.now(),

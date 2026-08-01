@@ -171,6 +171,45 @@ describe("jobsPublic.createOrReuseFromSource", () => {
 });
 
 describe("jobsPublic.listForUser", () => {
+  function buildCatalogListQuery(jobs: any[]) {
+    const rows = jobs
+      .map((job) => ({
+        jobId: job._id,
+        ownerClerkId: "clerk_123",
+        profileId: job.userId,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        sourceLanguage: job.rawLanguageDetected ?? null,
+        isSample: Boolean(job.isSample),
+        isFavorite: Boolean(job.isFavorite),
+        sourceUrl: job.sourceUrl,
+        sourceDomain: job.sourceDomain,
+        sourceType: job.sourceType,
+        parseStatus: job.parseStatus,
+        reviewState: job.reviewState,
+        matchTier:
+          job.matchTier ?? (job.title === "Legacy job" ? "weak" : "strong"),
+        status: job.status,
+        importedAt: job.importedAt,
+        updatedAt: job.updatedAt,
+        lastOpenedAt: job.lastOpenedAt,
+        lastActivityAt: Math.max(job.updatedAt ?? 0, job.lastOpenedAt ?? 0),
+        linkedDocumentCount: 0,
+        archivedAt: job.archivedAt ?? null,
+      }))
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+    const chain: any = {
+      withIndex: (_name: string, callback: (q: any) => unknown) => {
+        const q: any = { eq: () => q, gt: () => q };
+        callback(q);
+        return chain;
+      },
+      order: () => chain,
+      take: async (limit: number) => rows.slice(0, limit),
+    };
+    return chain;
+  }
   it("returns jobs across linked profiles without reading active CV state", async () => {
     const linkedProfiles = [
       {
@@ -240,6 +279,12 @@ describe("jobsPublic.listForUser", () => {
           query(table: string) {
             if (table === "activeCvSnapshots") {
               throw new Error("listForUser should not read active CV state");
+            }
+
+            if (table === "jobCatalog") {
+              return buildCatalogListQuery(
+                Array.from(jobsByProfileId.values()).flat(),
+              );
             }
 
             if (table === "userProfiles") {
@@ -424,6 +469,11 @@ describe("jobsPublic.listForUser", () => {
         },
         db: {
           query(table: string) {
+            if (table === "jobCatalog") {
+              return buildCatalogListQuery(
+                Array.from(jobsByProfileId.values()).flat(),
+              );
+            }
             if (table === "userProfiles") {
               return {
                 withIndex(_indexName: string, buildIndex: any) {
@@ -596,6 +646,11 @@ describe("jobsPublic.listForUser", () => {
         },
         db: {
           query(table: string) {
+            if (table === "jobCatalog") {
+              return buildCatalogListQuery(
+                Array.from(jobsByProfileId.values()).flat(),
+              );
+            }
             if (table === "userProfiles") {
               return {
                 withIndex(_indexName: string, buildIndex: any) {
@@ -694,8 +749,8 @@ describe("jobsPublic.listForUser", () => {
     );
 
     expect(result.map((job) => job.id)).toEqual(["job_second"]);
-    expect(proposalStatsJobIds).toEqual(["job_second"]);
-    expect(shadowJobIds).toEqual(["job_second"]);
+    expect(proposalStatsJobIds).toEqual([]);
+    expect(shadowJobIds).toEqual([]);
   });
 
   it("prefers a job resume override over the user default resume when computing match tier", async () => {
@@ -806,6 +861,12 @@ describe("jobsPublic.listForUser", () => {
           query(table: string) {
             if (table === "activeCvSnapshots") {
               throw new Error("listForUser should not read active CV state");
+            }
+
+            if (table === "jobCatalog") {
+              return buildCatalogListQuery(
+                Array.from(jobsByProfileId.values()).flat(),
+              );
             }
 
             if (table === "userProfiles") {
@@ -2958,6 +3019,45 @@ describe("jobsPublic.listArchivedForUser", () => {
         },
         db: {
           query(table: string) {
+            if (table === "jobCatalog") {
+              const job = jobsByProfileId.get("profile_primary")![1];
+              const rows = [
+                {
+                  jobId: job._id,
+                  ownerClerkId: "clerk_123",
+                  profileId: job.userId,
+                  title: job.title,
+                  company: job.company,
+                  location: job.location,
+                  sourceLanguage: null,
+                  isSample: false,
+                  isFavorite: false,
+                  sourceUrl: job.sourceUrl,
+                  sourceDomain: job.sourceDomain,
+                  sourceType: job.sourceType,
+                  parseStatus: job.parseStatus,
+                  reviewState: job.reviewState,
+                  matchTier: "strong",
+                  status: job.status,
+                  importedAt: job.importedAt,
+                  updatedAt: job.updatedAt,
+                  lastOpenedAt: job.lastOpenedAt,
+                  lastActivityAt: job.updatedAt,
+                  linkedDocumentCount: 0,
+                  archivedAt: job.archivedAt,
+                },
+              ];
+              const chain: any = {
+                withIndex: (_name: string, callback: (q: any) => unknown) => {
+                  const q: any = { eq: () => q, gt: () => q };
+                  callback(q);
+                  return chain;
+                },
+                order: () => chain,
+                take: async () => rows,
+              };
+              return chain;
+            }
             if (table === "activeCvSnapshots") {
               return {
                 withIndex(_indexName: string, buildIndex: any) {

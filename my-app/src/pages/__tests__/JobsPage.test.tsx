@@ -35,6 +35,7 @@ const materializeCvTailoringReviewMock = vi.fn();
 const hydrateCvDocumentMock = vi.fn();
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
+const ensureJobsReadModelPageMock = vi.fn().mockResolvedValue({ done: true });
 const debugInspectMatchInputMock = vi.fn();
 const convexClientMock = {
   query: debugInspectMatchInputMock,
@@ -231,6 +232,11 @@ let selectedJobResultByRefreshKey: Record<number, typeof selectedJob | null> =
 let jobDetailQueryResultById: Record<string, typeof selectedJob | null> = {};
 let debugPayload: Record<string, unknown> | null = null;
 let listError: Error | null = null;
+let jobsReadModelStatusResult = {
+  ownerKey: "clerk_123",
+  ready: true,
+  status: "ready",
+};
 let cvLibraryResult = {
   cvs: [{ id: "cv_alpha", title: "Primary resume", sections: [] }],
   currentCv: null,
@@ -241,15 +247,25 @@ vi.mock("convex/react", () => ({
     isAuthenticated: true,
   }),
   useConvex: () => convexClientMock,
+  usePaginatedQuery: (reference: string) => {
+    if (reference === "jobsPublic.listPageForUser") {
+      if (listError) {
+        throw listError;
+      }
+      return {
+        results: listResult,
+        status: "Exhausted",
+        loadMore: vi.fn(),
+      };
+    }
+    return { results: undefined, status: "LoadingFirstPage", loadMore: vi.fn() };
+  },
   useQuery: (
     reference: string,
     args?: { jobId?: string; clientRefreshKey?: number } | "skip",
   ) => {
-    if (reference === "jobsPublic.listForUser") {
-      if (listError) {
-        throw listError;
-      }
-      return listResult;
+    if (reference === "jobsPublic.jobsReadModelStatus") {
+      return jobsReadModelStatusResult;
     }
     if (reference === "jobsPublic.listArchivedForUser") {
       return archivedListResult;
@@ -271,6 +287,9 @@ vi.mock("convex/react", () => ({
   useMutation: (reference: string) => {
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
+    }
+    if (reference === "jobsPublic.ensureJobsReadModelPage") {
+      return ensureJobsReadModelPageMock;
     }
     if (reference === "jobsPublic.archiveJob") {
       return archiveJobMock;
@@ -331,10 +350,12 @@ vi.mock("@clerk/clerk-react", () => ({
   }),
 }));
 
-vi.mock("../../../convex/_generated/api", () => ({
+  vi.mock("../../../convex/_generated/api", () => ({
   api: {
     jobsPublic: {
-      listForUser: "jobsPublic.listForUser",
+      listPageForUser: "jobsPublic.listPageForUser",
+      jobsReadModelStatus: "jobsPublic.jobsReadModelStatus",
+      ensureJobsReadModelPage: "jobsPublic.ensureJobsReadModelPage",
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
       archiveJob: "jobsPublic.archiveJob",
@@ -598,6 +619,8 @@ describe("JobsPage", () => {
     showToastMock.mockClear();
     trackEventMock.mockClear();
     updateFieldMock.mockClear();
+    ensureJobsReadModelPageMock.mockReset();
+    ensureJobsReadModelPageMock.mockResolvedValue({ done: true });
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
     delete (
@@ -613,6 +636,11 @@ describe("JobsPage", () => {
       }
     ).__STRUCTURED_MATCH_READ_DEBUG__;
     listResult = jobsList;
+    jobsReadModelStatusResult = {
+      ownerKey: "clerk_123",
+      ready: true,
+      status: "ready",
+    };
     archivedListResult = [];
     selectedJobResult = {
       ...selectedJob,
@@ -659,6 +687,35 @@ describe("JobsPage", () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+  });
+
+  it("shows a recoverable Jobs loading failure", async () => {
+    jobsReadModelStatusResult = {
+      ownerKey: "clerk_123",
+      ready: false,
+      status: "backfill_required",
+    };
+    listResult = [];
+    ensureJobsReadModelPageMock.mockRejectedValueOnce(
+      new Error("Could not prepare jobs"),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Jobs could not be loaded",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(ensureJobsReadModelPageMock).toHaveBeenCalledTimes(2),
+    );
   });
 
   it("renders the list-detail inbox and updates trust immediately on approve", async () => {

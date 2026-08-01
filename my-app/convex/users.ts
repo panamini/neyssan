@@ -16,6 +16,7 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
+import { upsertProfileCatalog } from "./lib/profileCatalog";
 
 export type UserProfile = StoredUserProfile;
 type UserProfileInsert = Omit<Doc<"userProfiles">, "_id" | "_creationTime">;
@@ -42,7 +43,13 @@ export const createOrUpdateUser = internalMutation({
           if (name !== undefined && !profile.name) {
             updateData.name = name;
           }
-          return ctx.db.patch(profile._id, updateData);
+          return Promise.all([
+            ctx.db.patch(profile._id, updateData),
+            upsertProfileCatalog(ctx, {
+              ...profile,
+              ...updateData,
+            }),
+          ]);
         }),
       );
       return existingUser._id;
@@ -60,7 +67,9 @@ export const createOrUpdateUser = internalMutation({
         updatedAt: Date.now(),
         version: 1,
       };
-      return await ctx.db.insert("userProfiles", newUser);
+      const profileId = await ctx.db.insert("userProfiles", newUser);
+      await upsertProfileCatalog(ctx, { ...newUser, _id: profileId });
+      return profileId;
     }
   },
 });

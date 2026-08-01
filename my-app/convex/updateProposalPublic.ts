@@ -1,5 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { listProfilesForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
@@ -497,6 +498,12 @@ export default mutation({
     }
 
     await ctx.db.patch(args.id, patch);
+    if (proposal.jobId) {
+      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
+    }
+    if (patch.jobId && patch.jobId !== proposal.jobId) {
+      await refreshJobCatalogProposalStats(ctx, patch.jobId);
+    }
 
     if (hasContentPatch || hasSectionsPatch || hasMetadataPatch) {
       await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {

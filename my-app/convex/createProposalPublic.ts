@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
+import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
@@ -410,6 +411,9 @@ export default mutation({
       metadata: sanitizedMetadata,
     };
     const proposalId = await ctx.db.insert("proposals", proposal);
+    if (proposal.jobId) {
+      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
+    }
     await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
       _id: proposalId,
       ...proposal,

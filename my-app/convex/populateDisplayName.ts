@@ -1,5 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { syncProfileCatalogById } from "./lib/profileCatalog";
 
 /**
  * One-off migration to populate missing display name on userProfiles.
@@ -56,6 +57,7 @@ export default mutation({
 
         if (displayName) {
           await ctx.db.patch(profile._id, { name: displayName });
+          await syncProfileCatalogById(ctx, profile._id);
         }
       } catch (err) {
         console.error("Migration error for profile", profile._id, err);

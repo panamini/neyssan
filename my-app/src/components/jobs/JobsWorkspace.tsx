@@ -1604,6 +1604,9 @@ function JobsPageContent(): JSX.Element {
     jobs,
     archivedJobs,
     selectedJobRecord: selectedJobRecordFromQuery,
+    readModelState,
+    readModelError,
+    retryReadModel,
   } = useJobsQuery({
     isLoaded,
     isSignedIn: Boolean(isSignedIn),
@@ -3756,7 +3759,10 @@ function JobsPageContent(): JSX.Element {
     isLoaded &&
     isSignedIn &&
     isConvexAuthenticated &&
-    (jobs === undefined || archivedJobs === undefined);
+    readModelState !== "error" &&
+    (readModelState === "loading" ||
+      jobs === undefined ||
+      archivedJobs === undefined);
   const hasActiveJobs = (jobs?.length ?? 0) > 0;
   const hasArchivedJobs = (archivedJobs?.length ?? 0) > 0;
   const hasJobs = hasActiveJobs || hasArchivedJobs;
@@ -3928,7 +3934,19 @@ function JobsPageContent(): JSX.Element {
           </div>
         ) : null}
 
-        {!authStatusMessage && !isJobsListLoading && !hasJobs ? (
+        {!authStatusMessage && readModelState === "error" ? (
+          <div className="dasti-empty-state" role="alert">
+            <div className="dasti-empty-state__title">Jobs could not be loaded</div>
+            <div className="dasti-empty-state__subtitle">
+              {readModelError ?? "We couldn't prepare your jobs."}
+            </div>
+            <button type="button" className="dasti-button" onClick={retryReadModel}>
+              Retry
+            </button>
+          </div>
+        ) : null}
+
+        {!authStatusMessage && readModelState !== "error" && !isJobsListLoading && !hasJobs ? (
           <FirstRunPanel
             onImportFirstJob={handleImportFirstJob}
             onTrySampleJob={handleTrySampleJob}
@@ -3937,7 +3955,7 @@ function JobsPageContent(): JSX.Element {
           />
         ) : null}
 
-        {!authStatusMessage && !isJobsListLoading && hasJobs ? (
+        {!authStatusMessage && readModelState !== "error" && !isJobsListLoading && hasJobs ? (
           <div
             className={[
               "dasti-jobs-layout",
