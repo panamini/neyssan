@@ -73,15 +73,16 @@ describe("bounded Jobs read model scale", () => {
         {},
       ),
     ).resolves.toEqual({
-      done: true,
+      done: false,
       processedProfiles: 0,
       processedJobs: 0,
     });
     expect(replace).toHaveBeenCalledWith(
       "legacy_state",
       expect.objectContaining({
-        status: "ready",
-        version: 2,
+        status: "backfilling",
+        phase: "jobs",
+        version: 3,
       }),
     );
   });
@@ -152,7 +153,7 @@ describe("bounded Jobs read model scale", () => {
       "accountReadModels",
       expect.objectContaining({
         clerkId: "clerk_scale",
-        activeProfileId: "profile_1",
+        phase: "profiles",
         profileCursor: "profile_cursor_1",
       }),
     );

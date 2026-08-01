@@ -3,7 +3,6 @@ import { v } from 'convex/values';
 import { internalMutation } from './_generated/server';
 import { internal } from './_generated/api';
 import { getPrimaryProfileForClerk } from './lib/userProfiles';
-import { refreshJobCatalogProposalStats } from './lib/jobCatalog';
 import { requireOwnedProposalJobId } from './lib/proposalJobOwnership';
 
 const savedProposalType = v.optional(
@@ -87,9 +86,6 @@ export const saveJobAndProposal = internalMutation({
         proposalType: args.proposalType,
       }),
     });
-    if (jobId) {
-      await refreshJobCatalogProposalStats(ctx, jobId);
-    }
     return proposalId;
   },
 });
@@ -141,9 +137,6 @@ export default mutation({
         proposalType: args.proposalType,
       }),
     });
-    if (jobId) {
-      await refreshJobCatalogProposalStats(ctx, jobId);
-    }
     return proposalId;
   },
 });

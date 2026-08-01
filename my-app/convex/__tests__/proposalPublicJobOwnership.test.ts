@@ -62,6 +62,21 @@ function createStore(seedProposals: StoredRow[] = []) {
   const proposals = new Map<string, StoredRow>(
     seedProposals.map((proposal) => [proposal._id, { ...proposal }]),
   );
+  const stats = new Map<string, StoredRow>();
+  for (const jobId of jobs.keys()) {
+    const linked = [...proposals.values()].filter(
+      (proposal) => proposal.jobId === jobId && proposal.status === "saved",
+    );
+    stats.set(`stats_${jobId}`, {
+      _id: `stats_${jobId}`,
+      jobId,
+      linkedDocumentCount: linked.length,
+      latestProposalAt: Math.max(
+        0,
+        ...linked.map((proposal) => proposal.updatedAt ?? proposal.createdAt ?? 0),
+      ),
+    });
+  }
   const catalogPatches: Array<{ id: string; patch: Record<string, any> }> = [];
   const proposalPatches: Array<{ id: string; patch: Record<string, any> }> = [];
   const deletedIds: string[] = [];
@@ -72,6 +87,7 @@ function createStore(seedProposals: StoredRow[] = []) {
     if (table === "jobs") return [...jobs.values()];
     if (table === "jobCatalog") return [...catalogs.values()];
     if (table === "proposals") return [...proposals.values()];
+    if (table === "jobProposalStats") return [...stats.values()];
     return [];
   }
 
@@ -91,6 +107,11 @@ function createStore(seedProposals: StoredRow[] = []) {
       );
     },
     async insert(table: string, value: Record<string, any>) {
+      if (table === "jobProposalStats") {
+        const id = `stats_${value.jobId}`;
+        stats.set(id, { _id: id, ...value });
+        return id;
+      }
       if (table !== "proposals") {
         throw new Error(`Unexpected insert table: ${table}`);
       }
@@ -111,6 +132,11 @@ function createStore(seedProposals: StoredRow[] = []) {
       if (catalog) {
         catalogs.set(normalizedId, { ...catalog, ...patch });
         catalogPatches.push({ id: normalizedId, patch });
+        return;
+      }
+      const stat = stats.get(normalizedId);
+      if (stat) {
+        stats.set(normalizedId, { ...stat, ...patch });
         return;
       }
       throw new Error(`Unexpected patch id: ${normalizedId}`);
@@ -136,13 +162,20 @@ function createStore(seedProposals: StoredRow[] = []) {
             rowsFor(table).filter((row) =>
               [...conditions].every(([field, value]) => row[field] === value),
             );
-          return {
+          const result: any = {
             collect: async () => filteredRows(),
             first: async () => filteredRows()[0] ?? null,
             unique: async () => filteredRows()[0] ?? null,
             take: async (limit: number) => filteredRows().slice(0, limit),
             filter: () => ({ first: async () => filteredRows()[0] ?? null }),
           };
+          result.order = () => ({
+            first: async () =>
+              [...filteredRows()].sort(
+                (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0),
+              )[0] ?? null,
+          });
+          return result;
         },
       };
     },
@@ -285,6 +318,34 @@ describe("public proposal Job ownership and catalog counters", () => {
 
     await deleteProposalPublic._handler(store.ctx, { id: "proposal_2" });
     expect(store.catalogs.get("catalog_job_old")?.linkedDocumentCount).toBe(0);
+  });
+
+  it("keeps counts and activity exact beyond 100 on an ordinary edit", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(500);
+    const proposals = Array.from({ length: 150 }, (_, index) =>
+      savedProposal(`proposal_${index}`, "job_old", { updatedAt: index + 10 }),
+    );
+    const store = createStore(proposals);
+
+    await updateProposalPublic._handler(store.ctx, {
+      id: "proposal_0",
+      title: "Edited title",
+    });
+
+    expect(store.catalogs.get("catalog_job_old")).toMatchObject({
+      linkedDocumentCount: 150,
+      lastActivityAt: 500,
+    });
+  });
+
+  it("deletes an owned proposal whose stored Job was already removed", async () => {
+    const store = createStore([
+      savedProposal("proposal_orphan", "job_removed"),
+    ]);
+
+    await deleteProposalPublic._handler(store.ctx, { id: "proposal_orphan" });
+
+    expect(store.deletedIds).toContain("proposal_orphan");
   });
 
   it("fails closed when deleting a proposal linked to a foreign Job", async () => {

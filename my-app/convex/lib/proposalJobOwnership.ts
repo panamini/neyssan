@@ -29,7 +29,14 @@ export async function requireOwnedStoredProposalJobId(
 ): Promise<string | null> {
   const storedJobId =
     typeof proposal.jobId === "string" ? proposal.jobId.trim() : "";
-  return storedJobId
-    ? requireOwnedProposalJobId(ctx, clerkId, storedJobId)
-    : null;
+  if (!storedJobId) return null;
+  const normalizedJobId = ctx.db.normalizeId("jobs", storedJobId);
+  if (!normalizedJobId) return null;
+  const job = await ctx.db.get(normalizedJobId);
+  if (!job) return null;
+  const linkedProfile = job.userId ? await ctx.db.get(job.userId) : null;
+  if (!linkedProfile || linkedProfile.clerkId !== clerkId) {
+    throw new Error("Job not found");
+  }
+  return String(normalizedJobId);
 }

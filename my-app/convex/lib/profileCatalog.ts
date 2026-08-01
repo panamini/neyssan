@@ -1,6 +1,6 @@
 type UserProfileId = string;
 
-export const JOBS_READ_MODEL_VERSION = 2;
+export const JOBS_READ_MODEL_VERSION = 3;
 
 export type ProfileCatalogProjection = {
   profileId: UserProfileId;
@@ -13,6 +13,7 @@ export type ProfileCatalogProjection = {
   defaultResumeId?: string | null;
   defaultResumeName?: string | null;
   matchFingerprint: string;
+  isReviewedVariant: boolean;
 };
 
 function objectOrEmpty(value: unknown): Record<string, unknown> {
@@ -156,6 +157,9 @@ export function buildProfileCatalogProjection(
       ? { defaultResumeName: profile.defaultResumeName }
       : {}),
     matchFingerprint: buildMatchFingerprint(profile),
+    isReviewedVariant:
+      typeof profile.profileId === "string" &&
+      profile.profileId.startsWith("source-cv-variant:v1:"),
   };
 }
 
@@ -193,6 +197,8 @@ export async function upsertProfileCatalog(
       : typeof existingQuery.take === "function"
         ? (await existingQuery.take(1))[0] ?? null
         : (await existingQuery.collect())[0] ?? null;
+  const primarySelectionMayChange =
+    !existing || Number(existing.updatedAt ?? 0) !== projection.updatedAt;
   const matchInputsChanged =
     existing &&
     typeof existing.matchFingerprint === "string" &&
@@ -204,7 +210,7 @@ export async function upsertProfileCatalog(
     await ctx.db.insert("profileCatalog", projection);
   }
 
-  if (matchInputsChanged) {
+  if (primarySelectionMayChange || matchInputsChanged) {
     await invalidateJobsReadModelForClerk(ctx, projection.clerkId);
   }
 }

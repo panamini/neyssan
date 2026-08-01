@@ -6,6 +6,35 @@ import {
 } from "../lib/profileCatalog";
 
 describe("profileCatalog", () => {
+  it("invalidates readiness when a newly created CV can become primary", async () => {
+    const replace = vi.fn(async () => undefined);
+    const insert = vi.fn(async () => "catalog_new");
+    const query = vi.fn((table: string) => ({
+      withIndex: () => ({
+        first: async () =>
+          table === "profileCatalog"
+            ? null
+            : { _id: "read_model_1", status: "ready", version: 3 },
+      }),
+    }));
+
+    await upsertProfileCatalog(
+      { db: { query, insert, patch: vi.fn(), replace } },
+      {
+        _id: "profile_new",
+        clerkId: "clerk_1",
+        profileId: "cv_new",
+        updatedAt: 50,
+        version: 1,
+      },
+    );
+
+    expect(replace).toHaveBeenCalledWith(
+      "read_model_1",
+      expect.objectContaining({ status: "backfilling", version: 3 }),
+    );
+  });
+
   it("projects only catalog identity fields without copying resume payloads", () => {
     const projection = buildProfileCatalogProjection({
       _id: "profile_1",
@@ -33,6 +62,7 @@ describe("profileCatalog", () => {
       version: 3,
       updatedAt: 42,
       matchFingerprint: expect.stringMatching(/^match-v1-/),
+      isReviewedVariant: false,
     });
     expect(projection).not.toHaveProperty("cvDocument");
     expect(projection).not.toHaveProperty("experience");
@@ -91,12 +121,12 @@ describe("profileCatalog", () => {
     expect(replace).toHaveBeenCalledWith("read_model_1", {
       clerkId: "clerk_1",
       status: "backfilling",
-      version: 2,
+      version: 3,
       updatedAt: expect.any(Number),
     });
   });
 
-  it("does not restart Jobs backfill for metadata-only profile writes", async () => {
+  it("restarts Jobs backfill when metadata recency can promote a primary CV", async () => {
     const currentProfile = {
       _id: "profile_1",
       clerkId: "clerk_1",
@@ -109,16 +139,14 @@ describe("profileCatalog", () => {
       experience: [],
     };
     const current = buildProfileCatalogProjection(currentProfile);
-    const query = vi.fn((table: string) => {
-      if (table !== "profileCatalog") {
-        throw new Error(`unexpected metadata-only query: ${table}`);
-      }
-      return {
-        withIndex: () => ({
-          first: async () => ({ _id: "catalog_1", ...current }),
-        }),
-      };
-    });
+    const query = vi.fn((table: string) => ({
+      withIndex: () => ({
+        first: async () =>
+          table === "profileCatalog"
+            ? { _id: "catalog_1", ...current }
+            : { _id: "read_model_1", status: "ready", version: 3 },
+      }),
+    }));
     const replace = vi.fn();
 
     await upsertProfileCatalog(
@@ -133,13 +161,16 @@ describe("profileCatalog", () => {
       {
         ...currentProfile,
         name: "After",
-        version: 2,
+        version: 3,
         updatedAt: 20,
       },
     );
 
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(replace).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith("accountReadModels");
+    expect(replace).toHaveBeenCalledWith(
+      "read_model_1",
+      expect.objectContaining({ status: "backfilling", version: 3 }),
+    );
   });
 
   it("invalidates when authoritative CV evidence used by the visible verdict changes", async () => {
@@ -188,7 +219,7 @@ describe("profileCatalog", () => {
       },
       {
         ...beforeProfile,
-        version: 2,
+        version: 3,
         updatedAt: 20,
         cvDocument: {
           metadata: {
@@ -204,7 +235,7 @@ describe("profileCatalog", () => {
       "read_model_1",
       expect.objectContaining({
         status: "backfilling",
-        version: 2,
+        version: 3,
       }),
     );
   });
@@ -221,6 +252,7 @@ describe("profileCatalog", () => {
         }),
         patch,
         insert,
+        replace: vi.fn(async () => undefined),
       },
     };
 

@@ -3012,6 +3012,7 @@ describe("jobsPublic.listArchivedForUser", () => {
       ],
     ]);
 
+    let archivedIndexName = "";
     const result = await (listArchivedForUser as any)._handler(
       {
         auth: {
@@ -3048,7 +3049,8 @@ describe("jobsPublic.listArchivedForUser", () => {
                 },
               ];
               const chain: any = {
-                withIndex: (_name: string, callback: (q: any) => unknown) => {
+                withIndex: (name: string, callback: (q: any) => unknown) => {
+                  archivedIndexName = name;
                   const q: any = { eq: () => q, gt: () => q };
                   callback(q);
                   return chain;
@@ -3164,6 +3166,7 @@ describe("jobsPublic.listArchivedForUser", () => {
         title: "Archived job",
       }),
     ]);
+    expect(archivedIndexName).toBe("by_owner_is_archived_activity");
   });
 });
 

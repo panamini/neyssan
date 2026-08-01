@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { storeJobExtractionShadow } from "../jobsPublic";
 import {
+  buildJobCatalogProjection,
   syncJobCatalogById,
   toJobListItem,
 } from "../lib/jobCatalog";
@@ -95,6 +96,9 @@ function makeFixture() {
             throw new Error(`unexpected first query: ${table}`);
           },
           take: async (limit: number) => {
+            if (table === "profileCatalog") {
+              return [{ profileId: primaryProfile._id }].slice(0, limit);
+            }
             if (table === "userProfiles") return [attachedProfile].slice(0, limit);
             if (table === "job_extraction_shadow") {
               return [...shadowRows].reverse().slice(0, limit);
@@ -141,6 +145,26 @@ function makeFixture() {
 }
 
 describe("jobCatalog freshness", () => {
+  it("keeps structured unavailable evidence visibly unknown over a heuristic tier", () => {
+    const projection = buildJobCatalogProjection(
+      {
+        _id: "job_structured_unavailable",
+        userId: "profile_1",
+        title: "Engineer",
+        matchTier: "strong",
+      },
+      "clerk_1",
+      null,
+      "strong",
+      { verdict: "not_enough_signal", score: 0 },
+    );
+
+    expect(toJobListItem(projection)).toMatchObject({
+      matchTier: "unknown",
+      matchRead: { tier: "unknown" },
+      matchReview: { verdict: "not_enough_signal", score: 0 },
+    });
+  });
   it("uses the current primary profile default when a legacy Job has no explicit CV", async () => {
     const ownerClerkId = "clerk_multi_cv";
     const linkedProfile = {
@@ -171,16 +195,31 @@ describe("jobCatalog freshness", () => {
       keywords: ["React"],
       experience: [],
     };
+    const newerReviewedVariant = {
+      _id: "profile_reviewed_variant",
+      clerkId: ownerClerkId,
+      profileId: "source-cv-variant:v1:newer",
+      updatedAt: 100,
+      defaultResumeId: "source-cv-variant:v1:newer",
+      skills: ["Operations"],
+      keywords: ["operations"],
+      experience: [],
+    };
     const fixture = makeResumeSelectionFixture({
       ownerClerkId,
       linkedProfile,
       currentPrimary,
-      profiles: [linkedProfile, currentPrimary, currentDefault],
+      profiles: [
+        linkedProfile,
+        currentPrimary,
+        currentDefault,
+        newerReviewedVariant,
+      ],
     });
 
     await syncJobCatalogById(fixture.ctx as any, fixture.job._id);
 
-    expect(toJobListItem(fixture.getJobCatalog()).matchTier).toBe("strong");
+    expect(fixture.getJobCatalog().matchTier).toBe("strong");
   });
 
   it("fails closed when a Job's explicit CV attachment no longer exists", async () => {
@@ -210,7 +249,7 @@ describe("jobCatalog freshness", () => {
   it("invalidates then recomputes the visible tier after an attached CV edit", async () => {
     const fixture = makeFixture();
     await syncJobCatalogById(fixture.ctx as any, fixture.job._id);
-    expect(toJobListItem(fixture.getJobCatalog()).matchTier).toBe("weak");
+    expect(fixture.getJobCatalog().matchTier).toBe("weak");
 
     const updatedAttachedProfile = {
       ...fixture.getAttachedProfile(),
@@ -225,13 +264,13 @@ describe("jobCatalog freshness", () => {
     expect(fixture.getAccountReadModel()).toEqual(
       expect.objectContaining({
         status: "backfilling",
-        version: 2,
+        version: 3,
       }),
     );
     expect(fixture.getAccountReadModel()).not.toHaveProperty("profileCursor");
 
     await syncJobCatalogById(fixture.ctx as any, fixture.job._id);
-    expect(toJobListItem(fixture.getJobCatalog()).matchTier).toBe("strong");
+    expect(fixture.getJobCatalog().matchTier).toBe("strong");
   });
 
   it("synchronizes a lightweight structured verdict when the shadow writer changes", async () => {
@@ -339,6 +378,9 @@ function makeResumeSelectionFixture(args: {
             throw new Error(`unexpected first query: ${table}`);
           },
           take: async (limit: number) => {
+            if (table === "profileCatalog") {
+              return [{ profileId: args.currentPrimary._id }].slice(0, limit);
+            }
             if (table === "userProfiles" && indexName === "by_clerk_updated_at") {
               return [args.currentPrimary].slice(0, limit);
             }

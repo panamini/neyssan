@@ -1,6 +1,6 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
+import { syncJobProposalStatsDelta } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 import {
@@ -268,9 +268,7 @@ export const storeProposal = internalMutation({
       metadata: sanitizeRemoteMetadataImages(args.metadata) as typeof args.metadata,
     };
     const proposalId = await ctx.db.insert("proposals", proposal);
-    if (proposal.jobId) {
-      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
-    }
+    await syncJobProposalStatsDelta(ctx, null, { _id: proposalId, ...proposal });
     await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
       _id: proposalId,
       ...proposal,
@@ -400,6 +398,7 @@ export const updateProposal = internalMutation({
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
+    const before = await ctx.db.get(id);
     const patch = {
       ...updates,
       metadata: sanitizeRemoteMetadataImages(
@@ -413,9 +412,7 @@ export const updateProposal = internalMutation({
     const proposal = await ctx.db.get(id);
     if (proposal) {
       await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, proposal);
-      if (proposal.jobId) {
-        await refreshJobCatalogProposalStats(ctx, proposal.jobId);
-      }
+      await syncJobProposalStatsDelta(ctx, before, proposal);
     }
   },
 });
@@ -431,9 +428,7 @@ export const deleteProposal = internalMutation({
     }
 
     await ctx.db.delete(args.id);
-    if (proposal?.jobId) {
-      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
-    }
+    if (proposal) await syncJobProposalStatsDelta(ctx, proposal, null);
     return null;
   },
 });

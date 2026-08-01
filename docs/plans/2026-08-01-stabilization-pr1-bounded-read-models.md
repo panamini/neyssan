@@ -1,7 +1,7 @@
 # CHANGE CONTRACT
 
 - ID: CC-20260801-neyssan-bounded-read-models
-- Version: 7
+- Version: 8
 - Operation: IMPLEMENT
 - Authorization basis: direct implementation request in the stabilization delegation
 - Risk: HIGH
@@ -212,3 +212,20 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - Changeset self-review: the exact three-file v7 diff preserves owner derivation, adds one bounded owner-index primary lookup plus at most one bounded exact-resume lookup, keeps the explicit-attachment fail-closed rule, and introduces no response payload or schema change.
 - Fallow read-only audit was attempted with `audit --changed-since` and again could not create its temporary base worktree (exit 2); no audit-pass claim or automated fix is made. The advisory limitation matches v6 and does not replace the focused correctness evidence.
 - V7 local status before exact staged/sensitive review: `LOCAL_PASS`. Remote final-head CI and Codex review remain mandatory before any merge-readiness claim.
+
+## 13. V8 CORRECTION GATE
+
+- Authorization: controller-directed coherent correction of the seven final-head findings on frozen head `85cd32ff3a5db8706794016d71f2ea8b8f95aaa3`; base remains `21fba4869740938087ca4b44fa18f62b3b12d5c0`.
+- Invariants: normal primary/default CV selection excludes reviewed source variants and invalidates readiness in O(1) when ordering can change; proposal counts/activity remain exact and tenant-safe for every write and compatibility backfill; visible structured uncertainty stays unknown; archived pages order globally by activity before limiting.
+- Allowed scope: projection/schema helpers, active profile/proposal/Jobs write/read paths, focused regressions, generated Convex API only if repository tooling requires it, and this contract. Forbidden: PR2, merge, deploy, production/shared data, parent artifact, unrelated cleanup.
+- Required evidence: focused RED-to-green regressions; crash-safe affected batch; isolated 500/100/200/500 runtime proof plus a greater-than-100 single-Job proposal proof; type/lint/diff; Changeset and Fallow read-only review; exact staged and sensitive-data inspection.
+- Publication: one consolidated commit and non-force push to PR #374 only after local gates pass. Reply/resolve with exact-head evidence; preserve the one existing top-level Codex request and do not post another unless the controller explicitly authorizes a proven-required trigger.
+
+### V8 evidence ledger
+
+- Focused consolidated affected batch: PASS, 6 files / 79 tests / one worker. Regressions cover new-profile and metadata-recency invalidation, newer reviewed-variant exclusion, current normal primary/default selection, missing explicit attachment fail-closed behavior, orphan deletion versus existing foreign-link rejection, exact 150-proposal count and ordinary-edit activity, structured-unavailable visible unknown, archived discriminator index selection, and finite client backfill state.
+- Static gates: targeted ESLint and `git diff --check` PASS. TypeScript returns the documented 14 baseline errors in six non-v8 files after the two v8 typing regressions were corrected.
+- Read-model design: version 3 performs three finite phases—complete lightweight profile catalog, bounded Job projection/reset, then bounded proposal aggregation—before readiness. Proposal writes maintain count incrementally and obtain latest activity with one indexed row when removing the previous maximum; no proposal count uses capped `take` or unbounded `collect`.
+- Isolated runtime gate: PASS on an owned temporary self-hosted Convex backend at ports 3230/3231, using only ephemeral mode-600 local admin configuration. The database contained 100 heavy profiles, 500 heavy Jobs, 200 proposals, and 500 extraction shadows. Finite v3 backfill produced a cursor-bearing 36-row lightweight first page; the target Job materialized 150 linked proposals, then exactly 148 after an ordinary edit followed by delete and reassignment, with latest activity falling back correctly. Structured unavailable evidence rendered `unknown`, and the bounded archived query returned the row with activity `20000`. Authenticated creation of a new normal CV and a metadata-only promotion each changed account status to `backfilling`; finite refresh completed (final promotion: 32 calls), while the newer reviewed variant remained excluded by the canonical selector. The final verifier reported `{initialPageSize:36,targetVisitedWithin:50,proposalCount:148,visibleTier:"unknown",archivedTopActivity:20000}`. The exact backend-log interval after the valid promotion through final verification contains no memory warning or unexpected function failure; earlier fixture/setup errors and overlapping-harness OCC retries are explicitly outside that final interval and are not presented as product failures.
+- Fallow read-only: attempted with `audit --changed-since`; it again failed to create its temporary base worktree (exit 2). No Fallow-pass claim or automated fix is made.
+- V8 status: local runtime acceptance is satisfied; publication remains conditional on the final Changeset/Fallow/diff/sensitive/staged gates. PR #374 remains based on frozen head `85cd32ff3a5db8706794016d71f2ea8b8f95aaa3`, and no second top-level Codex request is authorized.

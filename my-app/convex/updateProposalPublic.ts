@@ -1,6 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
+import { syncJobProposalStatsDelta } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { listProfilesForClerk } from "./lib/userProfiles";
 import {
@@ -410,14 +410,18 @@ export default mutation({
     }
 
     const hasJobIdPatch = args.metadata?.jobId !== undefined;
-    const shouldRefreshProposalStats = hasStatusPatch || hasJobIdPatch;
-    const currentJobId = shouldRefreshProposalStats
-      ? await requireOwnedStoredProposalJobId(
-          ctx,
-          identity.subject,
-          proposal,
-        )
-      : null;
+    const currentJobId = await requireOwnedStoredProposalJobId(
+      ctx,
+      identity.subject,
+      proposal,
+    );
+    if (
+      typeof proposal.jobId === "string" &&
+      proposal.jobId.trim() &&
+      !currentJobId
+    ) {
+      throw new Error("Job not found");
+    }
     const nextJobId =
       hasJobIdPatch
         ? await requireOwnedProposalJobId(
@@ -525,16 +529,7 @@ export default mutation({
     }
 
     await ctx.db.patch(args.id, patch);
-    if (shouldRefreshProposalStats && currentJobId) {
-      await refreshJobCatalogProposalStats(ctx, currentJobId);
-    }
-    if (
-      shouldRefreshProposalStats &&
-      nextJobId &&
-      nextJobId !== currentJobId
-    ) {
-      await refreshJobCatalogProposalStats(ctx, nextJobId);
-    }
+    await syncJobProposalStatsDelta(ctx, proposal, { ...proposal, ...patch });
 
     if (hasContentPatch || hasSectionsPatch || hasMetadataPatch) {
       await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {

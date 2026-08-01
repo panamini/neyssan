@@ -55,7 +55,7 @@ type UseJobsQueryArgs = {
   selectedJobRefreshKey: number;
 };
 
-const JOBS_READ_MODEL_MAX_BACKFILL_PAGES = 250;
+const JOBS_READ_MODEL_MAX_BACKFILL_PAGES = 800;
 const JOBS_INBOX_PAGE_SIZE = 36;
 
 type JobsPaginationState = {

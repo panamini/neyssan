@@ -1,7 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { listProfilesForClerk } from "./lib/userProfiles";
-import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
+import { syncJobProposalStatsDelta } from "./lib/jobCatalog";
 import { requireOwnedStoredProposalJobId } from "./lib/proposalJobOwnership";
 import { bestEffortDeleteMcpReadSidePackageForStoredProposal } from "./mcpReadSideMaterialization";
 
@@ -35,9 +35,7 @@ export default mutation({
 
     await bestEffortDeleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     await ctx.db.delete(args.id);
-    if (jobId) {
-      await refreshJobCatalogProposalStats(ctx, jobId);
-    }
+    if (jobId) await syncJobProposalStatsDelta(ctx, proposal, null);
     return { success: true };
   },
 });

@@ -11,7 +11,6 @@ import {
   type JobMatchReviewVerdict,
 } from "./jobs/structuredMatchRead";
 
-const LINKED_PROPOSAL_PROJECTION_LIMIT = 100;
 const JOB_CATALOG_SHADOW_ROWS_LIMIT = 1;
 
 type JobCatalogMatchReview = {
@@ -44,6 +43,7 @@ export type JobCatalogProjection = {
   lastActivityAt: number;
   linkedDocumentCount: number;
   archivedAt?: number | null;
+  isArchived?: boolean;
 };
 
 function normalizeMatchTier(value: unknown): JobCatalogProjection["matchTier"] {
@@ -128,6 +128,7 @@ export function buildJobCatalogProjection(
     lastActivityAt,
     linkedDocumentCount,
     archivedAt: typeof job.archivedAt === "number" ? job.archivedAt : null,
+    isArchived: typeof job.archivedAt === "number",
   };
 }
 
@@ -176,20 +177,22 @@ export async function syncJobCatalogById(ctx: any, jobId: any): Promise<void> {
   if (job.ownerClerkId !== ownerClerkId) {
     await ctx.db.patch(job._id, { ownerClerkId });
   }
-  const primaryQuery = ctx.db
-    .query("userProfiles")
-    .withIndex("by_clerk_updated_at", (q: any) =>
-      q.eq("clerkId", ownerClerkId),
+  const primaryCatalogQuery = ctx.db
+    .query("profileCatalog")
+    .withIndex("by_clerk_variant_updated_at", (q: any) =>
+      q.eq("clerkId", ownerClerkId).eq("isReviewedVariant", false),
     );
   const orderedPrimaryQuery =
-    typeof primaryQuery.order === "function"
-      ? primaryQuery.order("desc")
-      : primaryQuery;
-  const primaryProfiles =
+    typeof primaryCatalogQuery.order === "function"
+      ? primaryCatalogQuery.order("desc")
+      : primaryCatalogQuery;
+  const primaryCatalogRows =
     typeof orderedPrimaryQuery.take === "function"
       ? await orderedPrimaryQuery.take(1)
       : (await orderedPrimaryQuery.collect()).slice(0, 1);
-  const primaryProfile = primaryProfiles[0] ?? profile;
+  const primaryProfile = primaryCatalogRows[0]?.profileId
+    ? await ctx.db.get(primaryCatalogRows[0].profileId)
+    : profile;
   const selectedResumeId =
     typeof job.lastResumeId === "string" && job.lastResumeId.trim()
       ? job.lastResumeId.trim()
@@ -282,29 +285,105 @@ export async function refreshJobCatalogProposalStats(
       : (await catalogQuery.take(1))[0] ?? null;
   if (!catalog) return;
 
-  const proposalQuery = ctx.db
-    .query("proposals")
-    .withIndex("by_job_and_status", (q: any) =>
-      q.eq("jobId", String(jobId)).eq("status", "saved"),
-    );
-  const proposals =
-    typeof proposalQuery.take === "function"
-      ? await proposalQuery.take(LINKED_PROPOSAL_PROJECTION_LIMIT)
-      : (await proposalQuery.collect()).slice(0, LINKED_PROPOSAL_PROJECTION_LIMIT);
-  const latestProposalAt = proposals.reduce(
-    (latest: number, proposal: any) =>
-      Math.max(latest, Number(proposal.updatedAt ?? proposal.createdAt ?? 0)),
-    0,
-  );
+  const stats = await ctx.db
+    .query("jobProposalStats")
+    .withIndex("by_job_id", (q: any) => q.eq("jobId", jobId))
+    .first();
 
   await ctx.db.patch(catalog._id, {
-    linkedDocumentCount: proposals.length,
+    linkedDocumentCount: Number(stats?.linkedDocumentCount ?? 0),
     lastActivityAt: Math.max(
       Number(catalog.updatedAt ?? 0),
       Number(catalog.lastOpenedAt ?? 0),
-      latestProposalAt,
+      Number(stats?.latestProposalAt ?? 0),
     ),
   });
+}
+
+async function getJobProposalStats(ctx: any, jobId: string) {
+  return ctx.db
+    .query("jobProposalStats")
+    .withIndex("by_job_id", (q: any) => q.eq("jobId", jobId))
+    .first();
+}
+
+export async function resetJobProposalStats(ctx: any, jobId: string) {
+  const existing = await getJobProposalStats(ctx, jobId);
+  const value = {
+    jobId,
+    linkedDocumentCount: 0,
+    latestProposalAt: 0,
+    updatedAt: Date.now(),
+  };
+  if (existing) await ctx.db.patch(existing._id, value);
+  else await ctx.db.insert("jobProposalStats", value);
+  await refreshJobCatalogProposalStats(ctx, jobId);
+}
+
+async function writeJobProposalStats(
+  ctx: any,
+  jobId: string,
+  count: number,
+  latestProposalAt: number,
+) {
+  const existing = await getJobProposalStats(ctx, jobId);
+  const value = {
+    jobId,
+    linkedDocumentCount: Math.max(0, count),
+    latestProposalAt: Math.max(0, latestProposalAt),
+    updatedAt: Date.now(),
+  };
+  if (existing) await ctx.db.patch(existing._id, value);
+  else await ctx.db.insert("jobProposalStats", value);
+  await refreshJobCatalogProposalStats(ctx, jobId);
+}
+
+function savedProposalJobId(proposal: any): string | null {
+  return proposal?.status === "saved" && typeof proposal.jobId === "string"
+    ? proposal.jobId
+    : null;
+}
+
+function proposalActivity(proposal: any): number {
+  return Number(proposal?.updatedAt ?? proposal?.createdAt ?? 0);
+}
+
+export async function syncJobProposalStatsDelta(
+  ctx: any,
+  before: Record<string, any> | null,
+  after: Record<string, any> | null,
+) {
+  const oldJobId = savedProposalJobId(before);
+  const newJobId = savedProposalJobId(after);
+  const affected = new Set([oldJobId, newJobId].filter(Boolean) as string[]);
+  for (const jobId of affected) {
+    const stats = await getJobProposalStats(ctx, jobId);
+    let count = Number(stats?.linkedDocumentCount ?? 0);
+    let latest = Number(stats?.latestProposalAt ?? 0);
+    if (oldJobId !== newJobId) {
+      if (oldJobId === jobId) count -= 1;
+      if (newJobId === jobId) count += 1;
+    }
+    if (newJobId === jobId) latest = Math.max(latest, proposalActivity(after));
+    if (
+      oldJobId === jobId &&
+      newJobId !== jobId &&
+      proposalActivity(before) >= latest
+    ) {
+      const latestQuery = ctx.db
+        .query("proposals")
+        .withIndex("by_job_status_updated", (q: any) =>
+          q.eq("jobId", jobId).eq("status", "saved"),
+        );
+      const orderedLatestQuery =
+        typeof latestQuery.order === "function"
+          ? latestQuery.order("desc")
+          : latestQuery;
+      const latestRow = await orderedLatestQuery.first();
+      latest = proposalActivity(latestRow);
+    }
+    await writeJobProposalStats(ctx, jobId, count, latest);
+  }
 }
 
 export function toJobListItem(catalog: JobCatalogProjection) {
@@ -319,6 +398,8 @@ export function toJobListItem(catalog: JobCatalogProjection) {
           score: catalog.matchReviewScore,
         }
       : null;
+  const visibleTier =
+    matchReviewVerdict === "not_enough_signal" ? "unknown" : catalog.matchTier;
   return {
     id: String(catalog.jobId),
     title: catalog.title,
@@ -332,8 +413,8 @@ export function toJobListItem(catalog: JobCatalogProjection) {
     sourceType: catalog.sourceType,
     parseStatus: catalog.parseStatus,
     reviewState: catalog.reviewState,
-    matchTier: catalog.matchTier,
-    matchRead: { tier: catalog.matchTier },
+    matchTier: visibleTier,
+    matchRead: { tier: visibleTier },
     matchReview,
     status: catalog.status,
     importedAt: catalog.importedAt,

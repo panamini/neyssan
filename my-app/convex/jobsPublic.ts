@@ -79,10 +79,12 @@ import {
   upsertProfileCatalog,
 } from "./lib/profileCatalog";
 import {
-  refreshJobCatalogProposalStats,
+  resetJobProposalStats,
+  syncJobProposalStatsDelta,
   syncJobCatalogById,
   toJobListItem,
 } from "./lib/jobCatalog";
+import { requireOwnedStoredProposalJobId } from "./lib/proposalJobOwnership";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -491,7 +493,10 @@ const liveMatchReviewRecordValidator = v.object({
 });
 
 function normalizeDebugToken(value: unknown): string {
-  return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const text = typeof value === "string" || typeof value === "number"
+    ? String(value)
+    : "";
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function parseStructuredInternalAllowlist(rawValue: string | undefined): Set<string> {
@@ -1956,10 +1961,6 @@ async function listProjectedJobsForProfiles(
   );
 
   const projections = await Promise.all(visibleJobs.map(async (job: any) => {
-    const storedResume = resolveStoredResumeSelection({
-      job,
-      primaryProfile,
-    });
     const matchReadProfile = resolveMatchReadSourceProfile({
       job,
       primaryProfile,
@@ -2359,7 +2360,7 @@ export const getById = query({
       resumeId: job.lastResumeId ?? null,
     });
     const profiles = normalizeProjectionProfiles(
-      [primaryProfile, ownerProfile, explicitProfile].filter(Boolean) as any[],
+      [primaryProfile, ownerProfile, explicitProfile].filter(Boolean),
     );
     if (
       profiles.length === 0
@@ -2810,8 +2811,8 @@ export const listForUser = query({
 
     const rows = await ctx.db
       .query("jobCatalog")
-      .withIndex("by_owner_archived_activity", (q: any) =>
-        q.eq("ownerClerkId", identity.subject).eq("archivedAt", null),
+      .withIndex("by_owner_is_archived_activity", (q: any) =>
+        q.eq("ownerClerkId", identity.subject).eq("isArchived", false),
       )
       .order("desc")
       .take(normalizeJobListLimit(args.limit));
@@ -2865,6 +2866,105 @@ export const ensureJobsReadModelPage = mutation({
       return { done: true, processedProfiles: 0, processedJobs: 0 };
     }
 
+    if (!state || state.phase === "profiles") {
+      const profilePage = await ctx.db
+        .query("userProfiles")
+        .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+        .paginate({ cursor: state?.profileCursor ?? null, numItems: 1 });
+      const catalogProfile = profilePage.page[0] ?? null;
+      if (!catalogProfile) {
+        const jobsPhase = {
+          clerkId,
+          status: "backfilling" as const,
+          version: JOBS_READ_MODEL_VERSION,
+          phase: "jobs" as const,
+          updatedAt: Date.now(),
+        };
+        if (persistedState) await ctx.db.replace(persistedState._id, jobsPhase);
+        else await ctx.db.insert("accountReadModels", jobsPhase);
+        return { done: false, processedProfiles: 0, processedJobs: 0 };
+      }
+      await upsertProfileCatalog(ctx, catalogProfile);
+      const nextState = {
+        clerkId,
+        status: "backfilling" as const,
+        version: JOBS_READ_MODEL_VERSION,
+        phase: "profiles" as const,
+        ...(profilePage.continueCursor
+          ? { profileCursor: profilePage.continueCursor }
+          : {}),
+        updatedAt: Date.now(),
+      };
+      if (persistedState) await ctx.db.replace(persistedState._id, nextState);
+      else await ctx.db.insert("accountReadModels", nextState);
+      return { done: false, processedProfiles: 1, processedJobs: 0 };
+    }
+
+    if (state?.phase === "proposals") {
+      if (!state.activeProfileId) {
+        const profilePage = await ctx.db
+          .query("userProfiles")
+          .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+          .paginate({ cursor: state.profileCursor ?? null, numItems: 1 });
+        const nextProfile = profilePage.page[0] ?? null;
+        if (!nextProfile) {
+          const readyDoc = {
+            clerkId,
+            status: "ready" as const,
+            version: JOBS_READ_MODEL_VERSION,
+            updatedAt: Date.now(),
+          };
+          if (persistedState) await ctx.db.replace(persistedState._id, readyDoc);
+          else await ctx.db.insert("accountReadModels", readyDoc);
+          return { done: true, processedProfiles: 0, processedJobs: 0 };
+        }
+        await ctx.db.replace(persistedState!._id, {
+          clerkId,
+          status: "backfilling",
+          version: JOBS_READ_MODEL_VERSION,
+          phase: "proposals",
+          activeProfileId: nextProfile._id,
+          ...(profilePage.continueCursor
+            ? { profileCursor: profilePage.continueCursor }
+            : {}),
+          updatedAt: Date.now(),
+        });
+        return { done: false, processedProfiles: 1, processedJobs: 0 };
+      }
+      const proposalPage = await ctx.db
+        .query("proposals")
+        .withIndex("by_user", (q: any) => q.eq("userId", state.activeProfileId))
+        .paginate({ cursor: state.proposalCursor ?? null, numItems: 50 });
+      for (const proposal of proposalPage.page) {
+        const ownedJobId = await requireOwnedStoredProposalJobId(
+          ctx,
+          clerkId,
+          proposal,
+        );
+        if (ownedJobId) {
+          await syncJobProposalStatsDelta(ctx, null, {
+            ...proposal,
+            jobId: ownedJobId,
+          });
+        }
+      }
+      await ctx.db.replace(persistedState!._id, {
+        clerkId,
+        status: "backfilling",
+        version: JOBS_READ_MODEL_VERSION,
+        phase: "proposals",
+        ...(state.profileCursor ? { profileCursor: state.profileCursor } : {}),
+        ...(!proposalPage.isDone
+          ? {
+              activeProfileId: state.activeProfileId,
+              proposalCursor: proposalPage.continueCursor,
+            }
+          : {}),
+        updatedAt: Date.now(),
+      });
+      return { done: false, processedProfiles: 0, processedJobs: 0 };
+    }
+
     let profile: any = null;
     let nextProfileCursor = state?.profileCursor;
     if (state?.activeProfileId) {
@@ -2883,15 +2983,16 @@ export const ensureJobsReadModelPage = mutation({
       profile = profilePage.page[0] ?? null;
       nextProfileCursor = profilePage.continueCursor;
       if (!profile) {
-        const readyDoc = {
+        const proposalPhase = {
           clerkId,
-          status: "ready" as const,
+          status: "backfilling" as const,
           version: JOBS_READ_MODEL_VERSION,
+          phase: "proposals" as const,
           updatedAt: Date.now(),
         };
-        if (persistedState) await ctx.db.replace(persistedState._id, readyDoc);
-        else await ctx.db.insert("accountReadModels", readyDoc);
-        return { done: true, processedProfiles: 0, processedJobs: 0 };
+        if (persistedState) await ctx.db.replace(persistedState._id, proposalPhase);
+        else await ctx.db.insert("accountReadModels", proposalPhase);
+        return { done: false, processedProfiles: 0, processedJobs: 0 };
       }
       await upsertProfileCatalog(ctx, profile);
       const selectedProfileState = {
@@ -2919,7 +3020,7 @@ export const ensureJobsReadModelPage = mutation({
     for (const job of jobsPage.page) {
       await ctx.db.patch(job._id, { ownerClerkId: clerkId });
       await syncJobCatalogById(ctx, job._id);
-      await refreshJobCatalogProposalStats(ctx, String(job._id));
+      await resetJobProposalStats(ctx, String(job._id));
     }
 
     const nextState = {
@@ -3155,8 +3256,8 @@ export const listArchivedForUser = query({
 
     const rows = await ctx.db
       .query("jobCatalog")
-      .withIndex("by_owner_archived_activity", (q: any) =>
-        q.eq("ownerClerkId", identity.subject).gt("archivedAt", 0),
+      .withIndex("by_owner_is_archived_activity", (q: any) =>
+        q.eq("ownerClerkId", identity.subject).eq("isArchived", true),
       )
       .order("desc")
       .take(normalizeJobListLimit(args.limit));

@@ -312,8 +312,14 @@ export default defineSchema({
     defaultResumeId: v.optional(v.union(v.string(), v.null())),
     defaultResumeName: v.optional(v.union(v.string(), v.null())),
     matchFingerprint: v.optional(v.string()),
+    isReviewedVariant: v.optional(v.boolean()),
   })
     .index("by_clerk_updated_at", ["clerkId", "updatedAt"])
+    .index("by_clerk_variant_updated_at", [
+      "clerkId",
+      "isReviewedVariant",
+      "updatedAt",
+    ])
     .index("by_profile_id", ["profileId"]),
 
   // Lightweight Jobs inbox projection. Large descriptions and extraction
@@ -356,6 +362,7 @@ export default defineSchema({
     lastActivityAt: v.number(),
     linkedDocumentCount: v.number(),
     archivedAt: v.optional(v.union(v.number(), v.null())),
+    isArchived: v.optional(v.boolean()),
   })
     .index("by_job_id", ["jobId"])
     .index("by_owner_activity", ["ownerClerkId", "lastActivityAt"])
@@ -363,7 +370,19 @@ export default defineSchema({
       "ownerClerkId",
       "archivedAt",
       "lastActivityAt",
+    ])
+    .index("by_owner_is_archived_activity", [
+      "ownerClerkId",
+      "isArchived",
+      "lastActivityAt",
     ]),
+
+  jobProposalStats: defineTable({
+    jobId: v.id("jobs"),
+    linkedDocumentCount: v.number(),
+    latestProposalAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_job_id", ["jobId"]),
 
   accountReadModels: defineTable({
     clerkId: v.string(),
@@ -372,6 +391,14 @@ export default defineSchema({
     profileCursor: v.optional(v.string()),
     activeProfileId: v.optional(v.id("userProfiles")),
     jobCursor: v.optional(v.string()),
+    phase: v.optional(
+      v.union(
+        v.literal("profiles"),
+        v.literal("jobs"),
+        v.literal("proposals"),
+      ),
+    ),
+    proposalCursor: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_clerk_id", ["clerkId"]),
 
@@ -505,6 +532,7 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_job", ["jobId"])
     .index("by_job_and_status", ["jobId", "status"])
+    .index("by_job_status_updated", ["jobId", "status", "updatedAt"])
     .index("by_status", ["status"])
     .index("by_platform", ["metadata.platform"])
     .index("by_created", ["createdAt"])
