@@ -100,6 +100,9 @@ class CatalogMemoryDb {
           async first() {
             return rows[0] ?? null;
           },
+          async collect() {
+            return rows;
+          },
           async take(limit: number) {
             db.pageSizes.push({ table, size: limit });
             return rows.slice(0, limit);
@@ -631,6 +634,64 @@ describe("finite catalog compatibility materialization", () => {
     }
 
     expect(scheduled).toHaveLength(0);
+    expect(db.tables.get("userProfiles")).toHaveLength(0);
+    expect(db.tables.get("profileCatalog")).toHaveLength(0);
+  });
+
+  it("rejects every shared profile creation path after the account deletion tombstone is done", async () => {
+    const { insertProfileWithCatalog } = await import("../profileCatalog");
+    const { ensureCanonicalProfileForClerk } = await import("../userProfiles");
+    const db = new CatalogMemoryDb({
+      userProfiles: [],
+      profileCatalog: [],
+      catalogBackfillStates: [],
+      activeCvSnapshots: [],
+      accountDeletionStates: [
+        {
+          _id: "direct_deletion_state",
+          _creationTime: 1,
+          clerkId: "clerk_direct_deleted",
+          status: "done",
+          updatedAt: 1,
+          version: 1,
+        },
+        {
+          _id: "canonical_deletion_state",
+          _creationTime: 2,
+          clerkId: "clerk_canonical_deleted",
+          status: "done",
+          updatedAt: 2,
+          version: 1,
+        },
+      ],
+    });
+    const ctx = { db } as any;
+
+    const directInsert = await insertProfileWithCatalog(ctx, {
+      clerkId: "clerk_direct_deleted",
+      email: "deleted@example.test",
+      preferences: {
+        writingStyle: "professional",
+        tonePreference: "formal",
+        autoSend: false,
+      },
+      createdAt: 3,
+      updatedAt: 3,
+      version: 1,
+    }).then(
+      () => "fulfilled",
+      () => "rejected",
+    );
+    const canonicalInsert = await ensureCanonicalProfileForClerk({
+      ctx,
+      clerkId: "clerk_canonical_deleted",
+      fallbackEmail: "deleted@example.test",
+    }).then(
+      () => "fulfilled",
+      () => "rejected",
+    );
+
+    expect([directInsert, canonicalInsert]).toEqual(["rejected", "rejected"]);
     expect(db.tables.get("userProfiles")).toHaveLength(0);
     expect(db.tables.get("profileCatalog")).toHaveLength(0);
   });

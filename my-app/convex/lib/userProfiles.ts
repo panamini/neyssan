@@ -1,4 +1,5 @@
 import type { Id } from "../_generated/dataModel";
+import { assertAccountProfileWriteAllowed } from "./accountDeletion";
 
 export type StoredUserProfileExperience = {
   company: string;
@@ -482,6 +483,7 @@ export async function ensureCanonicalProfileForClerk(args: {
   });
 
   if (!existingProfile) {
+    await assertAccountProfileWriteAllowed(ctx, clerkId);
     const insertedProfileId = await ctx.db.insert("userProfiles", {
       clerkId,
       email: seededProfile.email || compactWhitespace(fallbackEmail ?? ""),

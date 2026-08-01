@@ -3,6 +3,7 @@ import {
   isReviewedSourceCvVariant,
   type StoredUserProfile,
 } from "./userProfiles";
+import { assertAccountProfileWriteAllowed } from "./accountDeletion";
 
 export const PROFILE_CATALOG_VERSION = 1 as const;
 export const ACCOUNT_DELETION_BATCH_SIZE = 8;
@@ -189,6 +190,7 @@ export async function insertProfileWithCatalog(
   ctx: any,
   value: Record<string, unknown>,
 ): Promise<Id<"userProfiles">> {
+  await assertAccountProfileWriteAllowed(ctx, value.clerkId);
   const profileId = await ctx.db.insert("userProfiles", value);
   await syncProfileCatalogById(ctx, profileId);
   return profileId;
