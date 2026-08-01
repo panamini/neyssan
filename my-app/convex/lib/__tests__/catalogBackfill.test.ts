@@ -108,6 +108,67 @@ class CatalogMemoryDb {
 }
 
 describe("finite catalog compatibility materialization", () => {
+  it("does not invalidate ready materialization for an unchanged Profile but does for membership removal", async () => {
+    const { ensureCatalogsForOwnerPage } = await import("../../catalogsPublic");
+    const { syncProfileCatalogById } = await import("../profileCatalog");
+    const profile = {
+      _id: "profile_stable",
+      _creationTime: 1,
+      profileId: "cv_stable",
+      clerkId: "clerk_owner",
+      email: "owner@example.test",
+      createdAt: 1,
+      updatedAt: 10,
+      version: 1,
+    };
+    const db = new CatalogMemoryDb({
+      userProfiles: [profile],
+      jobs: [],
+      profileCatalog: [
+        {
+          _id: "profile_catalog_stable",
+          _creationTime: 2,
+          profileId: "profile_stable",
+          profileIdString: "profile_stable",
+          externalProfileId: "cv_stable",
+          ownerClerkId: "clerk_owner",
+          label: "cv_stable",
+          updatedAt: 10,
+          profileCreatedAt: 1,
+          version: 1,
+        },
+      ],
+      jobCatalog: [],
+      catalogBackfillStates: [
+        {
+          _id: "catalog_state_stable",
+          _creationTime: 3,
+          ownerClerkId: "clerk_owner",
+          status: "ready",
+          phase: "ready",
+          revision: 4,
+          scanRevision: 4,
+          updatedAt: 3,
+          version: 1,
+        },
+      ],
+    });
+    const ctx = { db } as any;
+
+    await syncProfileCatalogById(ctx, "profile_stable" as any);
+    expect(db.tables.get("catalogBackfillStates")?.[0]?.revision).toBe(4);
+    await expect(
+      ensureCatalogsForOwnerPage(ctx, "clerk_owner"),
+    ).resolves.toMatchObject({ status: "ready", processed: 0 });
+
+    await db.patch("profile_stable", {
+      profileId: "source-cv-variant:v1:job_1:cv_stable",
+    });
+    await syncProfileCatalogById(ctx, "profile_stable" as any);
+    expect(db.tables.get("profileCatalog")).toHaveLength(0);
+    expect(db.tables.get("catalogBackfillStates")?.[0]?.revision).toBe(5);
+  });
+
   it("resumes after a ready owner claims a legacy Profile with existing Jobs", async () => {
     const { ensureCatalogsForOwnerPage } = await import("../../catalogsPublic");
     const { syncProfileCatalogById } = await import("../profileCatalog");

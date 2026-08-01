@@ -80,6 +80,25 @@ async function getCatalogRowForProfile(ctx: any, profileId: Id<"userProfiles">) 
     .unique();
 }
 
+function profileCatalogProjectionEquals(
+  existing: Record<string, any>,
+  projection: ProfileCatalogProjection,
+): boolean {
+  const keys: Array<keyof ProfileCatalogProjection> = [
+    "profileId",
+    "profileIdString",
+    "ownerClerkId",
+    "externalProfileId",
+    "label",
+    "defaultResumeId",
+    "defaultResumeName",
+    "updatedAt",
+    "profileCreatedAt",
+    "version",
+  ];
+  return keys.every((key) => existing[key] === projection[key]);
+}
+
 export async function touchCatalogBackfillRevision(
   ctx: any,
   ownerClerkId: string,
@@ -118,18 +137,29 @@ export async function upsertProfileCatalogProjection(
   if (!projection) {
     if (existing) {
       await ctx.db.delete(existing._id);
+      if (options.touchRevision !== false) {
+        await touchCatalogBackfillRevision(ctx, existing.ownerClerkId);
+      }
     }
     return null;
   }
 
   if (existing) {
-    await ctx.db.patch(existing._id, projection);
+    if (!profileCatalogProjectionEquals(existing, projection)) {
+      await ctx.db.patch(existing._id, projection);
+    }
+    if (
+      options.touchRevision !== false &&
+      existing.ownerClerkId !== projection.ownerClerkId
+    ) {
+      await touchCatalogBackfillRevision(ctx, existing.ownerClerkId);
+      await touchCatalogBackfillRevision(ctx, projection.ownerClerkId);
+    }
   } else {
     await ctx.db.insert("profileCatalog", projection);
-  }
-
-  if (options.touchRevision !== false) {
-    await touchCatalogBackfillRevision(ctx, projection.ownerClerkId);
+    if (options.touchRevision !== false) {
+      await touchCatalogBackfillRevision(ctx, projection.ownerClerkId);
+    }
   }
   return projection;
 }
@@ -142,7 +172,12 @@ export async function syncProfileCatalogById(
   const profile = (await ctx.db.get(profileId)) as StoredUserProfile | null;
   if (!profile) {
     const existing = await getCatalogRowForProfile(ctx, profileId);
-    if (existing) await ctx.db.delete(existing._id);
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      if (options.touchRevision !== false) {
+        await touchCatalogBackfillRevision(ctx, existing.ownerClerkId);
+      }
+    }
     return null;
   }
   return upsertProfileCatalogProjection(ctx, profile, options);

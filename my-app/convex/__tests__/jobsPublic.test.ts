@@ -23,6 +23,13 @@ import {
 } from "../jobsPublic";
 import { hashNormalizedJobText } from "../lib/jobs/llmExtractJob";
 
+const profileCatalogMocks = vi.hoisted(() => ({
+  patchProfileWithCatalog: vi.fn(
+    (ctx: any, id: string, value: Record<string, unknown>) =>
+      ctx.db.patch(id, value),
+  ),
+}));
+
 vi.mock("../lib/jobCatalog", () => ({
   insertJobWithCatalog: (ctx: any, value: Record<string, unknown>) =>
     ctx.db.insert("jobs", value),
@@ -33,12 +40,12 @@ vi.mock("../lib/jobCatalog", () => ({
 }));
 
 vi.mock("../lib/profileCatalog", () => ({
-  patchProfileWithCatalog: (ctx: any, id: string, value: Record<string, unknown>) =>
-    ctx.db.patch(id, value),
+  patchProfileWithCatalog: profileCatalogMocks.patchProfileWithCatalog,
   syncProfileCatalogById: async () => null,
 }));
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.unstubAllEnvs();
 });
 
@@ -2886,6 +2893,14 @@ describe("jobsPublic.setResumeForJob", () => {
         skills: ["Retail design"],
         raw_text: expect.stringContaining("Miami Design District"),
         keywords: expect.arrayContaining(["retail", "design", "miami"]),
+      }),
+    );
+    expect(profileCatalogMocks.patchProfileWithCatalog).toHaveBeenCalledWith(
+      expect.anything(),
+      "profile_attached",
+      expect.objectContaining({
+        summary: "Retail design specialist for Miami Design District stores.",
+        skills: ["Retail design"],
       }),
     );
     expect(jobPatch).toEqual(

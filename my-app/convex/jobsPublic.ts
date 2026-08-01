@@ -1237,7 +1237,7 @@ async function backfillResumeProfileScoringFromCvDocument(
     return;
   }
 
-  await ctx.db.patch(resumeProfile._id, {
+  await patchProfileWithCatalog(ctx, resumeProfile._id, {
     ...(scoringFields.summary ? { summary: scoringFields.summary } : {}),
     ...(scoringFields.skills.length > 0 ? { skills: scoringFields.skills } : {}),
     ...(scoringFields.experience.length > 0
