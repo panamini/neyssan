@@ -56,6 +56,17 @@ type UseJobsQueryArgs = {
 };
 
 const JOBS_READ_MODEL_MAX_BACKFILL_PAGES = 250;
+const JOBS_INBOX_PAGE_SIZE = 36;
+
+type JobsPaginationState = {
+  results?: JobsQueryListItem[];
+  status:
+    | "LoadingFirstPage"
+    | "CanLoadMore"
+    | "LoadingMore"
+    | "Exhausted";
+  loadMore: (numItems: number) => void;
+};
 
 export function useJobsQuery({
   isLoaded,
@@ -70,6 +81,9 @@ export function useJobsQuery({
   readModelState: "loading" | "ready" | "error";
   readModelError: string | null;
   retryReadModel: () => void;
+  canLoadMoreJobs: boolean;
+  isLoadingMoreJobs: boolean;
+  loadMoreJobs: () => void;
 } {
   const jobsListReference = React.useMemo(
     () =>
@@ -192,8 +206,8 @@ export function useJobsQuery({
   const queryArgs = authenticated && readModelStatus?.ready ? {} : "skip";
 
   const jobsPage = usePaginatedQuery(jobsListReference, queryArgs, {
-    initialNumItems: 36,
-  }) as { results?: JobsQueryListItem[] } | undefined;
+    initialNumItems: JOBS_INBOX_PAGE_SIZE,
+  }) as JobsPaginationState | undefined;
   const archivedJobs = useQuery(
     archivedJobsListReference,
     queryArgs,
@@ -208,6 +222,11 @@ export function useJobsQuery({
     setReadModelError(null);
     setRetryToken((current) => current + 1);
   }, []);
+  const loadMoreJobs = React.useCallback(() => {
+    if (jobsPage?.status === "CanLoadMore") {
+      jobsPage.loadMore(JOBS_INBOX_PAGE_SIZE);
+    }
+  }, [jobsPage]);
 
   return {
     jobs: jobsPage?.results,
@@ -220,5 +239,8 @@ export function useJobsQuery({
         : "loading",
     readModelError,
     retryReadModel,
+    canLoadMoreJobs: jobsPage?.status === "CanLoadMore",
+    isLoadingMoreJobs: jobsPage?.status === "LoadingMore",
+    loadMoreJobs,
   };
 }

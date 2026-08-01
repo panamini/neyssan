@@ -35,6 +35,7 @@ function sourceFor(id: string | null) {
 }
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => ({ isLoading: false, isAuthenticated: true }),
   useQuery: () => null,
   useMutation: () => vi.fn().mockResolvedValue(undefined),

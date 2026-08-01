@@ -22,6 +22,7 @@ const transformEditorSelectionMock = vi.hoisted(() => vi.fn());
 const genericActionMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,

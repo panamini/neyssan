@@ -3,6 +3,10 @@ import { v } from "convex/values";
 import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { listProfilesForClerk } from "./lib/userProfiles";
+import {
+  requireOwnedProposalJobId,
+  requireOwnedStoredProposalJobId,
+} from "./lib/proposalJobOwnership";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
@@ -405,6 +409,24 @@ export default mutation({
       throw new Error("No proposal fields were provided to update.");
     }
 
+    const hasJobIdPatch = args.metadata?.jobId !== undefined;
+    const shouldRefreshProposalStats = hasStatusPatch || hasJobIdPatch;
+    const currentJobId = shouldRefreshProposalStats
+      ? await requireOwnedStoredProposalJobId(
+          ctx,
+          identity.subject,
+          proposal,
+        )
+      : null;
+    const nextJobId =
+      hasJobIdPatch
+        ? await requireOwnedProposalJobId(
+            ctx,
+            identity.subject,
+            args.metadata!.jobId!,
+          )
+        : currentJobId;
+
     const patch: {
       title?: string;
       content?: string;
@@ -471,6 +493,9 @@ export default mutation({
       const nextMetadata = {
         ...proposal.metadata,
         ...args.metadata,
+        ...(hasJobIdPatch && nextJobId
+          ? { jobId: nextJobId }
+          : null),
         ...(mergedTags ? { tags: mergedTags } : null),
       };
       if (shouldClearPageSize) {
@@ -494,15 +519,21 @@ export default mutation({
       patch.metadata = sanitizeRemoteMetadataImages(
         nextMetadata,
       ) as typeof proposal.metadata;
-      patch.jobId = args.metadata?.jobId ?? proposal.jobId;
+      if (hasJobIdPatch && nextJobId) {
+        patch.jobId = nextJobId;
+      }
     }
 
     await ctx.db.patch(args.id, patch);
-    if (proposal.jobId) {
-      await refreshJobCatalogProposalStats(ctx, proposal.jobId);
+    if (shouldRefreshProposalStats && currentJobId) {
+      await refreshJobCatalogProposalStats(ctx, currentJobId);
     }
-    if (patch.jobId && patch.jobId !== proposal.jobId) {
-      await refreshJobCatalogProposalStats(ctx, patch.jobId);
+    if (
+      shouldRefreshProposalStats &&
+      nextJobId &&
+      nextJobId !== currentJobId
+    ) {
+      await refreshJobCatalogProposalStats(ctx, nextJobId);
     }
 
     if (hasContentPatch || hasSectionsPatch || hasMetadataPatch) {

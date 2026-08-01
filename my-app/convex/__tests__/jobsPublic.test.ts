@@ -3371,6 +3371,10 @@ describe("jobsPublic archive recovery mutations", () => {
       archivedAt: 300,
       updatedAt: 300,
     };
+    const jobCatalog = {
+      _id: "job_catalog_archived",
+      jobId: job._id,
+    };
     const deleteCalls: string[] = [];
 
     const result = await (deleteArchivedJob as any)._handler(
@@ -3418,6 +3422,22 @@ describe("jobsPublic archive recovery mutations", () => {
                 },
               };
             }
+            if (table === "jobCatalog") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const jobId = buildIndex(scope);
+                  return {
+                    first: async () =>
+                      jobCatalog.jobId === jobId ? jobCatalog : null,
+                  };
+                },
+              };
+            }
             throw new Error(`Unexpected table: ${table}`);
           },
         },
@@ -3426,7 +3446,7 @@ describe("jobsPublic archive recovery mutations", () => {
     );
 
     expect(result).toBeNull();
-    expect(deleteCalls).toEqual(["job_archived"]);
+    expect(deleteCalls).toEqual(["job_catalog_archived", "job_archived"]);
   });
 
   it("duplicates a visible job owned by a linked profile", async () => {

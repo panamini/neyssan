@@ -3751,6 +3751,13 @@ export const deleteArchivedJob = mutation({
       throw new Error("Archived job not found");
     }
 
+    const catalog = await ctx.db
+      .query("jobCatalog")
+      .withIndex("by_job_id", (q: any) => q.eq("jobId", normalizedJobId))
+      .first();
+    if (catalog) {
+      await ctx.db.delete(catalog._id);
+    }
     await ctx.db.delete(normalizedJobId);
 
     return null;

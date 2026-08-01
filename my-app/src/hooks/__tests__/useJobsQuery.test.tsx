@@ -9,23 +9,39 @@ const deferredRuns: Array<{
   reject: (error: Error) => void;
 }> = [];
 const ensureReadModelPage = vi.fn();
+const loadMoreJobs = vi.fn();
 let statusOwnerKey = "clerk_a";
+let readModelReady = false;
+let paginatedResults: Array<{ id: string }> | undefined;
+let paginatedStatus:
+  | "LoadingFirstPage"
+  | "CanLoadMore"
+  | "LoadingMore"
+  | "Exhausted" = "LoadingFirstPage";
+let initialNumItems: number | undefined;
 
 vi.mock("convex/react", () => ({
   useQuery: (reference: string) =>
     reference === "jobsPublic.jobsReadModelStatus"
       ? {
           ownerKey: statusOwnerKey,
-          ready: false,
-          status: "backfill_required",
+          ready: readModelReady,
+          status: readModelReady ? "ready" : "backfill_required",
         }
       : undefined,
   useMutation: () => ensureReadModelPage,
-  usePaginatedQuery: () => ({
-    results: undefined,
-    status: "LoadingFirstPage",
-    loadMore: vi.fn(),
-  }),
+  usePaginatedQuery: (
+    _reference: string,
+    _args: Record<string, never> | "skip",
+    options: { initialNumItems: number },
+  ) => {
+    initialNumItems = options.initialNumItems;
+    return {
+      results: paginatedResults,
+      status: paginatedStatus,
+      loadMore: loadMoreJobs,
+    };
+  },
 }));
 
 vi.mock("../../../convex/_generated/api", () => ({
@@ -44,6 +60,11 @@ describe("useJobsQuery read-model recovery", () => {
   beforeEach(() => {
     deferredRuns.length = 0;
     statusOwnerKey = "clerk_a";
+    readModelReady = false;
+    paginatedResults = undefined;
+    paginatedStatus = "LoadingFirstPage";
+    initialNumItems = undefined;
+    loadMoreJobs.mockReset();
     ensureReadModelPage.mockReset();
     ensureReadModelPage.mockImplementation(
       () =>
@@ -103,5 +124,46 @@ describe("useJobsQuery read-model recovery", () => {
       deferredRuns[0].resolve({ done: true });
       deferredRuns[1].resolve({ done: true });
     });
+  });
+
+  it("keeps the first page at 36 and exposes bounded continuation state", () => {
+    readModelReady = true;
+    paginatedResults = Array.from({ length: 36 }, (_, index) => ({
+      id: `job_${index}`,
+    }));
+    paginatedStatus = "CanLoadMore";
+
+    const { result, rerender } = renderHook(() =>
+      useJobsQuery({
+        isLoaded: true,
+        isSignedIn: true,
+        isConvexAuthenticated: true,
+        selectedJobRefreshKey: 0,
+      }),
+    );
+
+    expect(initialNumItems).toBe(36);
+    expect(result.current.jobs).toHaveLength(36);
+    expect(result.current.canLoadMoreJobs).toBe(true);
+    expect(result.current.isLoadingMoreJobs).toBe(false);
+
+    act(() => result.current.loadMoreJobs());
+    expect(loadMoreJobs).toHaveBeenCalledWith(36);
+
+    paginatedStatus = "LoadingMore";
+    rerender();
+    expect(result.current.canLoadMoreJobs).toBe(false);
+    expect(result.current.isLoadingMoreJobs).toBe(true);
+    act(() => result.current.loadMoreJobs());
+    expect(loadMoreJobs).toHaveBeenCalledTimes(1);
+
+    paginatedResults = Array.from({ length: 52 }, (_, index) => ({
+      id: `job_${index}`,
+    }));
+    paginatedStatus = "Exhausted";
+    rerender();
+
+    expect(result.current.jobs).toHaveLength(52);
+    expect(result.current.canLoadMoreJobs).toBe(false);
   });
 });

@@ -1,15 +1,15 @@
 # CHANGE CONTRACT
 
 - ID: CC-20260801-neyssan-bounded-read-models
-- Version: 5
+- Version: 6
 - Operation: IMPLEMENT
 - Authorization basis: direct implementation request in the stabilization delegation
-- Risk: MEDIUM
+- Risk: HIGH
 - Status: AUTHORIZED_TO_IMPLEMENT
 
 ## 1. ATOMIC OUTCOME
 
-Make the active Jobs inbox read path globally bounded and independent of full Job/CV payloads for both new and existing accounts while preserving the active visible-verdict semantics and preventing stale list tiers after scoring-profile/default-CV edits. The list projection carries only the structured verdict/score needed by list chips and filters; shadow writes synchronize that projection, and profile edits invalidate account readiness in O(1) so the existing finite cursor backfill recomputes affected list state before the UI resumes list reads. Establish—but do not yet activate—the lightweight CV ownership catalog used by PR2 hydration.
+Make the active Jobs inbox read path globally bounded and independent of full Job/CV payloads for both new and existing accounts while preserving the active visible-verdict semantics, preventing stale list tiers after scoring-profile/default-CV edits, and keeping every page accessible through an explicit bounded Load more control. Keep Job/proposal projections tenant-safe by deleting orphaned Job rows and accepting, reassigning, deleting, or refreshing proposal Job links only after server-side linked-profile ownership validation. Establish—but do not yet activate—the lightweight CV ownership catalog used by PR2 hydration.
 
 ### Non-goals
 
@@ -30,7 +30,9 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 
 - Existing `jobs.userId` and `userProfiles` data remain valid and readable.
 - Job ownership is authenticated server-side; client-provided owner identifiers are never trusted.
+- Every public proposal Job link is normalized and checked against an authenticated linked profile before proposal persistence or Job-catalog counter refresh.
 - List responses contain summaries/counters only; raw job detail stays in `getById`.
+- The first active page remains at most 36 rows, while subsequent 36-row pages remain explicitly reachable without replacing the detail query.
 - A usable structured `matchReview.verdict` remains authoritative over the heuristic `matchRead`/`matchTier` for list chips and filters.
 - Profile writes never recompute an unbounded set of Jobs in one mutation.
 - The bounded path is additive and can be rolled back without deleting data.
@@ -74,6 +76,8 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - `my-app/convex/users.ts`, `my-app/convex/profiles.ts`, `my-app/convex/jobsPublic.ts` — synchronize writes, expose finite backfill, and expose bounded page query.
 - Active profile/job/proposal write call sites proven by search to require projection synchronization.
 - `my-app/src/hooks/useJobsQuery.ts` — consume bounded page query.
+- `my-app/src/components/jobs/JobsList.tsx`, `my-app/src/components/jobs/JobsWorkspace.tsx`, and focused UI tests — expose and verify accessible bounded pagination.
+- `my-app/convex/createProposalPublic.ts`, `my-app/convex/updateProposalPublic.ts`, `my-app/convex/deleteProposalPublic.ts`, `my-app/convex/saveJobAndProposal.ts`, and one shared `my-app/convex/lib/` helper — enforce authenticated Job-link ownership and synchronize old/new proposal counters.
 - Focused tests and generated Convex artifacts required by the schema/toolchain.
 - This contract document.
 
@@ -102,6 +106,10 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 | AC-8 | Final artifact is clean and scoped | diff/check/status | no unexpected paths, sensitive data, or whitespace errors |
 | AC-9 | Structured visible verdict survives the lightweight list projection | backend projection regression + existing Jobs UI conflict regression | `possible_lead`/68 projected against a `weak` tier remains `Worth a shot`; list query still touches only one `jobCatalog` page |
 | AC-10 | Scoring/default-CV edits cannot expose stale list tiers | invalidation/recompute regression + isolated runtime exercise | profile write performs one account-state invalidation, list is gated while stale, bounded backfill recomputes the changed attached/default profile tier |
+| AC-11 | Every active Job remains reachable after the bounded first page | hook + rendered Jobs regression with more than 36 rows | first request is 36; a keyboard-accessible Load more control requests the next bounded page, shows loading state, and disappears when exhausted |
+| AC-12 | Permanent archived-Job deletion cannot orphan its projection | authenticated mutation regression | the matching `jobCatalog.by_job_id` row and archived Job are deleted in one mutation after ownership validation |
+| AC-13 | Public proposal counters remain exact across create, reassignment, and delete | focused handler regressions | saved proposal create increments the owned Job; reassignment refreshes old and new Jobs; delete refreshes has-docs/no-docs state |
+| AC-14 | Public proposal Job links fail closed across tenants | focused create/update/delete and public save regressions | malformed, missing, or foreign Job IDs are rejected before proposal write/delete/catalog refresh; no foreign catalog row is mutated |
 
 ## 7. FAILURE MODES AND RECOVERY
 
@@ -111,6 +119,7 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - Extraction-shadow replacement/invalid output: synchronize the one Job and clear an obsolete usable verdict rather than retaining stale authority.
 - Generated Convex artifacts unavailable after the repository-supported local workflow: stop publication and report the exact runtime boundary.
 - Schema/type/test failure: correct only within this contract; issue a new contract version if scope changes.
+- Proposal row with inconsistent top-level and metadata Job IDs: fail closed before mutation or counter refresh; recovery requires reopening from an owned Job context.
 
 ## 8. BRANCH AND PR FRAMING
 
@@ -119,6 +128,7 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - Proposed PR title: `Bound Jobs inbox reads with additive lightweight projections`
 - Reviewer focus: pagination semantics, owner isolation, finite/recoverable backfill, no full payload on the Jobs list path, lean CV ownership foundation, and legacy compatibility.
 - v5 reviewer focus: structured verdict precedence with conflicting heuristic tier, shadow-to-catalog freshness, and bounded tier refresh after scoring/default-CV edits.
+- v6 reviewer focus: access to pages after the first 36, archived projection cleanup, and tenant-safe proposal Job-link/counter synchronization across every public write surface.
 
 ## 9. VERIFICATION LEDGER
 
@@ -155,3 +165,30 @@ Make the active Jobs inbox read path globally bounded and independent of full Jo
 - Fresh Fallow read-only review: the base audit reports no introduced dead code or duplication and retains the catalog projection/synchronization complexity advisories. Worktree health initially flagged the expanded fingerprint serializer as critical; normalization was split into small helpers and the rerun removed that finding. Remaining touched-helper advisories are `buildProfileCatalogProjection` (moderate), `buildJobCatalogProjection` (high), and `syncJobCatalogById` (moderate). Disposition: retain these centralized, directly tested projection boundaries; no automated Fallow fix was applied.
 - Final Changeset self-review: exact 12-path diff and untracked test inspected; `git diff --check` passed; strong credential/private-key scan returned no matches; ignored runtime artifacts remain outside the publication set. Two consecutive complete pre-stage fingerprints matched at state `db8b823a3ebf00eaa0f537e323c863fb68696722ce094d9b6c4ccf21365ec7df`; the contract-only evidence update is followed by a fresh repeated fingerprint before staging.
 - V5 local status: `LOCAL_PASS`. Remote CI and review remain required before any merge-readiness claim; no PR2, merge, deployment, or production/shared migration is authorized.
+
+## 11. V6 CORRECTION GATE
+
+- Authorization evidence: controller instruction to issue CC v6, correct the unresolved PR #374 review findings on the same branch/PR, and request review only on the new exact head.
+- Starting status: `LOCAL_FAIL` on published head `2f62ae2200e103471232703abda906a14f0ae03b`; the first 36 active Jobs are the only reachable page, archived Job deletion leaves `jobCatalog` rows, public proposal deletion leaves stale counters, and public proposal create/update paths can refresh a foreign Job catalog from client metadata.
+- Base remains `origin/main` at `21fba4869740938087ca4b44fa18f62b3b12d5c0`; branch remains `codex/neyssan-stabilization-read-models`; initial v6 complete state fingerprint is `f76c468d25e4bbfc9e3217a2d849ff041e8bec3188067268a34ab5745414f87d`.
+- Initial target hashes in the order listed by the v6 scope inventory: hook `ceb2473c...`, workspace `4e7038c3...`, list `9f69b1be...`, Jobs backend `cab9c33b...`, proposal create `85eb9a89...`, proposal update `bb489d18...`, proposal delete `785d5d36...`, public save `40c6259c...`, Job catalog `8d5239a2...`, Jobs backend test `b86e7a85...`, hook test `ab6eaea9...`, Jobs UI test `5cc3f8d6...`, contract `a8d97e06...`.
+- Direct active-call-site audit: `createProposalPublic.default`, `updateProposalPublic.default`, `deleteProposalPublic.default`, and `saveJobAndProposal.default` are the public proposal mutation surfaces that persist/delete linked proposals; `proposals.createProposal`, `proposals.updateProposal`, `proposals.deleteProposal`, and `saveJobAndProposal.saveJobAndProposal` are internal mutations and remain outside the public ownership boundary.
+- Required fresh evidence before follow-up publication: RED-to-green pagination, orphan-cleanup, counter, and foreign-ID regressions; focused/full tests; TypeScript/lint/diff checks; a fresh isolated 500 Jobs / 100 CV variants / 200 proposals / 500 shadows Convex execution and bounded-list log interval; exact full diff and sensitive-data review; Changeset self-review; Fallow read-only.
+- Publication boundary: one follow-up commit and non-force push to existing PR #374 only after all local gates pass. Reply to and resolve the five named threads only with final-head evidence, then post exactly one top-level `@codex` review request for that head. No PR2, merge, deployment, production/shared data mutation, or production migration is authorized.
+
+### V6 evidence ledger
+
+- RED evidence: the hook discarded Convex pagination state/loadMore; archived deletion left the indexed catalog row; proposal deletion did not refresh document counters; public create/update accepted foreign `metadata.jobId` values and refreshed the referenced catalog without linked-profile ownership proof. Focused regressions failed on those exact boundaries before implementation.
+- Focused final suite: PASS, 5 files and 185 tests. Coverage includes 36-row initial pagination and cumulative pages above 36, loading/exhausted button state, archived Job/catalog deletion, owned create/reassignment/delete counter refresh, malformed/foreign Job fail-closed behavior, and existing proposal metadata compatibility.
+- ProposalForge mock compatibility: PR1's `usePaginatedQuery` import exposed incomplete local `convex/react` mocks. All 25 affected ProposalForge factories now supply the same exhausted lightweight pagination result. Crash-safe one-file runs pass 8 tests across `length-guidance`, `save-to-library`, `generated-style-sync`, and `output-draft-guard`; the former missing-export failure is eliminated. Four additional one-file runs reach unchanged UI assertions instead of failing at import. `ProposalForge.tsx` and those four test files are byte-unchanged between exact base `21fba486...` and published head `2f62ae22...`; an exact-base execution attempt stopped earlier because that clean checkout lacks generated Convex API files, so this disposition is unchanged-hunk/call-path proof rather than a claimed passing base runtime.
+- Convex application suite after the backend corrections: PASS, 34 files and 522 tests. It was not redundantly rerun after the subsequent test-only mock additions.
+- Global Vitest proof class: `rtk npm test -- --run` is not a conclusive product gate in this environment. It reported two structured-upload fixture assertions, one environment-sensitive MCP `run.sh` assertion, then exhausted the Node heap near 4 GB and closed the worker channel. The two structured-upload files were rerun directly and fail at exact base `21fba486...` on the same missing-fixture assertions (`fixturePipelineDiagnostics` line 279 and `rawPdfExtraction` line 192). The MCP partition passes 224/225 and its sole failure is the local runtime refusing legacy/foreign stack state before the expected Clerk-key message. No further monolithic run was attempted.
+- Crash-safe execution: no orphaned Node/Vitest process was found for this worktree after interruption. Grouping four ProposalForge files still reproduced the 4 GB harness OOM; subsequent evidence uses one file per process with one worker so memory is reclaimed between runs.
+- TypeScript (`tsc --noEmit -p tsconfig.app.json`): 14 errors in the same six published-PR baseline files (`applicationContextPersistence`, `sourceCvTailoringReview`, `sourceCvCandidateFactAdapter`, `sourceCvPlanOrchestrator`, `mcpControlledSyntheticProof`, and `ProposalForge` resume fields). No v6 implementation file is implicated.
+- Targeted source ESLint: PASS for the hook, Jobs list, proposal ownership helper, public proposal create/update/delete/save paths, and focused source tests; Convex tests and ProposalForge tests are ignored by repository lint configuration. Targeted stylelint for `product-jobs.css`: PASS. `git diff --check`: PASS.
+- Fresh isolated Convex proof on final backend source: PASS at `/tmp/neyssan-pr1-convex.Wwzqdh` on owned temporary ports 3230/3231. The synthetic store contained 100 heavy `userProfiles`, 500 heavy Jobs, 500 `jobCatalog` rows, 200 proposals, and 500 extraction shadows. Initial backfill completed in 201 calls / 5.943 seconds; a profile edit invalidated readiness and the finite 201-call refresh completed in 5.476 seconds, changing the exercised tier from `weak` to `strong` while preserving lightweight `{ verdict: "possible_lead", score: 70 }` review authority.
+- Final bounded runtime observation: first page 36 rows, 21,519 bytes, 28 ms client-observed / 11 ms captured Convex query, no `cvDocument` or `rawDescription`, and 36 lightweight structured reviews. The captured two-line log interval contains zero memory-warning or unexpected-failure matches. The isolated backend stopped, port 3230 closed, ephemeral admin configuration was deleted, and no shared/production data was touched.
+- Final Changeset self-review: exact 38-file tracked diff plus the two intended untracked ownership files inspected; the 25 ProposalForge paths contain the same one-line mock compatibility addition; `git diff --check` passes; strong credential/private-key scan over every v6 path returns no matches; no runtime proof artifact is in the publication set.
+- Fallow read-only: changed-file audit could not create its temporary worktree and returned exit code 2, so no audit-pass claim is made. The fallback `fallow health --top 20 --explain` completed and surfaced repository-wide complexity hotspots, including the pre-existing `JobsPageContent` function; no finding identifies the small v6 helpers or pagination callback as a new defect, and no automated fix was applied.
+- Pre-stage complete Changeset fingerprint repeated identically at state `db22d8ea94409fbc0a12230d31e9d8008077f3681619a717c257ac6b2b555a51` across 40 publication paths with no hidden index flags. The contract-only ledger update is followed by one final repeated fingerprint before staging.
+- V6 local status before staging: `LOCAL_PASS`. Exact staged review remains required before commit. Remote final-head CI and Codex review remain required before any ready-to-merge claim.

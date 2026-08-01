@@ -4,6 +4,7 @@ import { internalMutation } from './_generated/server';
 import { internal } from './_generated/api';
 import { getPrimaryProfileForClerk } from './lib/userProfiles';
 import { refreshJobCatalogProposalStats } from './lib/jobCatalog';
+import { requireOwnedProposalJobId } from './lib/proposalJobOwnership';
 
 const savedProposalType = v.optional(
   v.union(
@@ -24,8 +25,8 @@ function buildProposalMetadata(args: {
   const targetEmployerName = args.company?.trim();
   return {
     platform: args.platform,
-    jobId: args.jobId ?? args.url,
     tags: [],
+    ...(args.jobId ? { jobId: args.jobId } : {}),
     ...(args.description ? { sourceJobDescription: args.description } : {}),
     ...(targetEmployerName ? { targetEmployerName } : {}),
     ...(args.proposalType ? { proposalType: args.proposalType } : {}),
@@ -62,6 +63,10 @@ export const saveJobAndProposal = internalMutation({
       if (!user) throw new Error("Failed to create user profile");
     }
 
+    const jobId = args.jobData.jobId
+      ? await requireOwnedProposalJobId(ctx, identity.subject, args.jobData.jobId)
+      : undefined;
+
     const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       title: args.jobData.title,
@@ -72,18 +77,18 @@ export const saveJobAndProposal = internalMutation({
       updatedAt: Date.now(),
       sections: [{ type: "text", content: args.proposalText }],
       metrics: { score: 0, confidence: 0 },
-      jobId: args.jobData.jobId,
+      ...(jobId ? { jobId } : {}),
       metadata: buildProposalMetadata({
         platform: args.jobData.platform,
         url: args.jobData.url,
-        jobId: args.jobData.jobId,
+        jobId,
         description: args.jobData.description,
         company: args.jobData.company,
         proposalType: args.proposalType,
       }),
     });
-    if (args.jobData.jobId) {
-      await refreshJobCatalogProposalStats(ctx, args.jobData.jobId);
+    if (jobId) {
+      await refreshJobCatalogProposalStats(ctx, jobId);
     }
     return proposalId;
   },
@@ -112,6 +117,10 @@ export default mutation({
       throw new Error('User not found');
     }
 
+    const jobId = args.jobData.jobId
+      ? await requireOwnedProposalJobId(ctx, identity.subject, args.jobData.jobId)
+      : undefined;
+
     const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       title: args.jobData.title,
@@ -122,18 +131,18 @@ export default mutation({
       updatedAt: Date.now(),
       sections: [{ type: "text", content: args.proposalText }],
       metrics: { score: 0, confidence: 0 },
-      jobId: args.jobData.jobId,
+      ...(jobId ? { jobId } : {}),
       metadata: buildProposalMetadata({
         platform: args.jobData.platform,
         url: args.jobData.url,
-        jobId: args.jobData.jobId,
+        jobId,
         description: args.jobData.description,
         company: args.jobData.company,
         proposalType: args.proposalType,
       }),
     });
-    if (args.jobData.jobId) {
-      await refreshJobCatalogProposalStats(ctx, args.jobData.jobId);
+    if (jobId) {
+      await refreshJobCatalogProposalStats(ctx, jobId);
     }
     return proposalId;
   },

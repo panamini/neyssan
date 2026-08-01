@@ -39,6 +39,7 @@ const {
 const showToastMock = vi.fn();
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => convexAuthState,
   useQuery: (...args: unknown[]) => useQueryMock(...args),
   useMutation: () => vi.fn().mockResolvedValue(undefined),

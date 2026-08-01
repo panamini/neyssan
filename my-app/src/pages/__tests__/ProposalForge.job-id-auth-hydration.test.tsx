@@ -62,6 +62,7 @@ const {
 });
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => authState,
   useQuery: (query: unknown, args?: unknown) => {
     queryCalls.push({ query, args });

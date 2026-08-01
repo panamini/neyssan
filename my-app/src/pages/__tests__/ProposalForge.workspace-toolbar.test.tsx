@@ -27,6 +27,7 @@ function TestForgePanel(): JSX.Element | null {
 }
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,

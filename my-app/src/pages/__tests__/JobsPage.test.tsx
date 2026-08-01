@@ -36,6 +36,7 @@ const hydrateCvDocumentMock = vi.fn();
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const ensureJobsReadModelPageMock = vi.fn().mockResolvedValue({ done: true });
+const loadMoreJobsMock = vi.fn();
 const debugInspectMatchInputMock = vi.fn();
 const convexClientMock = {
   query: debugInspectMatchInputMock,
@@ -225,6 +226,11 @@ const selectedJob = {
 };
 
 let listResult: typeof jobsList | undefined = jobsList;
+let listPaginationStatus:
+  | "LoadingFirstPage"
+  | "CanLoadMore"
+  | "LoadingMore"
+  | "Exhausted" = "Exhausted";
 let archivedListResult: typeof archivedJobsList | undefined = [];
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
 let selectedJobResultByRefreshKey: Record<number, typeof selectedJob | null> =
@@ -254,8 +260,8 @@ vi.mock("convex/react", () => ({
       }
       return {
         results: listResult,
-        status: "Exhausted",
-        loadMore: vi.fn(),
+        status: listPaginationStatus,
+        loadMore: loadMoreJobsMock,
       };
     }
     return { results: undefined, status: "LoadingFirstPage", loadMore: vi.fn() };
@@ -636,6 +642,8 @@ describe("JobsPage", () => {
       }
     ).__STRUCTURED_MATCH_READ_DEBUG__;
     listResult = jobsList;
+    listPaginationStatus = "Exhausted";
+    loadMoreJobsMock.mockReset();
     jobsReadModelStatusResult = {
       ownerKey: "clerk_123",
       ready: true,
@@ -716,6 +724,44 @@ describe("JobsPage", () => {
     await waitFor(() =>
       expect(ensureJobsReadModelPageMock).toHaveBeenCalledTimes(2),
     );
+  });
+
+  it("keeps Jobs after the first 36 accessible through Load more", async () => {
+    const allJobs = Array.from({ length: 42 }, (_, index) => ({
+      ...jobsList[0],
+      id: `job_${index + 1}`,
+      title: `Synthetic role ${index + 1}`,
+      importedAt: jobsList[0].importedAt - index,
+      updatedAt: jobsList[0].updatedAt - index,
+      lastOpenedAt: jobsList[0].lastOpenedAt - index,
+      lastActivityAt: jobsList[0].lastActivityAt - index,
+    }));
+    listResult = allJobs.slice(0, 36);
+    listPaginationStatus = "CanLoadMore";
+
+    const renderJobsPage = () => (
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const rendered = render(renderJobsPage());
+
+    expect(await screen.findByText("Synthetic role 36")).toBeInTheDocument();
+    expect(screen.queryByText("Synthetic role 37")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more jobs" }));
+    expect(loadMoreJobsMock).toHaveBeenCalledWith(36);
+
+    listResult = allJobs;
+    listPaginationStatus = "Exhausted";
+    rendered.rerender(renderJobsPage());
+
+    expect(await screen.findByText("Synthetic role 42")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Load more jobs" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the list-detail inbox and updates trust immediately on approve", async () => {

@@ -5,6 +5,7 @@ import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { requireOwnedProposalJobId } from "./lib/proposalJobOwnership";
 import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
@@ -387,13 +388,24 @@ export default mutation({
       });
     }
 
-    const sanitizedMetadata = sanitizeRemoteMetadataImages(
-      args.metadata ?? {},
-    ) as NonNullable<typeof args.metadata>;
+    const normalizedJobId =
+      args.metadata?.jobId !== undefined
+        ? await requireOwnedProposalJobId(
+            ctx,
+            identity.subject,
+            args.metadata.jobId,
+          )
+        : null;
+    const sanitizedMetadata = {
+      ...(sanitizeRemoteMetadataImages(
+        args.metadata ?? {},
+      ) as NonNullable<typeof args.metadata>),
+      ...(normalizedJobId ? { jobId: normalizedJobId } : {}),
+    };
 
     const proposal = {
       userId: user._id,
-      jobId: args.metadata?.jobId,
+      ...(normalizedJobId ? { jobId: normalizedJobId } : {}),
       title: trimmedTitle,
       content: trimmedContent,
       status: args.status ?? "saved",

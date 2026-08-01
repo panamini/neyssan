@@ -1,6 +1,8 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { listProfilesForClerk } from "./lib/userProfiles";
+import { refreshJobCatalogProposalStats } from "./lib/jobCatalog";
+import { requireOwnedStoredProposalJobId } from "./lib/proposalJobOwnership";
 import { bestEffortDeleteMcpReadSidePackageForStoredProposal } from "./mcpReadSideMaterialization";
 
 /**
@@ -25,9 +27,17 @@ export default mutation({
     if (!ownedProfileIds.has(String(proposal.userId))) {
       throw new Error("Not authorized to delete this proposal");
     }
+    const jobId = await requireOwnedStoredProposalJobId(
+      ctx,
+      identity.subject,
+      proposal,
+    );
 
     await bestEffortDeleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     await ctx.db.delete(args.id);
+    if (jobId) {
+      await refreshJobCatalogProposalStats(ctx, jobId);
+    }
     return { success: true };
   },
 });

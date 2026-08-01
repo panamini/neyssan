@@ -1610,6 +1610,9 @@ function JobsPageContent(): JSX.Element {
     readModelState,
     readModelError,
     retryReadModel,
+    canLoadMoreJobs,
+    isLoadingMoreJobs,
+    loadMoreJobs,
   } = useJobsQuery({
     isLoaded,
     isSignedIn: Boolean(isSignedIn),
@@ -3976,6 +3979,8 @@ function JobsPageContent(): JSX.Element {
                 selectedJobId={selectedJobId}
                 filteredJobs={filteredJobs}
                 displayedJobsCount={displayedJobs?.length ?? 0}
+                canLoadMoreJobs={canLoadMoreJobs}
+                isLoadingMoreJobs={isLoadingMoreJobs}
                 searchQuery={searchQuery}
                 sortOrder={sortOrder}
                 matchFilter={matchFilter}
@@ -4030,6 +4035,7 @@ function JobsPageContent(): JSX.Element {
                   setConfirmingPermanentDeleteJobId
                 }
                 onImportFirstJob={handleImportFirstJob}
+                onLoadMoreJobs={loadMoreJobs}
               />
             ) : null}
 

@@ -470,6 +470,18 @@
   overflow-y: auto;
 }
 
+.dasti-jobs-list-pagination {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-5);
+}
+
+.dasti-jobs-list-pagination .dasti-button {
+  max-width: 100%;
+}
+
 .dasti-jobs-list-item {
   display: grid;
   gap: 2px;

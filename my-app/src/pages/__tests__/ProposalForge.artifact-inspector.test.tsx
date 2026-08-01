@@ -9,6 +9,7 @@ const proposalDisplaySpy = vi.fn();
 let mockVoicePreset: "signature" | null = "signature";
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,

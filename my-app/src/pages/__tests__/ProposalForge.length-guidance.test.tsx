@@ -8,6 +8,7 @@ import { writeStoredProposalOutputDraft } from "../../lib/proposal-output-draft"
 const showToastMock = vi.fn();
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,

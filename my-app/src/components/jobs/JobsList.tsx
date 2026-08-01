@@ -60,6 +60,8 @@ type JobsListProps = {
   selectedJobId?: string;
   filteredJobs: JobsListItem[];
   displayedJobsCount: number;
+  canLoadMoreJobs: boolean;
+  isLoadingMoreJobs: boolean;
   searchQuery: string;
   sortOrder: JobsSortOrder;
   matchFilter: JobsMatchFilter;
@@ -90,6 +92,7 @@ type JobsListProps = {
   onDeleteArchivedJob: (jobId: string) => void;
   onConfirmPermanentDeleteJobIdChange: (jobId: string | null) => void;
   onImportFirstJob: () => void;
+  onLoadMoreJobs: () => void;
   isProposalSelectionMode?: boolean;
   onCancelProposalSelection?: () => void;
 };
@@ -169,6 +172,8 @@ export function JobsList({
   selectedJobId,
   filteredJobs,
   displayedJobsCount,
+  canLoadMoreJobs,
+  isLoadingMoreJobs,
   searchQuery,
   sortOrder,
   matchFilter,
@@ -198,6 +203,7 @@ export function JobsList({
   onRestoreArchivedJob,
   onDeleteArchivedJob,
   onConfirmPermanentDeleteJobIdChange,
+  onLoadMoreJobs,
   isProposalSelectionMode = false,
   onCancelProposalSelection,
 }: JobsListProps): JSX.Element {
@@ -695,6 +701,19 @@ export function JobsList({
           })}
         </div>
       )}
+      {jobsView === "active" &&
+      (canLoadMoreJobs || isLoadingMoreJobs) ? (
+        <div className="dasti-jobs-list-pagination" aria-live="polite">
+          <button
+            type="button"
+            className="dasti-button dasti-button--secondary dasti-button--sm"
+            onClick={onLoadMoreJobs}
+            disabled={isLoadingMoreJobs}
+          >
+            {isLoadingMoreJobs ? "Loading more jobs…" : "Load more jobs"}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -86,6 +86,7 @@ const DRAFT_PROPOSALS = [
 ] as any;
 
 vi.mock("convex/react", () => ({
+  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
   useConvexAuth: () => ({ isLoading: false, isAuthenticated: true }),
   useQuery: (query: string) =>
     query === "proposalsPublic.default" ? DRAFT_PROPOSALS : null,
