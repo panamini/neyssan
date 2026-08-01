@@ -5,6 +5,8 @@ import {
 } from "./userProfiles";
 
 export const PROFILE_CATALOG_VERSION = 1 as const;
+export const ACCOUNT_DELETION_BATCH_SIZE = 8;
+const OWNER_JOB_CATALOG_PAGE_SIZE = ACCOUNT_DELETION_BATCH_SIZE / 2;
 
 export type ProfileCatalogProjection = {
   profileId: Id<"userProfiles">;
@@ -201,11 +203,67 @@ export async function patchProfileWithCatalog(
   await syncProfileCatalogById(ctx, profileId);
 }
 
-export async function deleteProfileWithCatalog(
+export async function deleteProfileWithCatalogPage(
   ctx: any,
   profileId: Id<"userProfiles">,
 ): Promise<void> {
+  const jobCatalogRows = await ctx.db
+    .query("jobCatalog")
+    .withIndex("by_profile_id", (q: any) => q.eq("profileId", profileId))
+    .take(ACCOUNT_DELETION_BATCH_SIZE);
+  if (jobCatalogRows.length > 0) {
+    for (const row of jobCatalogRows) await ctx.db.delete(row._id);
+    return;
+  }
+
+  const jobs = await ctx.db
+    .query("jobs")
+    .withIndex("by_user", (q: any) => q.eq("userId", profileId))
+    .take(ACCOUNT_DELETION_BATCH_SIZE);
+  if (jobs.length > 0) {
+    for (const job of jobs) await ctx.db.delete(job._id);
+    return;
+  }
+
   const existing = await getCatalogRowForProfile(ctx, profileId);
   if (existing) await ctx.db.delete(existing._id);
   await ctx.db.delete(profileId);
+}
+
+export async function deleteOwnedCatalogRowsPage(
+  ctx: any,
+  ownerClerkId: string,
+): Promise<boolean> {
+  const profileRows = await ctx.db
+    .query("profileCatalog")
+    .withIndex("by_owner_profile_id", (q: any) =>
+      q.eq("ownerClerkId", ownerClerkId),
+    )
+    .take(ACCOUNT_DELETION_BATCH_SIZE);
+  if (profileRows.length > 0) {
+    for (const row of profileRows) await ctx.db.delete(row._id);
+    return true;
+  }
+
+  const jobRows = await ctx.db
+    .query("jobCatalog")
+    .withIndex("by_owner_archived_updated", (q: any) =>
+      q.eq("ownerClerkId", ownerClerkId),
+    )
+    .take(OWNER_JOB_CATALOG_PAGE_SIZE);
+  if (jobRows.length > 0) {
+    for (const row of jobRows) {
+      const job = await ctx.db.get(row.jobId);
+      if (job) {
+        const profile = await ctx.db.get(job.userId);
+        if (!profile || profile.clerkId === ownerClerkId) {
+          await ctx.db.delete(job._id);
+        }
+      }
+      await ctx.db.delete(row._id);
+    }
+    return true;
+  }
+
+  return false;
 }

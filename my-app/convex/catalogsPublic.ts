@@ -6,6 +6,7 @@ import { upsertProfileCatalogProjection } from "./lib/profileCatalog";
 const MAX_SUMMARY_ROWS = 36;
 const PROFILE_BACKFILL_PAGE_SIZE = 4;
 const JOB_BACKFILL_PAGE_SIZE = 8;
+const JOBS_TRAVERSAL_VERSION = 1 as const;
 
 function boundedLimit(value: number | undefined): number {
   if (!Number.isFinite(value)) return MAX_SUMMARY_ROWS;
@@ -54,12 +55,22 @@ function stripConvexSystemFields(row: Record<string, any>) {
   return summary;
 }
 
+async function isAccountDeletionActive(ctx: any, clerkId: string) {
+  return Boolean(
+    await ctx.db
+      .query("accountDeletionStates")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+      .unique(),
+  );
+}
+
 export const listProfileSummaries = query({
   args: { limit: v.optional(v.number()) },
   returns: v.array(profileSummaryValidator),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (await isAccountDeletionActive(ctx, identity.subject)) return [];
     const rows = await ctx.db
       .query("profileCatalog")
       .withIndex("by_owner_primary", (q) =>
@@ -80,6 +91,7 @@ export const listJobSummaries = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (await isAccountDeletionActive(ctx, identity.subject)) return [];
     const rows = await ctx.db
       .query("jobCatalog")
       .withIndex("by_owner_archived_updated", (q) =>
@@ -105,6 +117,7 @@ async function getOrCreateBackfillState(ctx: any, ownerClerkId: string) {
     phase: "profiles",
     revision: 0,
     scanRevision: 0,
+    jobsTraversalVersion: JOBS_TRAVERSAL_VERSION,
     updatedAt: Date.now(),
     version: 1,
   });
@@ -127,8 +140,31 @@ export async function ensureCatalogsForOwnerPage(
   phase: "profiles" | "jobs" | "ready";
   processed: number;
 }> {
+  if (await isAccountDeletionActive(ctx, ownerClerkId)) {
+    return { status: "ready", phase: "ready", processed: 0 };
+  }
   const state = await getOrCreateBackfillState(ctx, ownerClerkId);
   if (!state) throw new Error("Catalog materialization state unavailable");
+  if (
+    (state.phase === "jobs" || state.phase === "ready") &&
+    state.jobsTraversalVersion !== JOBS_TRAVERSAL_VERSION
+  ) {
+    await ctx.db.patch(state._id, {
+      status: "running",
+      phase: "jobs",
+      profileCursor: undefined,
+      profileScanAfter: undefined,
+      currentProfileId: undefined,
+      currentProfileScanKey: undefined,
+      currentJobCursor: undefined,
+      nextProfileCursor: undefined,
+      profileScanDone: undefined,
+      scanRevision: state.revision,
+      jobsTraversalVersion: JOBS_TRAVERSAL_VERSION,
+      updatedAt: Date.now(),
+    });
+    return { status: "running", phase: "jobs", processed: 0 };
+  }
   if (state.status === "ready") {
     if (state.scanRevision === state.revision) {
       return resultForState(state, 0);
@@ -137,11 +173,14 @@ export async function ensureCatalogsForOwnerPage(
       status: "running",
       phase: "jobs",
       profileCursor: undefined,
+      profileScanAfter: undefined,
       currentProfileId: undefined,
+      currentProfileScanKey: undefined,
       currentJobCursor: undefined,
       nextProfileCursor: undefined,
       profileScanDone: undefined,
       scanRevision: state.revision,
+      jobsTraversalVersion: JOBS_TRAVERSAL_VERSION,
       updatedAt: Date.now(),
     });
     return { status: "running", phase: "jobs", processed: 0 };
@@ -165,7 +204,9 @@ export async function ensureCatalogsForOwnerPage(
         status: "running",
         phase: "jobs",
         profileCursor: undefined,
+        profileScanAfter: undefined,
         scanRevision: state.revision,
+        jobsTraversalVersion: JOBS_TRAVERSAL_VERSION,
         updatedAt: Date.now(),
       });
       return { status: "running", phase: "jobs", processed: page.page.length };
@@ -190,41 +231,53 @@ export async function ensureCatalogsForOwnerPage(
   if (state.scanRevision !== state.revision) {
     await ctx.db.patch(state._id, {
       profileCursor: undefined,
+      profileScanAfter: undefined,
       currentProfileId: undefined,
+      currentProfileScanKey: undefined,
       currentJobCursor: undefined,
       nextProfileCursor: undefined,
       profileScanDone: undefined,
       scanRevision: state.revision,
+      jobsTraversalVersion: JOBS_TRAVERSAL_VERSION,
       updatedAt: Date.now(),
     });
     return { status: "running", phase: "jobs", processed: 0 };
   }
 
   let currentProfileId = state.currentProfileId;
+  let currentProfileScanKey = state.currentProfileScanKey;
   let currentJobCursor = state.currentJobCursor;
-  let nextProfileCursor = state.nextProfileCursor;
-  let profileScanDone = Boolean(state.profileScanDone);
 
   if (!currentProfileId) {
     const profilePage = await ctx.db
       .query("profileCatalog")
-      .withIndex("by_owner_primary", (q: any) =>
-        q.eq("ownerClerkId", ownerClerkId),
-      )
-      .paginate({ cursor: state.profileCursor ?? null, numItems: 1 });
-    const currentProfile = profilePage.page[0] ?? null;
+      .withIndex("by_owner_profile_id", (q: any) => {
+        const owner = q.eq("ownerClerkId", ownerClerkId);
+        return state.profileScanAfter
+          ? owner.gt("profileIdString", state.profileScanAfter)
+          : owner;
+      })
+      .take(1);
+    const currentProfile = profilePage[0] ?? null;
     if (!currentProfile) {
       await ctx.db.patch(state._id, {
         status: "ready",
         phase: "ready",
+        profileCursor: undefined,
+        profileScanAfter: undefined,
+        currentProfileId: undefined,
+        currentProfileScanKey: undefined,
+        currentJobCursor: undefined,
+        nextProfileCursor: undefined,
+        profileScanDone: undefined,
+        jobsTraversalVersion: JOBS_TRAVERSAL_VERSION,
         updatedAt: Date.now(),
       });
       return { status: "ready", phase: "ready", processed: 0 };
     }
     currentProfileId = currentProfile.profileId;
+    currentProfileScanKey = currentProfile.profileIdString;
     currentJobCursor = undefined;
-    nextProfileCursor = profilePage.continueCursor;
-    profileScanDone = profilePage.isDone;
   }
 
   const jobsPage = await ctx.db
@@ -242,31 +295,19 @@ export async function ensureCatalogsForOwnerPage(
     await ctx.db.patch(state._id, {
       status: "running",
       currentProfileId,
+      currentProfileScanKey,
       currentJobCursor: jobsPage.continueCursor,
-      nextProfileCursor,
-      profileScanDone,
       updatedAt: Date.now(),
     });
     return { status: "running", phase: "jobs", processed: jobsPage.page.length };
   }
 
-  if (profileScanDone) {
-    await ctx.db.patch(state._id, {
-      status: "ready",
-      phase: "ready",
-      currentProfileId: undefined,
-      currentJobCursor: undefined,
-      nextProfileCursor: undefined,
-      profileScanDone: undefined,
-      updatedAt: Date.now(),
-    });
-    return { status: "ready", phase: "ready", processed: jobsPage.page.length };
-  }
-
   await ctx.db.patch(state._id, {
     status: "running",
-    profileCursor: nextProfileCursor,
+    profileCursor: undefined,
+    profileScanAfter: currentProfileScanKey ?? String(currentProfileId),
     currentProfileId: undefined,
+    currentProfileScanKey: undefined,
     currentJobCursor: undefined,
     nextProfileCursor: undefined,
     profileScanDone: undefined,

@@ -17,10 +17,12 @@ import {
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
 import {
-  deleteProfileWithCatalog,
+  deleteOwnedCatalogRowsPage,
+  deleteProfileWithCatalogPage,
   insertProfileWithCatalog,
   patchProfileWithCatalog,
 } from "./lib/profileCatalog";
+import { internal } from "./_generated/api";
 
 export type UserProfile = StoredUserProfile;
 type UserProfileInsert = Omit<Doc<"userProfiles">, "_id" | "_creationTime">;
@@ -33,6 +35,12 @@ export const createOrUpdateUser = internalMutation({
   },
   handler: async (ctx, args) => {
     const { clerkId, email, name } = args;
+
+    const deletionState = await ctx.db
+      .query("accountDeletionStates")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .unique();
+    if (deletionState) return null;
 
     const existingUsers = await listProfilesForClerk(ctx, clerkId);
     const existingUser = existingUsers[0] ?? null;
@@ -100,14 +108,60 @@ export const getProfileById = internalQuery({
   },
 });
 
+async function runDeleteUserPage(ctx: any, clerkId: string): Promise<void> {
+  let deletionState = await ctx.db
+    .query("accountDeletionStates")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .unique();
+  if (!deletionState) {
+    const stateId = await ctx.db.insert("accountDeletionStates", {
+      clerkId,
+      status: "deleting",
+      updatedAt: Date.now(),
+      version: 1,
+    });
+    deletionState = await ctx.db.get(stateId);
+  }
+  const scheduleContinuation = async () => {
+    await ctx.scheduler.runAfter(0, internal.users.continueDeleteUser, {
+      clerkId,
+    });
+  };
+
+  if (await deleteOwnedCatalogRowsPage(ctx, clerkId)) {
+    await scheduleContinuation();
+    return;
+  }
+
+  const profile = await ctx.db
+    .query("userProfiles")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+  if (profile) {
+    await deleteProfileWithCatalogPage(ctx, profile._id);
+    await scheduleContinuation();
+    return;
+  }
+
+  const backfillState = await ctx.db
+    .query("catalogBackfillStates")
+    .withIndex("by_owner", (q: any) => q.eq("ownerClerkId", clerkId))
+    .first();
+  if (backfillState) await ctx.db.delete(backfillState._id);
+  await ctx.db.patch(deletionState._id, {
+    status: "done",
+    updatedAt: Date.now(),
+  });
+}
+
 export const deleteUser = internalMutation({
   args: { clerkId: v.string() },
-  handler: async (ctx, args) => {
-    const users = await listProfilesForClerk(ctx, args.clerkId);
-    for (const user of users) {
-      await deleteProfileWithCatalog(ctx, user._id);
-    }
-  },
+  handler: async (ctx, args) => runDeleteUserPage(ctx, args.clerkId),
+});
+
+export const continueDeleteUser = internalMutation({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => runDeleteUserPage(ctx, args.clerkId),
 });
 
 export const getUser = query({

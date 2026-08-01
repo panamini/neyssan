@@ -5,6 +5,7 @@ type Row = Record<string, any> & { _id: string; _creationTime: number };
 class CatalogMemoryDb {
   readonly tables = new Map<string, Row[]>();
   readonly pageSizes: Array<{ table: string; size: number }> = [];
+  readonly deleteCalls: string[] = [];
   private nextId = 1;
 
   constructor(seed: Record<string, Row[]>) {
@@ -41,6 +42,7 @@ class CatalogMemoryDb {
   }
 
   async delete(id: string) {
+    this.deleteCalls.push(id);
     for (const [table, rows] of this.tables) {
       const next = rows.filter((row) => row._id !== id);
       if (next.length !== rows.length) {
@@ -60,16 +62,29 @@ class CatalogMemoryDb {
             filters.push([field, value]);
             return q;
           },
+          gt(field: string, value: unknown) {
+            filters.push([`gt:${field}`, value]);
+            return q;
+          },
         };
         buildIndex(q);
         let rows = [...(db.tables.get(table) ?? [])].filter((row) =>
-          filters.every(([field, value]) => row[field] === value),
+          filters.every(([field, value]) =>
+            field.startsWith("gt:")
+              ? row[field.slice(3)] > value
+              : row[field] === value,
+          ),
         );
         rows.sort((left, right) => left._creationTime - right._creationTime);
         if (indexName === "by_owner_primary") {
           rows.sort((left, right) =>
             left.updatedAt - right.updatedAt ||
             left.profileCreatedAt - right.profileCreatedAt ||
+            String(left.profileIdString).localeCompare(String(right.profileIdString)),
+          );
+        }
+        if (indexName === "by_owner_profile_id") {
+          rows.sort((left, right) =>
             String(left.profileIdString).localeCompare(String(right.profileIdString)),
           );
         }
@@ -146,6 +161,7 @@ describe("finite catalog compatibility materialization", () => {
           ownerClerkId: "clerk_owner",
           status: "ready",
           phase: "ready",
+          jobsTraversalVersion: 1,
           revision: 4,
           scanRevision: 4,
           updatedAt: 3,
@@ -300,5 +316,424 @@ describe("finite catalog compatibility materialization", () => {
     expect(replay.status).toBe("ready");
     expect(db.tables.get("profileCatalog")).toHaveLength(100);
     expect(db.tables.get("jobCatalog")).toHaveLength(500);
+  });
+
+  it("does not skip an unvisited Profile when its display recency changes during the Jobs phase", async () => {
+    const { ensureCatalogsForOwnerPage } = await import("../../catalogsPublic");
+    const { syncProfileCatalogById } = await import("../profileCatalog");
+    const profiles: Row[] = [
+      {
+        _id: "profile_a",
+        _creationTime: 1,
+        clerkId: "clerk_owner",
+        profileId: "cv_a",
+        email: "owner@example.test",
+        createdAt: 1,
+        updatedAt: 10,
+        version: 1,
+      },
+      {
+        _id: "profile_b",
+        _creationTime: 2,
+        clerkId: "clerk_owner",
+        profileId: "cv_b",
+        email: "owner@example.test",
+        createdAt: 2,
+        updatedAt: 20,
+        version: 1,
+      },
+    ];
+    const jobs: Row[] = profiles.map((profile, index) => ({
+      _id: `job_${index}`,
+      _creationTime: 10 + index,
+      userId: profile._id,
+      createdAt: index,
+      importedAt: index,
+      updatedAt: index,
+      lastOpenedAt: index,
+      title: `Role ${index}`,
+      company: "Acme",
+    }));
+    const db = new CatalogMemoryDb({
+      userProfiles: profiles,
+      jobs,
+      profileCatalog: profiles.map((profile, index) => ({
+        _id: `catalog_${index}`,
+        _creationTime: 20 + index,
+        profileId: profile._id,
+        profileIdString: profile._id,
+        externalProfileId: profile.profileId,
+        ownerClerkId: "clerk_owner",
+        label: profile.profileId,
+        updatedAt: profile.updatedAt,
+        profileCreatedAt: profile.createdAt,
+        version: 1,
+      })),
+      jobCatalog: [
+        {
+          _id: "job_catalog_a",
+          _creationTime: 30,
+          jobId: "job_0",
+          profileId: "profile_a",
+          ownerClerkId: "clerk_owner",
+        },
+      ],
+      catalogBackfillStates: [
+        {
+          _id: "catalog_state",
+          _creationTime: 40,
+          ownerClerkId: "clerk_owner",
+          status: "running",
+          phase: "jobs",
+          profileCursor: "1",
+          jobsTraversalVersion: 1,
+          revision: 1,
+          scanRevision: 1,
+          updatedAt: 40,
+          version: 1,
+        },
+      ],
+      accountDeletionStates: [],
+    });
+    const ctx = { db } as any;
+
+    await db.patch("profile_b", { updatedAt: 5 });
+    await syncProfileCatalogById(ctx, "profile_b" as any);
+
+    let result = await ensureCatalogsForOwnerPage(ctx, "clerk_owner");
+    for (let calls = 0; result.status !== "ready" && calls < 10; calls += 1) {
+      result = await ensureCatalogsForOwnerPage(ctx, "clerk_owner");
+    }
+
+    expect(result.status).toBe("ready");
+    expect(db.tables.get("jobCatalog")?.map((row) => row.jobId).sort()).toEqual([
+      "job_0",
+      "job_1",
+    ]);
+  });
+
+  it("restarts a legacy in-progress Jobs traversal before deriving a stable boundary", async () => {
+    const { ensureCatalogsForOwnerPage } = await import("../../catalogsPublic");
+    const profiles: Row[] = [
+      {
+        _id: "profile_a",
+        _creationTime: 1,
+        clerkId: "clerk_owner",
+        profileId: "cv_a",
+        createdAt: 1,
+        updatedAt: 20,
+      },
+      {
+        _id: "profile_b",
+        _creationTime: 2,
+        clerkId: "clerk_owner",
+        profileId: "cv_b",
+        createdAt: 2,
+        updatedAt: 10,
+      },
+    ];
+    const db = new CatalogMemoryDb({
+      userProfiles: profiles,
+      profileCatalog: profiles.map((profile, index) => ({
+        _id: `catalog_${index}`,
+        _creationTime: 10 + index,
+        profileId: profile._id,
+        profileIdString: profile._id,
+        ownerClerkId: "clerk_owner",
+        updatedAt: profile.updatedAt,
+        profileCreatedAt: profile.createdAt,
+        version: 1,
+      })),
+      jobs: profiles.map((profile, index) => ({
+        _id: `legacy_job_${index}`,
+        _creationTime: 20 + index,
+        userId: profile._id,
+        createdAt: index,
+        importedAt: index,
+        updatedAt: index,
+        lastOpenedAt: index,
+        title: `Legacy ${index}`,
+        company: "Acme",
+      })),
+      jobCatalog: [],
+      catalogBackfillStates: [
+        {
+          _id: "legacy_state",
+          _creationTime: 30,
+          ownerClerkId: "clerk_owner",
+          status: "running",
+          phase: "jobs",
+          profileCursor: "1",
+          currentProfileId: "profile_b",
+          revision: 1,
+          scanRevision: 1,
+          updatedAt: 30,
+          version: 1,
+        },
+      ],
+      accountDeletionStates: [],
+    });
+    const ctx = { db } as any;
+
+    let result = await ensureCatalogsForOwnerPage(ctx, "clerk_owner");
+    expect(result).toEqual({ status: "running", phase: "jobs", processed: 0 });
+    for (let calls = 0; result.status !== "ready" && calls < 10; calls += 1) {
+      result = await ensureCatalogsForOwnerPage(ctx, "clerk_owner");
+    }
+
+    expect(result.status).toBe("ready");
+    expect(db.tables.get("jobCatalog")?.map((row) => row.jobId).sort()).toEqual([
+      "legacy_job_0",
+      "legacy_job_1",
+    ]);
+  });
+
+  it("hides summaries immediately and completes account deletion through bounded resumable pages", async () => {
+    const { listJobSummaries, listProfileSummaries } = await import(
+      "../../catalogsPublic"
+    );
+    const { createOrUpdateUser, deleteUser } = await import("../../users");
+    const profiles: Row[] = Array.from({ length: 10 }, (_, index) => ({
+      _id: `profile_${index}`,
+      _creationTime: index + 1,
+      clerkId: "clerk_deleted",
+      profileId: `cv_${index}`,
+      email: "deleted@example.test",
+      createdAt: index + 1,
+      updatedAt: index + 1,
+      version: 1,
+    }));
+    const jobs: Row[] = profiles.flatMap((profile, profileIndex) =>
+      Array.from({ length: 2 }, (_, jobIndex) => ({
+        _id: `job_${profileIndex}_${jobIndex}`,
+        _creationTime: 100 + profileIndex * 2 + jobIndex,
+        userId: profile._id,
+        createdAt: 1,
+        importedAt: 1,
+        updatedAt: 1,
+        lastOpenedAt: 1,
+        title: "Role",
+        company: "Acme",
+      })),
+    );
+    const db = new CatalogMemoryDb({
+      userProfiles: profiles,
+      jobs,
+      profileCatalog: profiles.map((profile, index) => ({
+        _id: `profile_catalog_${index}`,
+        _creationTime: 200 + index,
+        profileId: profile._id,
+        profileIdString: profile._id,
+        ownerClerkId: "clerk_deleted",
+        updatedAt: profile.updatedAt,
+        profileCreatedAt: profile.createdAt,
+        version: 1,
+      })),
+      jobCatalog: jobs.map((job, index) => ({
+        _id: `job_catalog_${index}`,
+        _creationTime: 300 + index,
+        jobId: job._id,
+        profileId: job.userId,
+        ownerClerkId: "clerk_deleted",
+      })),
+      catalogBackfillStates: [
+        {
+          _id: "catalog_state",
+          _creationTime: 400,
+          ownerClerkId: "clerk_deleted",
+          status: "ready",
+          phase: "ready",
+          revision: 1,
+          scanRevision: 1,
+          updatedAt: 400,
+          version: 1,
+        },
+      ],
+      accountDeletionStates: [],
+    });
+    const scheduled: Array<{ clerkId: string }> = [];
+    const ctx = {
+      auth: { getUserIdentity: async () => ({ subject: "clerk_deleted" }) },
+      db,
+      scheduler: {
+        runAfter: async (
+          _delay: number,
+          _reference: unknown,
+          args: { clerkId: string },
+        ) => {
+          scheduled.push(args);
+        },
+      },
+    } as any;
+
+    let previousDeleteCount = db.deleteCalls.length;
+    await (deleteUser as any)._handler(ctx, { clerkId: "clerk_deleted" });
+    expect(db.deleteCalls.length - previousDeleteCount).toBeLessThanOrEqual(8);
+    await expect(
+      (listProfileSummaries as any)._handler(ctx, {}),
+    ).resolves.toEqual([]);
+    await expect(
+      (listJobSummaries as any)._handler(ctx, {}),
+    ).resolves.toEqual([]);
+
+    let invocations = 1;
+    while (scheduled.length > 0 && invocations < 100) {
+      const args = scheduled.shift()!;
+      previousDeleteCount = db.deleteCalls.length;
+      await (deleteUser as any)._handler(ctx, args);
+      expect(db.deleteCalls.length - previousDeleteCount).toBeLessThanOrEqual(8);
+      invocations += 1;
+    }
+
+    expect(invocations).toBeLessThan(100);
+    expect(scheduled).toHaveLength(0);
+    expect(db.tables.get("userProfiles")).toHaveLength(0);
+    expect(db.tables.get("jobs")).toHaveLength(0);
+    expect(db.tables.get("profileCatalog")).toHaveLength(0);
+    expect(db.tables.get("jobCatalog")).toHaveLength(0);
+    expect(db.tables.get("catalogBackfillStates")).toHaveLength(0);
+    expect(db.tables.get("accountDeletionStates")).toEqual([
+      expect.objectContaining({ clerkId: "clerk_deleted", status: "done" }),
+    ]);
+
+    await expect(
+      (createOrUpdateUser as any)._handler(ctx, {
+        clerkId: "clerk_deleted",
+        email: "late@example.test",
+        name: "Late event",
+      }),
+    ).resolves.toBeNull();
+    expect(db.tables.get("userProfiles")).toHaveLength(0);
+
+    await db.insert("userProfiles", {
+      _id: "profile_late",
+      clerkId: "clerk_deleted",
+      profileId: "cv_late",
+      email: "late@example.test",
+      createdAt: 500,
+      updatedAt: 500,
+      version: 1,
+    });
+    await db.insert("profileCatalog", {
+      profileId: "profile_late",
+      profileIdString: "profile_late",
+      ownerClerkId: "clerk_deleted",
+      updatedAt: 500,
+      profileCreatedAt: 500,
+      version: 1,
+    });
+
+    await (deleteUser as any)._handler(ctx, { clerkId: "clerk_deleted" });
+    while (scheduled.length > 0 && invocations < 110) {
+      const args = scheduled.shift()!;
+      await (deleteUser as any)._handler(ctx, args);
+      invocations += 1;
+    }
+
+    expect(scheduled).toHaveLength(0);
+    expect(db.tables.get("userProfiles")).toHaveLength(0);
+    expect(db.tables.get("profileCatalog")).toHaveLength(0);
+  });
+
+  it("deletes a legacy orphan Job before discarding its last owner projection", async () => {
+    const { deleteUser } = await import("../../users");
+    const db = new CatalogMemoryDb({
+      userProfiles: [
+        {
+          _id: "foreign_profile",
+          _creationTime: 1,
+          clerkId: "clerk_foreign",
+          profileId: "cv_foreign",
+          email: "foreign@example.test",
+          createdAt: 1,
+          updatedAt: 1,
+          version: 1,
+        },
+      ],
+      jobs: [
+        {
+          _id: "orphan_job",
+          _creationTime: 1,
+          userId: "missing_profile",
+          createdAt: 1,
+          importedAt: 1,
+          updatedAt: 1,
+          lastOpenedAt: 1,
+          title: "Orphaned role",
+          company: "Acme",
+        },
+        {
+          _id: "foreign_job",
+          _creationTime: 2,
+          userId: "foreign_profile",
+          createdAt: 2,
+          importedAt: 2,
+          updatedAt: 2,
+          lastOpenedAt: 2,
+          title: "Foreign role",
+          company: "Elsewhere",
+        },
+      ],
+      profileCatalog: [],
+      jobCatalog: [
+        {
+          _id: "orphan_job_catalog",
+          _creationTime: 2,
+          jobId: "orphan_job",
+          profileId: "missing_profile",
+          ownerClerkId: "clerk_deleted",
+        },
+        {
+          _id: "stale_foreign_job_catalog",
+          _creationTime: 3,
+          jobId: "foreign_job",
+          profileId: "foreign_profile",
+          ownerClerkId: "clerk_deleted",
+        },
+      ],
+      catalogBackfillStates: [],
+      accountDeletionStates: [
+        {
+          _id: "deletion_state",
+          _creationTime: 4,
+          clerkId: "clerk_deleted",
+          status: "done",
+          updatedAt: 3,
+          version: 1,
+        },
+      ],
+    });
+    const scheduled: Array<{ clerkId: string }> = [];
+    const ctx = {
+      db,
+      scheduler: {
+        runAfter: async (
+          _delay: number,
+          _reference: unknown,
+          args: { clerkId: string },
+        ) => scheduled.push(args),
+      },
+    } as any;
+
+    let invocations = 0;
+    await (deleteUser as any)._handler(ctx, { clerkId: "clerk_deleted" });
+    invocations += 1;
+    while (scheduled.length > 0 && invocations < 10) {
+      await (deleteUser as any)._handler(ctx, scheduled.shift()!);
+      invocations += 1;
+    }
+
+    expect(invocations).toBeLessThan(10);
+    expect(scheduled).toHaveLength(0);
+    expect(db.tables.get("jobCatalog")).toHaveLength(0);
+    expect(db.tables.get("jobs")?.map((job) => job._id)).toEqual([
+      "foreign_job",
+    ]);
+    expect(db.tables.get("userProfiles")?.map((profile) => profile._id)).toEqual([
+      "foreign_profile",
+    ]);
+    expect(db.tables.get("accountDeletionStates")).toEqual([
+      expect.objectContaining({ clerkId: "clerk_deleted", status: "done" }),
+    ]);
   });
 });

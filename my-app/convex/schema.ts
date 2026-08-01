@@ -517,6 +517,7 @@ export default defineSchema({
     version: v.literal(1),
   })
     .index("by_profile_id", ["profileId"])
+    .index("by_owner_profile_id", ["ownerClerkId", "profileIdString"])
     .index("by_owner_primary", [
       "ownerClerkId",
       "updatedAt",
@@ -548,6 +549,7 @@ export default defineSchema({
     version: v.literal(1),
   })
     .index("by_job_id", ["jobId"])
+    .index("by_profile_id", ["profileId"])
     .index("by_owner_archived_updated", [
       "ownerClerkId",
       "archived",
@@ -567,15 +569,25 @@ export default defineSchema({
       v.literal("ready"),
     ),
     profileCursor: v.optional(v.string()),
+    profileScanAfter: v.optional(v.string()),
     currentProfileId: v.optional(v.id("userProfiles")),
+    currentProfileScanKey: v.optional(v.string()),
     currentJobCursor: v.optional(v.string()),
     nextProfileCursor: v.optional(v.string()),
     profileScanDone: v.optional(v.boolean()),
+    jobsTraversalVersion: v.optional(v.literal(1)),
     revision: v.number(),
     scanRevision: v.number(),
     updatedAt: v.number(),
     version: v.literal(1),
   }).index("by_owner", ["ownerClerkId"]),
+
+  accountDeletionStates: defineTable({
+    clerkId: v.string(),
+    status: v.union(v.literal("deleting"), v.literal("done")),
+    updatedAt: v.number(),
+    version: v.literal(1),
+  }).index("by_clerk_id", ["clerkId"]),
 
   job_extraction_shadow: defineTable({
     job_id: v.id("jobs"),
