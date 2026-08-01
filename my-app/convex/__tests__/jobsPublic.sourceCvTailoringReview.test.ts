@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   materializeCvTailoringReview,
@@ -6,6 +6,10 @@ import {
   submitCvTailoringReview,
 } from "../jobsPublic";
 import { listProfilesForClerk } from "../lib/userProfiles";
+
+vi.mock("../lib/jobCatalog", () => ({
+  syncJobCatalogById: async () => null,
+}));
 
 const T = Date.UTC(2026, 6, 30);
 const CLERK_ID = "clerk-owner";

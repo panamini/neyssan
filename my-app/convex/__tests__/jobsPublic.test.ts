@@ -23,6 +23,21 @@ import {
 } from "../jobsPublic";
 import { hashNormalizedJobText } from "../lib/jobs/llmExtractJob";
 
+vi.mock("../lib/jobCatalog", () => ({
+  insertJobWithCatalog: (ctx: any, value: Record<string, unknown>) =>
+    ctx.db.insert("jobs", value),
+  patchJobWithCatalog: (ctx: any, id: string, value: Record<string, unknown>) =>
+    ctx.db.patch(id, value),
+  deleteJobWithCatalog: (ctx: any, id: string) => ctx.db.delete(id),
+  syncJobCatalogById: async () => null,
+}));
+
+vi.mock("../lib/profileCatalog", () => ({
+  patchProfileWithCatalog: (ctx: any, id: string, value: Record<string, unknown>) =>
+    ctx.db.patch(id, value),
+  syncProfileCatalogById: async () => null,
+}));
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });

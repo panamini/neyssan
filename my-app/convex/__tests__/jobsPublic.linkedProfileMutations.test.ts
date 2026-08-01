@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { approveReviewItem, updateField } from "../jobsPublic";
+
+vi.mock("../lib/jobCatalog", () => ({
+  patchJobWithCatalog: (ctx: any, id: string, value: Record<string, unknown>) =>
+    ctx.db.patch(id, value),
+}));
 
 function buildLinkedProfiles() {
   return [

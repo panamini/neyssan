@@ -425,7 +425,7 @@ function sortByRecency(left: StoredUserProfile, right: StoredUserProfile): numbe
   return String(right._id).localeCompare(String(left._id));
 }
 
-function isReviewedSourceCvVariant(profile: StoredUserProfile): boolean {
+export function isReviewedSourceCvVariant(profile: StoredUserProfile): boolean {
   return (
     typeof profile.profileId === "string" &&
     profile.profileId.startsWith("source-cv-variant:v1:")

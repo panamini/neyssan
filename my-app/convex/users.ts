@@ -16,6 +16,11 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
+import {
+  deleteProfileWithCatalog,
+  insertProfileWithCatalog,
+  patchProfileWithCatalog,
+} from "./lib/profileCatalog";
 
 export type UserProfile = StoredUserProfile;
 type UserProfileInsert = Omit<Doc<"userProfiles">, "_id" | "_creationTime">;
@@ -33,18 +38,16 @@ export const createOrUpdateUser = internalMutation({
     const existingUser = existingUsers[0] ?? null;
 
     if (existingUser) {
-      await Promise.all(
-        existingUsers.map((profile) => {
-          const updateData: Partial<UserProfile> = {
-            email,
-            updatedAt: Date.now(),
-          };
-          if (name !== undefined && !profile.name) {
-            updateData.name = name;
-          }
-          return ctx.db.patch(profile._id, updateData);
-        }),
-      );
+      for (const profile of existingUsers) {
+        const updateData: Partial<UserProfile> = {
+          email,
+          updatedAt: Date.now(),
+        };
+        if (name !== undefined && !profile.name) {
+          updateData.name = name;
+        }
+        await patchProfileWithCatalog(ctx, profile._id, updateData);
+      }
       return existingUser._id;
     } else {
       const newUser: UserProfileInsert = {
@@ -60,7 +63,7 @@ export const createOrUpdateUser = internalMutation({
         updatedAt: Date.now(),
         version: 1,
       };
-      return await ctx.db.insert("userProfiles", newUser);
+      return await insertProfileWithCatalog(ctx, newUser);
     }
   },
 });
@@ -101,7 +104,9 @@ export const deleteUser = internalMutation({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
     const users = await listProfilesForClerk(ctx, args.clerkId);
-    await Promise.all(users.map((user) => ctx.db.delete(user._id)));
+    for (const user of users) {
+      await deleteProfileWithCatalog(ctx, user._id);
+    }
   },
 });
 
@@ -192,6 +197,6 @@ export const updateUserProfile = internalMutation({
       rawText: updateData.raw_text ?? user.raw_text,
     });
 
-    return await ctx.db.patch(user._id, updateData);
+    return await patchProfileWithCatalog(ctx, user._id, updateData);
   },
 });

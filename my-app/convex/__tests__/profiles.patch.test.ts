@@ -8,6 +8,13 @@ import {
 } from "../profiles";
 import { buildMatchReadProfile, computeMatchRead } from "../lib/jobs/matchRead";
 
+vi.mock("../lib/profileCatalog", () => ({
+  insertProfileWithCatalog: (ctx: any, value: Record<string, unknown>) =>
+    ctx.db.insert("userProfiles", value),
+  patchProfileWithCatalog: (ctx: any, id: string, value: Record<string, unknown>) =>
+    ctx.db.patch(id, value),
+}));
+
 function makeMatchableCvDocument() {
   return {
     id: "cv_content",

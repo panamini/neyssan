@@ -72,6 +72,16 @@ import {
   prepareOwnedCvTailoringReview,
   submitOwnedCvTailoringReview,
 } from "./lib/jobs/sourceCvTailoringReview";
+import {
+  deleteJobWithCatalog,
+  insertJobWithCatalog,
+  patchJobWithCatalog,
+  syncJobCatalogById,
+} from "./lib/jobCatalog";
+import {
+  patchProfileWithCatalog,
+  syncProfileCatalogById,
+} from "./lib/profileCatalog";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -966,7 +976,7 @@ async function archiveActiveSampleJobsForProfile(ctx: any, profileId: string) {
   const now = Date.now();
   await Promise.all(
     activeSampleJobs.map((job: any) =>
-      ctx.db.patch(job._id, {
+      patchJobWithCatalog(ctx, job._id, {
         archivedAt: now,
         updatedAt: now,
       }),
@@ -1738,6 +1748,7 @@ async function requireCanonicalUserProfile(ctx: any) {
     fallbackEmail: identity.email,
     fallbackName: identity.name,
   });
+  await syncProfileCatalogById(ctx, profile.id);
 
   return {
     _id: profile.id,
@@ -2042,7 +2053,7 @@ export const createOrReuseFromSource = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      await patchJobWithCatalog(ctx, existing._id, {
         lastOpenedAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -2054,7 +2065,7 @@ export const createOrReuseFromSource = mutation({
       };
     }
 
-    const jobId = await ctx.db.insert("jobs", {
+    const jobId = await insertJobWithCatalog(ctx, {
       userId: profile._id,
       createdAt: draft.createdAt,
       updatedAt: draft.updatedAt,
@@ -2084,7 +2095,7 @@ export const createOrReuseFromSource = mutation({
       status: draft.status,
       archivedAt: draft.archivedAt,
       reviewItems: shouldParse ? [] : draft.reviewItems,
-    });
+    }, profile.clerkId);
 
     if (shouldParse) {
       await ctx.scheduler.runAfter(
@@ -2994,7 +3005,10 @@ export const materializeCvTailoringReview = mutation({
   },
   returns: cvTailoringMaterializationResultValidator,
   handler: async (ctx, args) => {
-    return await materializeOwnedCvTailoringReview(ctx, args);
+    const result = await materializeOwnedCvTailoringReview(ctx, args);
+    const normalizedJobId = ctx.db.normalizeId("jobs", result.jobId);
+    if (normalizedJobId) await syncJobCatalogById(ctx, normalizedJobId);
+    return result;
   },
 });
 
@@ -3037,7 +3051,7 @@ export const setResumeForJob = mutation({
       await backfillResumeProfileScoringFromCvDocument(ctx, resumeProfile);
     }
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       lastResumeId: args.resumeId ?? null,
       lastResumeName: args.resumeName ?? null,
       updatedAt: Date.now(),
@@ -3077,7 +3091,7 @@ export const setJobFavorite = mutation({
       throw new Error("Job not found");
     }
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       isFavorite: args.isFavorite,
       updatedAt: Date.now(),
     });
@@ -3111,7 +3125,7 @@ export const setDefaultResume = mutation({
       }
     }
 
-    await ctx.db.patch(primaryProfile._id, {
+    await patchProfileWithCatalog(ctx, primaryProfile._id, {
       defaultResumeId: args.resumeId ?? null,
       defaultResumeName: args.resumeName ?? null,
       updatedAt: Date.now(),
@@ -3283,7 +3297,7 @@ export const seedSampleJob = mutation({
 
     if (activeSampleJob) {
       const now = Date.now();
-      await ctx.db.patch(activeSampleJob._id, {
+      await patchJobWithCatalog(ctx, activeSampleJob._id, {
         lastOpenedAt: now,
         updatedAt: now,
       });
@@ -3300,7 +3314,7 @@ export const seedSampleJob = mutation({
 
     if (archivedSampleJob) {
       const now = Date.now();
-      await ctx.db.patch(archivedSampleJob._id, {
+      await patchJobWithCatalog(ctx, archivedSampleJob._id, {
         archivedAt: null,
         lastOpenedAt: now,
         updatedAt: now,
@@ -3311,10 +3325,10 @@ export const seedSampleJob = mutation({
 
     const now = Date.now();
     const sampleJob = buildSampleJobDraft(now);
-    const jobId = await ctx.db.insert("jobs", {
+    const jobId = await insertJobWithCatalog(ctx, {
       userId: profile._id,
       ...sampleJob,
-    });
+    }, profile.clerkId);
     await scheduleFirstRunPathMetric(ctx, "sample");
     return { jobId: String(jobId) };
   },
@@ -3329,7 +3343,7 @@ export const markOpened = mutation({
     const { normalizedJobId } = await requireJobForLinkedProfile(ctx, args.jobId);
 
     const now = Date.now();
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       lastOpenedAt: now,
       updatedAt: now,
     });
@@ -3404,7 +3418,7 @@ export const updateField = mutation({
       now,
     });
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       [args.fieldKey]: args.value,
       reviewItems,
       reviewState: resolveCanonicalJobReviewState(reviewItems),
@@ -3442,7 +3456,7 @@ export const approveReviewItem = mutation({
       (item) => item.id === args.reviewItemId,
     );
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       ...(approvedItem
         ? {
             [approvedItem.fieldKey]:
@@ -3470,7 +3484,7 @@ export const archiveJob = mutation({
     );
 
     const now = Date.now();
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       archivedAt: now,
       updatedAt: now,
     });
@@ -3490,7 +3504,7 @@ export const restoreArchivedJob = mutation({
       args.jobId,
     );
 
-    await ctx.db.patch(normalizedJobId, {
+    await patchJobWithCatalog(ctx, normalizedJobId, {
       archivedAt: null,
       updatedAt: Date.now(),
     });
@@ -3513,7 +3527,7 @@ export const deleteArchivedJob = mutation({
       throw new Error("Archived job not found");
     }
 
-    await ctx.db.delete(normalizedJobId);
+    await deleteJobWithCatalog(ctx, normalizedJobId);
 
     return null;
   },
@@ -3530,7 +3544,7 @@ export const duplicateJob = mutation({
     const { job } = await requireJobForLinkedProfile(ctx, args.jobId);
 
     const now = Date.now();
-    const duplicatedJobId = await ctx.db.insert("jobs", {
+    const duplicatedJobId = await insertJobWithCatalog(ctx, {
       userId: job.userId,
       createdAt: now,
       updatedAt: now,
@@ -3607,7 +3621,7 @@ export const parseCreatedJob = internalMutation({
         applicationUrl: job.applicationUrl,
       });
 
-      await ctx.db.patch(normalizedJobId, {
+      await patchJobWithCatalog(ctx, normalizedJobId, {
         company: resolveReparsedCompany({
           existingCompany: job.company,
           parsedCompany: draft.company,
@@ -3646,7 +3660,7 @@ export const parseCreatedJob = internalMutation({
       }
     } catch (error) {
       console.error("[jobsPublic.parseCreatedJob] parse failed", error);
-      await ctx.db.patch(normalizedJobId, {
+      await patchJobWithCatalog(ctx, normalizedJobId, {
         parseStatus: "failed",
         reviewState: "pending",
         updatedAt: Date.now(),

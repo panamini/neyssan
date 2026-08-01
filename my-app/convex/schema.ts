@@ -504,6 +504,79 @@ export default defineSchema({
     .index("by_user_dedupe", ["userId", "dedupeKey"])
     .index("by_user_updated", ["userId", "updatedAt"]),
 
+  profileCatalog: defineTable({
+    profileId: v.id("userProfiles"),
+    profileIdString: v.string(),
+    ownerClerkId: v.string(),
+    externalProfileId: v.optional(v.string()),
+    label: v.optional(v.string()),
+    defaultResumeId: v.optional(v.union(v.string(), v.null())),
+    defaultResumeName: v.optional(v.union(v.string(), v.null())),
+    updatedAt: v.number(),
+    profileCreatedAt: v.number(),
+    version: v.literal(1),
+  })
+    .index("by_profile_id", ["profileId"])
+    .index("by_owner_primary", [
+      "ownerClerkId",
+      "updatedAt",
+      "profileCreatedAt",
+      "profileIdString",
+    ]),
+
+  jobCatalog: defineTable({
+    jobId: v.id("jobs"),
+    profileId: v.id("userProfiles"),
+    ownerClerkId: v.string(),
+    title: v.string(),
+    company: v.string(),
+    location: v.string(),
+    sourceLanguage: v.string(),
+    sourceUrl: v.string(),
+    sourceDomain: v.string(),
+    sourceType: v.string(),
+    parseStatus: v.string(),
+    reviewState: v.string(),
+    status: v.string(),
+    isSample: v.boolean(),
+    isFavorite: v.boolean(),
+    archived: v.boolean(),
+    importedAt: v.number(),
+    updatedAt: v.number(),
+    lastOpenedAt: v.number(),
+    lastActivityAt: v.number(),
+    version: v.literal(1),
+  })
+    .index("by_job_id", ["jobId"])
+    .index("by_owner_archived_updated", [
+      "ownerClerkId",
+      "archived",
+      "updatedAt",
+    ]),
+
+  catalogBackfillStates: defineTable({
+    ownerClerkId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("ready"),
+    ),
+    phase: v.union(
+      v.literal("profiles"),
+      v.literal("jobs"),
+      v.literal("ready"),
+    ),
+    profileCursor: v.optional(v.string()),
+    currentProfileId: v.optional(v.id("userProfiles")),
+    currentJobCursor: v.optional(v.string()),
+    nextProfileCursor: v.optional(v.string()),
+    profileScanDone: v.optional(v.boolean()),
+    revision: v.number(),
+    scanRevision: v.number(),
+    updatedAt: v.number(),
+    version: v.literal(1),
+  }).index("by_owner", ["ownerClerkId"]),
+
   job_extraction_shadow: defineTable({
     job_id: v.id("jobs"),
     job_text_hash: v.string(),

@@ -12,6 +12,7 @@ import {
   resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { patchProfileWithCatalog } from "./lib/profileCatalog";
 
 const PROFILE_LIST_DEFAULT_LIMIT = 40;
 const PROFILE_LIST_MAX_LIMIT = 120;
@@ -415,7 +416,7 @@ export default mutation({
       rawText: updates.raw_text ?? existing.raw_text,
     });
 
-    await ctx.db.patch(existing._id, updates);
+    await patchProfileWithCatalog(ctx, existing._id, updates);
     return null;
   },
 });
