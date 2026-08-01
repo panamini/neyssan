@@ -30,6 +30,7 @@ import {
 import { openOnboardingReplay } from "../../lib/onboarding-replay-event";
 import type { CvDocument } from "../../types/cvDocument";
 import { formatUiDate } from "../../lib/ui-date";
+import { resolveVisibleJobVerdict } from "../../lib/jobs/visibleJobVerdict";
 import {
   REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX,
   readReviewedSourceCvVariantBinding,
@@ -1048,11 +1049,13 @@ function matchesListFilters(
 ): boolean {
   const openedAt = optimisticOpenedAt ?? job.lastOpenedAt;
   const isFavorite = optimisticFavorite ?? job.isFavorite;
-  const verdict = job.matchReview?.verdict;
-  const resolvedTier = job.matchRead?.tier ?? job.matchTier;
-  const isStrongMatch = verdict === "strong_lead" || resolvedTier === "strong";
-  const isWorthMatch =
-    verdict === "possible_lead" || resolvedTier === "partial";
+  const visibleVerdict = resolveVisibleJobVerdict({
+    matchReview: job.matchReview,
+    matchRead: job.matchRead,
+    matchTier: job.matchTier,
+  });
+  const isStrongMatch = visibleVerdict.key === "strong_match";
+  const isWorthMatch = visibleVerdict.key === "worth_a_shot";
   if (matchFilter === "worth_plus" && !isStrongMatch && !isWorthMatch) {
     return false;
   }
@@ -1062,10 +1065,10 @@ function matchesListFilters(
   if (matchFilter === "partial" && !isWorthMatch) {
     return false;
   }
-  if (matchFilter === "weak" && resolvedTier !== "weak") {
+  if (matchFilter === "weak" && visibleVerdict.key !== "probably_skip") {
     return false;
   }
-  if (matchFilter === "unknown" && resolvedTier !== "unknown") {
+  if (matchFilter === "unknown" && visibleVerdict.key !== "maybe") {
     return false;
   }
   if (hasDocsOnly && job.linkedDocumentCount === 0) {

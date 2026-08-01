@@ -1,5 +1,7 @@
 type UserProfileId = string;
 
+export const JOBS_READ_MODEL_VERSION = 2;
+
 export type ProfileCatalogProjection = {
   profileId: UserProfileId;
   clerkId: string;
@@ -10,7 +12,91 @@ export type ProfileCatalogProjection = {
   updatedAt: number;
   defaultResumeId?: string | null;
   defaultResumeName?: string | null;
+  matchFingerprint: string;
 };
+
+function objectOrEmpty(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function arrayOrEmpty(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function firstPresent(...values: unknown[]): unknown {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return null;
+}
+
+function buildMatchFingerprint(profile: Record<string, unknown>): string {
+  const profileDetails = objectOrEmpty(profile.profile);
+  const contact = objectOrEmpty(profile.contact);
+  const cvDocument = objectOrEmpty(profile.cvDocument);
+  const cvMetadata = objectOrEmpty(cvDocument.metadata);
+  const authoritativeResume = objectOrEmpty(
+    firstPresent(
+      cvMetadata.authoritativeResume,
+      cvDocument.authoritativeResume,
+    ),
+  );
+  const serialized = JSON.stringify({
+    profileId: stringOrNull(profile.profileId),
+    defaultResumeId: stringOrNull(profile.defaultResumeId),
+    desiredPosition: firstPresent(
+      profile.desiredPosition,
+      profileDetails.desiredPosition,
+    ),
+    headline: firstPresent(profile.headline),
+    summary: stringOrNull(profile.summary),
+    skills: arrayOrEmpty(profile.skills),
+    keywords: arrayOrEmpty(profile.keywords),
+    experience: arrayOrEmpty(profile.experience),
+    education: arrayOrEmpty(profile.education),
+    certifications: firstPresent(profile.certifications),
+    certificates: firstPresent(profile.certificates),
+    licenses: firstPresent(profile.licenses),
+    languages: firstPresent(profile.languages),
+    projects: firstPresent(profile.projects),
+    achievements: firstPresent(profile.achievements),
+    awards: firstPresent(profile.awards),
+    publications: firstPresent(profile.publications),
+    volunteer: firstPresent(profile.volunteer),
+    affiliations: firstPresent(profile.affiliations),
+    professionalAffiliations: firstPresent(profile.professionalAffiliations),
+    memberships: firstPresent(profile.memberships),
+    associations: firstPresent(profile.associations),
+    additionalInformation: firstPresent(
+      profile.additional_information,
+      profile.additionalInformation,
+      profile.additionalInfo,
+    ),
+    portfolio: firstPresent(profile.portfolio),
+    website: firstPresent(profile.website),
+    location: firstPresent(profile.location, contact.address),
+    rawText: stringOrNull(profile.raw_text),
+    authoritativeNormalized: firstPresent(authoritativeResume.normalized),
+  });
+  let primary = 0x811c9dc5;
+  let secondary = 0x9e3779b9;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    primary = Math.imul(primary ^ code, 0x01000193);
+    secondary = Math.imul(secondary ^ code, 0x85ebca6b);
+  }
+  return `match-v1-${(primary >>> 0).toString(16).padStart(8, "0")}${(
+    secondary >>> 0
+  )
+    .toString(16)
+    .padStart(8, "0")}-${serialized.length}`;
+}
 
 function resolveCatalogLabel(profile: Record<string, unknown>): string | null {
   const cvDocument =
@@ -69,7 +155,26 @@ export function buildProfileCatalogProjection(
     profile.defaultResumeName === null
       ? { defaultResumeName: profile.defaultResumeName }
       : {}),
+    matchFingerprint: buildMatchFingerprint(profile),
   };
+}
+
+async function invalidateJobsReadModelForClerk(
+  ctx: any,
+  clerkId: string,
+): Promise<void> {
+  const state = await ctx.db
+    .query("accountReadModels")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+  if (!state) return;
+
+  await ctx.db.replace(state._id, {
+    clerkId,
+    status: "backfilling",
+    version: JOBS_READ_MODEL_VERSION,
+    updatedAt: Date.now(),
+  });
 }
 
 export async function upsertProfileCatalog(
@@ -88,11 +193,19 @@ export async function upsertProfileCatalog(
       : typeof existingQuery.take === "function"
         ? (await existingQuery.take(1))[0] ?? null
         : (await existingQuery.collect())[0] ?? null;
+  const matchInputsChanged =
+    existing &&
+    typeof existing.matchFingerprint === "string" &&
+    existing.matchFingerprint !== projection.matchFingerprint;
 
   if (existing) {
     await ctx.db.patch(existing._id, projection);
   } else {
     await ctx.db.insert("profileCatalog", projection);
+  }
+
+  if (matchInputsChanged) {
+    await invalidateJobsReadModelForClerk(ctx, projection.clerkId);
   }
 }
 

@@ -33,6 +33,59 @@ function makeCatalogRow(job: ReturnType<typeof makeFullJob>, index: number) {
 }
 
 describe("bounded Jobs read model scale", () => {
+  it("restarts a legacy ready state when the projection version changes", async () => {
+    const replace = vi.fn(async () => undefined);
+    const query = vi.fn((table: string) => {
+      if (table === "accountReadModels") {
+        return {
+          withIndex: () => ({
+            first: async () => ({
+              _id: "legacy_state",
+              clerkId: "clerk_scale",
+              status: "ready",
+              updatedAt: 1,
+            }),
+          }),
+        };
+      }
+      if (table === "userProfiles") {
+        return {
+          withIndex: () => ({
+            paginate: async () => ({
+              page: [],
+              isDone: true,
+              continueCursor: "",
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    await expect(
+      ensureJobsReadModelPage._handler(
+        {
+          auth: {
+            getUserIdentity: vi.fn(async () => ({ subject: "clerk_scale" })),
+          },
+          db: { query, replace },
+        } as any,
+        {},
+      ),
+    ).resolves.toEqual({
+      done: true,
+      processedProfiles: 0,
+      processedJobs: 0,
+    });
+    expect(replace).toHaveBeenCalledWith(
+      "legacy_state",
+      expect.objectContaining({
+        status: "ready",
+        version: 2,
+      }),
+    );
+  });
+
   it("selects a legacy profile without issuing a second paginated query", async () => {
     let paginatedQueries = 0;
     const insert = vi.fn(async (table: string) => `${table}_inserted`);
@@ -110,6 +163,10 @@ describe("bounded Jobs read model scale", () => {
       makeFullJob(index),
     );
     const jobs = fullJobs.map(makeCatalogRow);
+    Object.assign(jobs[0], {
+      matchReviewVerdict: "possible_lead",
+      matchReviewScore: 68,
+    });
     const profiles = Array.from({ length: 100 }, (_, index) => ({
       _id: `profile_${index}`,
       cvDocument: { rawText: "cv".repeat(100_000) },
@@ -176,6 +233,15 @@ describe("bounded Jobs read model scale", () => {
     expect(paginate).toHaveBeenCalledOnce();
     expect(paginate).toHaveBeenCalledWith({ cursor: null, numItems: 36 });
     expect(result.page).toHaveLength(36);
+    expect(result.page[0]).toEqual(
+      expect.objectContaining({
+        matchTier: "unknown",
+        matchReview: {
+          verdict: "possible_lead",
+          score: 68,
+        },
+      }),
+    );
     expect(JSON.stringify(result)).not.toContain("cvDocument");
     expect(JSON.stringify(result)).not.toContain("rawDescription");
     expect(JSON.stringify(result).length).toBeLessThan(100_000);

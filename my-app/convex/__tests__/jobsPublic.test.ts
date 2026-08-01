@@ -4713,6 +4713,7 @@ describe("jobsPublic job extraction shadow cache", () => {
     await storeJobExtractionShadow._handler(
       {
         db: {
+          get: async () => null,
           insert: async (table: string, value: unknown) => {
             expect(table).toBe("job_extraction_shadow");
             inserts.push(value);
@@ -4800,6 +4801,7 @@ describe("jobsPublic job extraction shadow cache", () => {
             await storeJobExtractionShadow._handler(
               {
                 db: {
+                  get: async () => null,
                   insert: async (table: string, value: unknown) => {
                     expect(table).toBe("job_extraction_shadow");
                     inserts.push(value);

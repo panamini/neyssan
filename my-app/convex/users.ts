@@ -16,7 +16,10 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
-import { upsertProfileCatalog } from "./lib/profileCatalog";
+import {
+  syncProfileCatalogById,
+  upsertProfileCatalog,
+} from "./lib/profileCatalog";
 
 export type UserProfile = StoredUserProfile;
 type UserProfileInsert = Omit<Doc<"userProfiles">, "_id" | "_creationTime">;
@@ -201,6 +204,8 @@ export const updateUserProfile = internalMutation({
       rawText: updateData.raw_text ?? user.raw_text,
     });
 
-    return await ctx.db.patch(user._id, updateData);
+    const result = await ctx.db.patch(user._id, updateData);
+    await syncProfileCatalogById(ctx, user._id);
+    return result;
   },
 });

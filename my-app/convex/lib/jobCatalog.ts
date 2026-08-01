@@ -1,6 +1,19 @@
 import { buildMatchReadProfile, computeMatchRead } from "./jobs/matchRead";
+import { detectJobPostingLanguage } from "./jobs/canonicalJobs";
+import {
+  buildJobMatchReviewFromStructuredDebug,
+  buildStructuredMatchReadDebug,
+  buildStructuredPendingMatchRead,
+  type JobMatchReviewVerdict,
+} from "./jobs/structuredMatchRead";
 
 const LINKED_PROPOSAL_PROJECTION_LIMIT = 100;
+const JOB_CATALOG_SHADOW_ROWS_LIMIT = 1;
+
+type JobCatalogMatchReview = {
+  verdict: JobMatchReviewVerdict;
+  score: number;
+};
 
 export type JobCatalogProjection = {
   jobId: string;
@@ -18,6 +31,8 @@ export type JobCatalogProjection = {
   parseStatus: string;
   reviewState: string;
   matchTier: "strong" | "partial" | "weak" | "unknown";
+  matchReviewVerdict?: JobMatchReviewVerdict | null;
+  matchReviewScore?: number | null;
   status: string;
   importedAt: number;
   updatedAt: number;
@@ -33,11 +48,34 @@ function normalizeMatchTier(value: unknown): JobCatalogProjection["matchTier"] {
     : "unknown";
 }
 
+function normalizeMatchReviewVerdict(
+  value: unknown,
+): JobMatchReviewVerdict | null {
+  return value === "strong_lead" ||
+    value === "possible_lead" ||
+    value === "probably_skip" ||
+    value === "not_enough_signal"
+    ? value
+    : null;
+}
+
+function resolveEffectiveJobRawLanguageDetected(job: Record<string, any>) {
+  const stored = String(job.rawLanguageDetected ?? "").trim();
+  const detected = detectJobPostingLanguage(
+    `${job.title ?? ""}\n${job.rawDescription ?? ""}`,
+  );
+  if (stored.toLowerCase().startsWith("en") && detected !== "en") {
+    return detected;
+  }
+  return stored || detected;
+}
+
 export function buildJobCatalogProjection(
   job: Record<string, any>,
   ownerClerkId: string,
   existing?: Partial<JobCatalogProjection> | null,
   matchTierOverride?: JobCatalogProjection["matchTier"],
+  matchReviewOverride?: JobCatalogMatchReview | null,
 ): JobCatalogProjection {
   const updatedAt = Number(job.updatedAt ?? job.createdAt ?? 0);
   const lastOpenedAt = Number(job.lastOpenedAt ?? updatedAt);
@@ -47,6 +85,16 @@ export function buildJobCatalogProjection(
     lastOpenedAt,
     Number(existing?.lastActivityAt ?? 0),
   );
+  const matchReviewVerdict =
+    matchReviewOverride === undefined
+      ? normalizeMatchReviewVerdict(existing?.matchReviewVerdict)
+      : matchReviewOverride?.verdict ?? null;
+  const matchReviewScore =
+    matchReviewOverride === undefined
+      ? typeof existing?.matchReviewScore === "number"
+        ? existing.matchReviewScore
+        : null
+      : matchReviewOverride?.score ?? null;
 
   return {
     jobId: String(job._id),
@@ -67,6 +115,8 @@ export function buildJobCatalogProjection(
     parseStatus: String(job.parseStatus ?? "pending"),
     reviewState: String(job.reviewState ?? "needs_review"),
     matchTier: matchTierOverride ?? normalizeMatchTier(job.matchTier),
+    matchReviewVerdict,
+    matchReviewScore,
     status: String(job.status ?? "active"),
     importedAt: Number(job.importedAt ?? updatedAt),
     updatedAt,
@@ -82,6 +132,7 @@ export async function upsertJobCatalog(
   job: Record<string, any>,
   ownerClerkId: string,
   matchTierOverride?: JobCatalogProjection["matchTier"],
+  matchReviewOverride?: JobCatalogMatchReview | null,
 ): Promise<void> {
   const existingQuery = ctx.db
     .query("jobCatalog")
@@ -97,6 +148,7 @@ export async function upsertJobCatalog(
     ownerClerkId,
     existing,
     matchTierOverride,
+    matchReviewOverride,
   );
 
   if (existing) {
@@ -152,7 +204,39 @@ export async function syncJobCatalogById(ctx: any, jobId: any): Promise<void> {
         profile: buildMatchReadProfile(profile),
       }).tier
     : normalizeMatchTier(job.matchTier);
-  await upsertJobCatalog(ctx, job, ownerClerkId, matchTier);
+  const pendingMatchRead = buildStructuredPendingMatchRead({
+    jobId: String(job._id),
+    profileId: String(profile?.profileId ?? profile?._id ?? ""),
+  });
+  const shadowQuery = ctx.db
+    .query("job_extraction_shadow")
+    .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id));
+  const orderedShadowQuery =
+    typeof shadowQuery.order === "function"
+      ? shadowQuery.order("desc")
+      : shadowQuery;
+  const shadowRows =
+    typeof orderedShadowQuery.take === "function"
+      ? await orderedShadowQuery.take(JOB_CATALOG_SHADOW_ROWS_LIMIT)
+      : (await orderedShadowQuery.collect()).slice(
+          0,
+          JOB_CATALOG_SHADOW_ROWS_LIMIT,
+        );
+  const matchReview = buildJobMatchReviewFromStructuredDebug(
+    buildStructuredMatchReadDebug({
+      old: pendingMatchRead,
+      job: {
+        id: String(job._id),
+        rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
+      },
+      profile,
+      shadowRows,
+    }),
+  );
+  await upsertJobCatalog(ctx, job, ownerClerkId, matchTier, {
+    verdict: matchReview.verdict,
+    score: matchReview.score,
+  });
 }
 
 export async function refreshJobCatalogProposalStats(
@@ -194,6 +278,17 @@ export async function refreshJobCatalogProposalStats(
 }
 
 export function toJobListItem(catalog: JobCatalogProjection) {
+  const matchReviewVerdict = normalizeMatchReviewVerdict(
+    catalog.matchReviewVerdict,
+  );
+  const matchReview =
+    matchReviewVerdict !== null &&
+    typeof catalog.matchReviewScore === "number"
+      ? {
+          verdict: matchReviewVerdict,
+          score: catalog.matchReviewScore,
+        }
+      : null;
   return {
     id: String(catalog.jobId),
     title: catalog.title,
@@ -209,7 +304,7 @@ export function toJobListItem(catalog: JobCatalogProjection) {
     reviewState: catalog.reviewState,
     matchTier: catalog.matchTier,
     matchRead: { tier: catalog.matchTier },
-    matchReview: null,
+    matchReview,
     status: catalog.status,
     importedAt: catalog.importedAt,
     updatedAt: catalog.updatedAt,

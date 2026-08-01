@@ -311,6 +311,7 @@ export default defineSchema({
     updatedAt: v.number(),
     defaultResumeId: v.optional(v.union(v.string(), v.null())),
     defaultResumeName: v.optional(v.union(v.string(), v.null())),
+    matchFingerprint: v.optional(v.string()),
   })
     .index("by_clerk_updated_at", ["clerkId", "updatedAt"])
     .index("by_profile_id", ["profileId"]),
@@ -338,6 +339,16 @@ export default defineSchema({
       v.literal("weak"),
       v.literal("unknown"),
     ),
+    matchReviewVerdict: v.optional(
+      v.union(
+        v.literal("strong_lead"),
+        v.literal("possible_lead"),
+        v.literal("probably_skip"),
+        v.literal("not_enough_signal"),
+        v.null(),
+      ),
+    ),
+    matchReviewScore: v.optional(v.union(v.number(), v.null())),
     status: v.string(),
     importedAt: v.number(),
     updatedAt: v.number(),
@@ -356,6 +367,7 @@ export default defineSchema({
 
   accountReadModels: defineTable({
     clerkId: v.string(),
+    version: v.optional(v.number()),
     status: v.union(v.literal("backfilling"), v.literal("ready")),
     profileCursor: v.optional(v.string()),
     activeProfileId: v.optional(v.id("userProfiles")),

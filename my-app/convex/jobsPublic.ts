@@ -74,6 +74,7 @@ import {
   submitOwnedCvTailoringReview,
 } from "./lib/jobs/sourceCvTailoringReview";
 import {
+  JOBS_READ_MODEL_VERSION,
   syncProfileCatalogById,
   upsertProfileCatalog,
 } from "./lib/profileCatalog";
@@ -393,6 +394,19 @@ const jobMatchReviewValidator = v.object({
     }),
   ),
 });
+
+const listJobMatchReviewValidator = v.union(
+  v.null(),
+  v.object({
+    verdict: v.union(
+      v.literal("strong_lead"),
+      v.literal("possible_lead"),
+      v.literal("probably_skip"),
+      v.literal("not_enough_signal"),
+    ),
+    score: v.number(),
+  }),
+);
 
 const structuredMatchReviewLabelValidator = v.union(
   v.literal("good"),
@@ -1126,6 +1140,7 @@ export const storeJobExtractionShadow = internalMutation({
       final_confidence: args.finalConfidence,
       created_at: args.createdAt,
     });
+    await syncJobCatalogById(ctx, args.jobId);
 
     return null;
   },
@@ -2778,7 +2793,7 @@ export const listForUser = query({
         v.literal("unknown"),
       ),
       matchRead: listJobMatchReadValidator,
-      matchReview: v.union(v.null(), jobMatchReviewValidator),
+      matchReview: listJobMatchReviewValidator,
       status: v.string(),
       importedAt: v.number(),
       updatedAt: v.number(),
@@ -2819,7 +2834,8 @@ export const jobsReadModelStatus = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const state = await findAccountReadModel(ctx, identity.subject);
-    return state?.status === "ready"
+    return state?.status === "ready" &&
+      state.version === JOBS_READ_MODEL_VERSION
       ? { ownerKey: identity.subject, ready: true, status: "ready" as const }
       : {
           ownerKey: identity.subject,
@@ -2840,7 +2856,11 @@ export const ensureJobsReadModelPage = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const clerkId = identity.subject;
-    const state = await findAccountReadModel(ctx, clerkId);
+    const persistedState = await findAccountReadModel(ctx, clerkId);
+    const state =
+      persistedState?.version === JOBS_READ_MODEL_VERSION
+        ? persistedState
+        : null;
     if (state?.status === "ready") {
       return { done: true, processedProfiles: 0, processedJobs: 0 };
     }
@@ -2866,9 +2886,10 @@ export const ensureJobsReadModelPage = mutation({
         const readyDoc = {
           clerkId,
           status: "ready" as const,
+          version: JOBS_READ_MODEL_VERSION,
           updatedAt: Date.now(),
         };
-        if (state) await ctx.db.replace(state._id, readyDoc);
+        if (persistedState) await ctx.db.replace(persistedState._id, readyDoc);
         else await ctx.db.insert("accountReadModels", readyDoc);
         return { done: true, processedProfiles: 0, processedJobs: 0 };
       }
@@ -2876,11 +2897,13 @@ export const ensureJobsReadModelPage = mutation({
       const selectedProfileState = {
         clerkId,
         status: "backfilling" as const,
+        version: JOBS_READ_MODEL_VERSION,
         ...(nextProfileCursor ? { profileCursor: nextProfileCursor } : {}),
         activeProfileId: profile._id,
         updatedAt: Date.now(),
       };
-      if (state) await ctx.db.replace(state._id, selectedProfileState);
+      if (persistedState)
+        await ctx.db.replace(persistedState._id, selectedProfileState);
       else await ctx.db.insert("accountReadModels", selectedProfileState);
       return { done: false, processedProfiles: 1, processedJobs: 0 };
     }
@@ -2902,6 +2925,7 @@ export const ensureJobsReadModelPage = mutation({
     const nextState = {
       clerkId,
       status: "backfilling" as const,
+      version: JOBS_READ_MODEL_VERSION,
       ...(nextProfileCursor ? { profileCursor: nextProfileCursor } : {}),
       ...(!jobsPage.isDone
         ? {
@@ -2911,7 +2935,7 @@ export const ensureJobsReadModelPage = mutation({
         : {}),
       updatedAt: Date.now(),
     };
-    if (state) await ctx.db.replace(state._id, nextState);
+    if (persistedState) await ctx.db.replace(persistedState._id, nextState);
     else await ctx.db.insert("accountReadModels", nextState);
 
     return {
@@ -2948,7 +2972,7 @@ export const listPageForUser = query({
           v.literal("unknown"),
         ),
         matchRead: listJobMatchReadValidator,
-        matchReview: v.union(v.null(), jobMatchReviewValidator),
+        matchReview: listJobMatchReviewValidator,
         status: v.string(),
         importedAt: v.number(),
         updatedAt: v.number(),
@@ -3114,7 +3138,7 @@ export const listArchivedForUser = query({
         v.literal("unknown"),
       ),
       matchRead: listJobMatchReadValidator,
-      matchReview: v.union(v.null(), jobMatchReviewValidator),
+      matchReview: listJobMatchReviewValidator,
       status: v.string(),
       importedAt: v.number(),
       updatedAt: v.number(),

@@ -1623,6 +1623,21 @@ describe("JobsPage", () => {
       within(selectedRow as HTMLElement).queryByText("Probably skip"),
     ).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: "Worth a shot" }));
+    expect(
+      within(jobsListElement).getByText("Operations Associate"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Filters" }));
+    fireEvent.click(
+      screen.getByRole("menuitemradio", { name: "Probably skip" }),
+    );
+    await waitFor(() => {
+      expect(
+        within(jobsListElement).queryByText("Operations Associate"),
+      ).toBeNull();
+    });
+
     const matchRegion = await screen.findByLabelText("Match");
     expect(
       within(matchRegion).getByText("Partial match. A few checks left."),
