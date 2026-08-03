@@ -296,6 +296,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                 buildIndex(scope);
                 return {
+                  filter() {
+                    return this;
+                  },
                   order() {
                     return this;
                   },
@@ -316,6 +319,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -469,6 +475,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -489,6 +498,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     take: async () => [],
                     collect: async () => [],
                   };
@@ -506,6 +518,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -641,6 +656,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -669,6 +687,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -690,6 +711,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -710,6 +734,172 @@ describe("jobsPublic.listForUser", () => {
     expect(result.map((job) => job.id)).toEqual(["job_second"]);
     expect(proposalStatsJobIds).toEqual(["job_second"]);
     expect(shadowJobIds).toEqual(["job_second"]);
+  });
+
+  it("filters foreign linked proposals before the list stats cap", async () => {
+    const profile = {
+      _id: "profile_owner",
+      _creationTime: 1,
+      clerkId: "clerk_123",
+      updatedAt: 1,
+      createdAt: 1,
+      version: 1,
+      skills: ["react"],
+      keywords: ["react"],
+      email: "owner@example.com",
+    };
+    const job = {
+      _id: "job_owner",
+      userId: profile._id,
+      title: "Owner job",
+      company: "Acme",
+      location: "Remote",
+      rawDescription: "React work.",
+      rawLanguageDetected: "en",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      parseStatus: "parsed",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 1,
+      updatedAt: 1,
+      lastOpenedAt: 1,
+      archivedAt: null,
+      mustHaves: ["React"],
+      keywords: ["React"],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+    };
+    const linkedProposals = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        _id: `foreign_${index}`,
+        jobId: job._id,
+        userId: "profile_foreign",
+        status: "saved",
+        updatedAt: 100 - index,
+      })),
+      {
+        _id: "owner_proposal",
+        jobId: job._id,
+        userId: profile._id,
+        status: "saved",
+        updatedAt: 1,
+      },
+    ];
+    let ownerFilterApplied = false;
+
+    const result = await listForUser._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  buildIndex({
+                    eq() {
+                      return this;
+                    },
+                  });
+                  return { collect: async () => [profile] };
+                },
+              };
+            }
+
+            if (table === "jobs") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  buildIndex({
+                    eq() {
+                      return this;
+                    },
+                  });
+                  return {
+                    order() {
+                      return this;
+                    },
+                    collect: async () => [job],
+                  };
+                },
+              };
+            }
+
+            if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const criteria: Record<string, string> = {};
+                  const index = {
+                    eq(field: string, value: string) {
+                      criteria[field] = value;
+                      return this;
+                    },
+                  };
+                  buildIndex(index);
+                  let rows = linkedProposals.filter(
+                    (proposal) =>
+                      proposal.jobId === criteria.jobId &&
+                      proposal.status === criteria.status,
+                  );
+                  return {
+                    filter(buildFilter: any) {
+                      const filter = {
+                        field(field: string) {
+                          return field;
+                        },
+                        eq(field: string, value: string) {
+                          ownerFilterApplied ||= field === "userId";
+                          rows = rows.filter((proposal) => proposal[field] === value);
+                          return this;
+                        },
+                      };
+                      buildFilter(filter);
+                      return this;
+                    },
+                    take: async (limit: number) => {
+                      expect(ownerFilterApplied).toBe(true);
+                      return rows.slice(0, limit);
+                    },
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  buildIndex({
+                    eq() {
+                      return this;
+                    },
+                  });
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {},
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: job._id,
+        linkedDocumentCount: 1,
+      }),
+    ]);
   });
 
   it("prefers a job resume override over the user default resume when computing match tier", async () => {
@@ -853,6 +1043,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -873,6 +1066,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -893,6 +1089,9 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -1057,16 +1256,32 @@ describe("jobsPublic.getById", () => {
                   }
                   return true;
                 });
+                let filteredRows = scopedRows;
                 return {
+                  filter(buildFilter: any) {
+                    const filter = {
+                      field(field: string) {
+                        return field;
+                      },
+                      eq(field: string, value: string) {
+                        filteredRows = filteredRows.filter(
+                          (row) => row[field] === value,
+                        );
+                        return this;
+                      },
+                    };
+                    buildFilter(filter);
+                    return this;
+                  },
                   order() {
                     return this;
                   },
-                  take: async (limit: number) => scopedRows.slice(0, limit),
+                  take: async (limit: number) => filteredRows.slice(0, limit),
                   collect: async () => {
                     if (failUnboundedDetailReads) {
                       throw new Error("unbounded proposals collect");
                     }
-                    return scopedRows;
+                    return filteredRows;
                   },
                 };
               },
@@ -1386,6 +1601,7 @@ describe("jobsPublic.getById", () => {
     const job = buildProjectionJob();
     const linkedProposalRows = Array.from({ length: 64 }, (_, index) => ({
       _id: `proposal_${index}`,
+      userId: job.userId,
       title: `Proposal ${index}`,
       status: "saved",
       updatedAt: 1000 - index,
@@ -1414,6 +1630,62 @@ describe("jobsPublic.getById", () => {
     expect(result?.visibleExtractionSource).toBe("llm");
   });
 
+  it("filters foreign linked proposals before saved and draft detail caps", async () => {
+    const job = buildProjectionJob();
+    const foreignSaved = Array.from({ length: 12 }, (_, index) => ({
+      _id: `foreign_saved_${index}`,
+      jobId: job._id,
+      userId: "profile_foreign",
+      title: `Foreign saved ${index}`,
+      status: "saved",
+      updatedAt: 100 - index,
+    }));
+    const foreignDraft = Array.from({ length: 12 }, (_, index) => ({
+      _id: `foreign_draft_${index}`,
+      jobId: job._id,
+      userId: "profile_foreign",
+      title: `Foreign draft ${index}`,
+      status: "draft",
+      updatedAt: 100 - index,
+    }));
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        linkedProposalRows: [
+          ...foreignSaved,
+          {
+            _id: "owner_saved",
+            jobId: job._id,
+            userId: job.userId,
+            title: "Owner saved",
+            status: "saved",
+            updatedAt: 1,
+          },
+          ...foreignDraft,
+          {
+            _id: "owner_draft",
+            jobId: job._id,
+            userId: job.userId,
+            title: "Owner draft",
+            status: "draft",
+            updatedAt: 1,
+          },
+        ],
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.linkedProposalCount).toBe(1);
+    expect(result?.draftProposalCount).toBe(1);
+    expect(result?.linkedProposals).toEqual([
+      expect.objectContaining({ id: "owner_saved", title: "Owner saved" }),
+    ]);
+    expect(result?.draftProposals).toEqual([
+      expect.objectContaining({ id: "owner_draft", title: "Owner draft" }),
+    ]);
+  });
+
   it("returns only saved linked proposals in job detail", async () => {
     const job = buildProjectionJob();
     const result = await getById._handler(
@@ -1423,6 +1695,7 @@ describe("jobsPublic.getById", () => {
           {
             _id: "proposal_draft",
             jobId: job._id,
+            userId: job.userId,
             title: "Draft proposal",
             status: "draft",
             updatedAt: 300,
@@ -1430,6 +1703,7 @@ describe("jobsPublic.getById", () => {
           {
             _id: "proposal_saved",
             jobId: job._id,
+            userId: job.userId,
             title: "Saved proposal",
             status: "saved",
             updatedAt: 200,
@@ -1929,6 +2203,9 @@ describe("jobsPublic.getById", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     order() {
                       return this;
                     },
@@ -3134,6 +3411,9 @@ describe("jobsPublic.listArchivedForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    filter() {
+                      return this;
+                    },
                     take: async () => [],
                     collect: async () => [],
                   };

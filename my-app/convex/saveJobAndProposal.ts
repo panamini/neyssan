@@ -3,6 +3,7 @@ import { v } from 'convex/values';
 import { internalMutation } from './_generated/server';
 import { internal } from './_generated/api';
 import { getPrimaryProfileForClerk } from './lib/userProfiles';
+import { resolveOwnedProposalJobId } from './lib/proposals/proposalJobLink';
 
 const savedProposalType = v.optional(
   v.union(
@@ -61,6 +62,11 @@ export const saveJobAndProposal = internalMutation({
       if (!user) throw new Error("Failed to create user profile");
     }
 
+    const jobId = await resolveOwnedProposalJobId(
+      ctx,
+      user._id,
+      args.jobData.jobId,
+    );
     return ctx.db.insert("proposals", {
       userId: user._id,
       title: args.jobData.title,
@@ -71,7 +77,7 @@ export const saveJobAndProposal = internalMutation({
       updatedAt: Date.now(),
       sections: [{ type: "text", content: args.proposalText }],
       metrics: { score: 0, confidence: 0 },
-      jobId: args.jobData.jobId,
+      jobId,
       metadata: buildProposalMetadata({
         platform: args.jobData.platform,
         url: args.jobData.url,
@@ -107,6 +113,11 @@ export default mutation({
       throw new Error('User not found');
     }
 
+    const jobId = await resolveOwnedProposalJobId(
+      ctx,
+      user._id,
+      args.jobData.jobId,
+    );
     return ctx.db.insert("proposals", {
       userId: user._id,
       title: args.jobData.title,
@@ -117,7 +128,7 @@ export default mutation({
       updatedAt: Date.now(),
       sections: [{ type: "text", content: args.proposalText }],
       metrics: { score: 0, confidence: 0 },
-      jobId: args.jobData.jobId,
+      jobId,
       metadata: buildProposalMetadata({
         platform: args.jobData.platform,
         url: args.jobData.url,

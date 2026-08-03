@@ -912,7 +912,8 @@ async function loadLinkedProposalStatsForJobs(ctx: any, jobs: any[]) {
         .query("proposals")
         .withIndex("by_job_and_status", (q: any) =>
           q.eq("jobId", jobId).eq("status", "saved"),
-        );
+        )
+        .filter((q: any) => q.eq(q.field("userId"), job.userId));
       const linkedProposalRows =
         typeof linkedProposals.take === "function"
           ? await linkedProposals.take(JOB_LIST_LINKED_PROPOSALS_LIMIT)
@@ -2248,6 +2249,7 @@ export const getById = query({
         .withIndex("by_job_and_status", (q) =>
           q.eq("jobId", String(job._id)).eq("status", "saved"),
         )
+        .filter((q) => q.eq(q.field("userId"), job.userId))
         .order("desc")
         .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT),
       ctx.db
@@ -2255,6 +2257,7 @@ export const getById = query({
         .withIndex("by_job_and_status", (q) =>
           q.eq("jobId", String(job._id)).eq("status", "draft"),
         )
+        .filter((q) => q.eq(q.field("userId"), job.userId))
         .order("desc")
         .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT),
     ]);

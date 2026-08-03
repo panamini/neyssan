@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { listProfilesForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { resolveOwnedProposalJobId } from "./lib/proposals/proposalJobLink";
 import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
@@ -440,6 +441,14 @@ export default mutation({
     }
 
     if (hasMetadataPatch) {
+      const jobId =
+        args.metadata?.jobId === undefined
+          ? proposal.jobId
+          : await resolveOwnedProposalJobId(
+              ctx,
+              proposal.userId,
+              args.metadata.jobId,
+            );
       if (isProposalStyleTraceEnabled()) {
         console.info(PROPOSAL_STYLE_TRACE_MARKER, {
           route: "updateProposalPublic",
@@ -493,7 +502,7 @@ export default mutation({
       patch.metadata = sanitizeRemoteMetadataImages(
         nextMetadata,
       ) as typeof proposal.metadata;
-      patch.jobId = args.metadata?.jobId ?? proposal.jobId;
+      patch.jobId = jobId;
     }
 
     await ctx.db.patch(args.id, patch);

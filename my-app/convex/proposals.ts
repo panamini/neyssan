@@ -2,6 +2,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { resolveOwnedProposalJobId } from "./lib/proposals/proposalJobLink";
 import {
   bestEffortDeleteMcpReadSidePackageForStoredProposal,
   bestEffortMaterializeMcpReadSideForStoredProposal,
@@ -262,8 +263,10 @@ export const storeProposal = internalMutation({
     }),
   },
   handler: async (ctx, args) => {
+    const jobId = await resolveOwnedProposalJobId(ctx, args.userId, args.jobId);
     const proposal = {
       ...args,
+      jobId,
       metadata: sanitizeRemoteMetadataImages(args.metadata) as typeof args.metadata,
     };
     const proposalId = await ctx.db.insert("proposals", proposal);
@@ -396,8 +399,17 @@ export const updateProposal = internalMutation({
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
+    const proposal = await ctx.db.get(id);
+    if (!proposal) {
+      throw new Error("Proposal not found");
+    }
+    const jobId =
+      args.jobId === undefined
+        ? proposal.jobId
+        : await resolveOwnedProposalJobId(ctx, proposal.userId, args.jobId);
     const patch = {
       ...updates,
+      jobId,
       metadata: sanitizeRemoteMetadataImages(
         updates.metadata,
       ) as typeof updates.metadata,
@@ -406,9 +418,9 @@ export const updateProposal = internalMutation({
 
     await ctx.db.patch(id, patch);
 
-    const proposal = await ctx.db.get(id);
-    if (proposal) {
-      await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, proposal);
+    const updatedProposal = await ctx.db.get(id);
+    if (updatedProposal) {
+      await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, updatedProposal);
     }
   },
 });
