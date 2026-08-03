@@ -736,7 +736,7 @@ describe("jobsPublic.listForUser", () => {
     expect(shadowJobIds).toEqual(["job_second"]);
   });
 
-  it("filters foreign linked proposals before the list stats cap", async () => {
+  it("keeps same-Clerk cross-profile proposals ahead of foreign list-cap pressure", async () => {
     const profile = {
       _id: "profile_owner",
       _creationTime: 1,
@@ -748,9 +748,15 @@ describe("jobsPublic.listForUser", () => {
       keywords: ["react"],
       email: "owner@example.com",
     };
+    const secondaryProfile = {
+      ...profile,
+      _id: "profile_secondary",
+      email: "secondary@example.com",
+    };
+    const profiles = [profile, secondaryProfile];
     const job = {
       _id: "job_owner",
-      userId: profile._id,
+      userId: secondaryProfile._id,
       title: "Owner job",
       company: "Acme",
       location: "Remote",
@@ -806,7 +812,7 @@ describe("jobsPublic.listForUser", () => {
                       return this;
                     },
                   });
-                  return { collect: async () => [profile] };
+                  return { collect: async () => profiles };
                 },
               };
             }
@@ -814,8 +820,10 @@ describe("jobsPublic.listForUser", () => {
             if (table === "jobs") {
               return {
                 withIndex(_indexName: string, buildIndex: any) {
+                  const criteria: Record<string, string> = {};
                   buildIndex({
-                    eq() {
+                    eq(field: string, value: string) {
+                      criteria[field] = value;
                       return this;
                     },
                   });
@@ -823,7 +831,8 @@ describe("jobsPublic.listForUser", () => {
                     order() {
                       return this;
                     },
-                    collect: async () => [job],
+                    collect: async () =>
+                      criteria.userId === job.userId ? [job] : [],
                   };
                 },
               };
@@ -852,12 +861,20 @@ describe("jobsPublic.listForUser", () => {
                           return field;
                         },
                         eq(field: string, value: string) {
-                          ownerFilterApplied ||= field === "userId";
-                          rows = rows.filter((proposal) => proposal[field] === value);
-                          return this;
+                          return { field, values: [value] };
+                        },
+                        or(...expressions: Array<{ field: string; values: string[] }>) {
+                          return {
+                            field: expressions[0]?.field,
+                            values: expressions.flatMap((expression) => expression.values),
+                          };
                         },
                       };
-                      buildFilter(filter);
+                      const expression = buildFilter(filter);
+                      ownerFilterApplied ||= expression?.field === "userId";
+                      rows = rows.filter((proposal) =>
+                        expression?.values?.includes(proposal.userId),
+                      );
                       return this;
                     },
                     take: async (limit: number) => {
@@ -1131,7 +1148,6 @@ describe("jobsPublic.getById", () => {
     linkedProposalRows = [],
     identity = { subject: "clerk_123" },
     failUnboundedDetailReads = false,
-    failProfileCollection = false,
     linkedProfiles = [
       {
         _id: "profile_primary",
@@ -1152,7 +1168,6 @@ describe("jobsPublic.getById", () => {
     linkedProposalRows?: any[];
     identity?: { subject: string; email?: string };
     failUnboundedDetailReads?: boolean;
-    failProfileCollection?: boolean;
     linkedProfiles?: any[];
   }) {
     return {
@@ -1221,14 +1236,10 @@ describe("jobsPublic.getById", () => {
                 };
                 const clerkId = buildIndex(scope);
                 return {
-                  collect: async () => {
-                    if (failProfileCollection) {
-                      throw new Error("unexpected profile collect");
-                    }
-                    return linkedProfiles.filter(
+                  collect: async () =>
+                    linkedProfiles.filter(
                       (profile) => profile.clerkId === clerkId,
-                    );
-                  },
+                    ),
                 };
               },
               get: async (id: string) =>
@@ -1264,13 +1275,19 @@ describe("jobsPublic.getById", () => {
                         return field;
                       },
                       eq(field: string, value: string) {
-                        filteredRows = filteredRows.filter(
-                          (row) => row[field] === value,
-                        );
-                        return this;
+                        return { field, values: [value] };
+                      },
+                      or(...expressions: Array<{ field: string; values: string[] }>) {
+                        return {
+                          field: expressions[0]?.field,
+                          values: expressions.flatMap((expression) => expression.values),
+                        };
                       },
                     };
-                    buildFilter(filter);
+                    const expression = buildFilter(filter);
+                    filteredRows = filteredRows.filter(
+                      (row) => expression?.values?.includes(row[expression.field]),
+                    );
                     return this;
                   },
                   order() {
@@ -1407,13 +1424,12 @@ describe("jobsPublic.getById", () => {
     };
   }
 
-  it("loads job detail without collecting every linked profile", async () => {
+  it("loads job detail with server-side linked profile authority", async () => {
     const job = buildProjectionJob();
 
     const result = await getById._handler(
       buildGetByIdProjectionCtx({
         job,
-        failProfileCollection: true,
       }),
       { jobId: job._id },
     );
@@ -1630,8 +1646,34 @@ describe("jobsPublic.getById", () => {
     expect(result?.visibleExtractionSource).toBe("llm");
   });
 
-  it("filters foreign linked proposals before saved and draft detail caps", async () => {
-    const job = buildProjectionJob();
+  it("keeps same-Clerk cross-profile proposals ahead of foreign detail-cap pressure", async () => {
+    const job = buildProjectionJob({ userId: "profile_secondary" });
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Legacy React"],
+        keywords: ["legacy ops"],
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_secondary",
+        _creationTime: 101,
+        profileId: "cv_secondary",
+        clerkId: "clerk_123",
+        updatedAt: 101,
+        createdAt: 101,
+        version: 1,
+        skills: ["React"],
+        keywords: ["frontend"],
+        email: "secondary@example.com",
+      },
+    ];
     const foreignSaved = Array.from({ length: 12 }, (_, index) => ({
       _id: `foreign_saved_${index}`,
       jobId: job._id,
@@ -1657,7 +1699,7 @@ describe("jobsPublic.getById", () => {
           {
             _id: "owner_saved",
             jobId: job._id,
-            userId: job.userId,
+            userId: "profile_primary",
             title: "Owner saved",
             status: "saved",
             updatedAt: 1,
@@ -1666,12 +1708,13 @@ describe("jobsPublic.getById", () => {
           {
             _id: "owner_draft",
             jobId: job._id,
-            userId: job.userId,
+            userId: "profile_primary",
             title: "Owner draft",
             status: "draft",
             updatedAt: 1,
           },
         ],
+        linkedProfiles,
       }),
       { jobId: job._id },
     );

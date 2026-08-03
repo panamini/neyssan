@@ -899,7 +899,24 @@ async function listRecentJobsForProfileId(
   return jobs.slice(0, limit);
 }
 
-async function loadLinkedProposalStatsForJobs(ctx: any, jobs: any[]) {
+function filterProposalsForProfileIds(query: any, profileIds: string[]) {
+  const uniqueProfileIds = [...new Set(profileIds.filter(Boolean))];
+  if (uniqueProfileIds.length === 1) {
+    return query.eq(query.field("userId"), uniqueProfileIds[0]);
+  }
+
+  return query.or(
+    ...uniqueProfileIds.map((profileId) =>
+      query.eq(query.field("userId"), profileId),
+    ),
+  );
+}
+
+async function loadLinkedProposalStatsForJobs(
+  ctx: any,
+  jobs: any[],
+  profileIds: string[],
+) {
   const stats = new Map<
     string,
     { count: number; latestUpdatedAt: number }
@@ -913,7 +930,7 @@ async function loadLinkedProposalStatsForJobs(ctx: any, jobs: any[]) {
         .withIndex("by_job_and_status", (q: any) =>
           q.eq("jobId", jobId).eq("status", "saved"),
         )
-        .filter((q: any) => q.eq(q.field("userId"), job.userId));
+        .filter((q: any) => filterProposalsForProfileIds(q, profileIds));
       const linkedProposalRows =
         typeof linkedProposals.take === "function"
           ? await linkedProposals.take(JOB_LIST_LINKED_PROPOSALS_LIMIT)
@@ -1816,6 +1833,7 @@ async function listProjectedJobsForProfiles(
   const linkedProposalStats = await loadLinkedProposalStatsForJobs(
     ctx,
     visibleJobs,
+    normalizedProfiles.map((profile) => String(profile._id ?? profile.id ?? "")),
   );
 
   const projections = await Promise.all(
@@ -2208,6 +2226,14 @@ export const getById = query({
       return null;
     }
 
+    const accountProfiles = await listProfilesForClerk(ctx, clerkId);
+    if (accountProfiles.length === 0) {
+      return null;
+    }
+    const accountProfileIds = accountProfiles.map((profile) =>
+      String(profile._id),
+    );
+
     const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
     if (!normalizedJobId) {
       return null;
@@ -2219,6 +2245,7 @@ export const getById = query({
       !job ||
       !ownerProfile ||
       ownerProfile.clerkId !== clerkId ||
+      !accountProfileIds.includes(String(job.userId)) ||
       (job.archivedAt !== null && job.archivedAt !== undefined)
     ) {
       return null;
@@ -2249,7 +2276,7 @@ export const getById = query({
         .withIndex("by_job_and_status", (q) =>
           q.eq("jobId", String(job._id)).eq("status", "saved"),
         )
-        .filter((q) => q.eq(q.field("userId"), job.userId))
+        .filter((q) => filterProposalsForProfileIds(q, accountProfileIds))
         .order("desc")
         .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT),
       ctx.db
@@ -2257,7 +2284,7 @@ export const getById = query({
         .withIndex("by_job_and_status", (q) =>
           q.eq("jobId", String(job._id)).eq("status", "draft"),
         )
-        .filter((q) => q.eq(q.field("userId"), job.userId))
+        .filter((q) => filterProposalsForProfileIds(q, accountProfileIds))
         .order("desc")
         .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT),
     ]);
