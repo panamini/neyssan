@@ -3464,6 +3464,7 @@ function JobsPageContent(): JSX.Element {
         await approveReviewItem({
           jobId: selectedJobId,
           reviewItemId: item.id,
+          expectedSuggestedValue: item.suggestedValue,
         });
       } catch (error) {
         restoreFailedJobBriefMutation(briefMutation);

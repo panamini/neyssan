@@ -65,14 +65,23 @@ const EMPTY_LINKED_PROPOSALS: ProposalBriefLinkedProposal[] = [];
 function commitAfterReviewAction(
   action: () => Promise<void> | void,
   onSuccess: () => void,
+  isCurrent: () => boolean,
 ): void {
   try {
     const result = action();
     if (result && typeof result.then === "function") {
-      void result.then(onSuccess).catch(() => {});
+      void result
+        .then(() => {
+          if (isCurrent()) {
+            onSuccess();
+          }
+        })
+        .catch(() => {});
       return;
     }
-    onSuccess();
+    if (isCurrent()) {
+      onSuccess();
+    }
   } catch {
     // The parent owns error messaging; keep the local item retryable.
   }
@@ -282,12 +291,14 @@ export function ProposalBriefCard({
     Record<string, { reviewStatus: string; approvedValue?: unknown }>
   >({});
   const [isPostingOpen, setIsPostingOpen] = React.useState(false);
+  const activeJobIdRef = React.useRef(jobId);
+  activeJobIdRef.current = jobId;
 
   React.useEffect(() => {
     setEditingItemId(null);
     setDraftValues({});
     setResolvedItems({});
-  }, [reviewItems, summaryText, visibleSummaryText]);
+  }, [jobId, reviewItems, summaryText, visibleSummaryText]);
 
   const visibleReviewItems = extractionUnavailable
     ? []
@@ -556,7 +567,9 @@ export function ProposalBriefCard({
                   )}
                 </div>
               ) : null}
-              {resolvedRequirements.length > 0 && !hasRequirementsReviewItem ? (
+              {!extractionUnavailable &&
+              (resolvedRequirements.length > 0 || Boolean(onSaveField)) &&
+              !hasRequirementsReviewItem ? (
                 <div
                   className="ds-card dasti-brief-card__review-item"
                   id="job-requirements"
@@ -615,7 +628,9 @@ export function ProposalBriefCard({
                   )}
                 </div>
               ) : null}
-              {resolvedKeywords.length > 0 && !hasKeywordsReviewItem ? (
+              {!extractionUnavailable &&
+              (resolvedKeywords.length > 0 || Boolean(onSaveField)) &&
+              !hasKeywordsReviewItem ? (
                 <div
                   className="ds-card dasti-brief-card__review-item"
                   id="job-keywords"
@@ -737,6 +752,7 @@ export function ProposalBriefCard({
                               className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                               aria-label={`Save ${item.label}`}
                               onClick={() => {
+                                const actionJobId = jobId;
                                 const nextValue = Array.isArray(
                                   item.suggestedValue,
                                 )
@@ -757,6 +773,7 @@ export function ProposalBriefCard({
                                     }));
                                     setEditingItemId(null);
                                   },
+                                  () => activeJobIdRef.current === actionJobId,
                                 );
                               }}
                             >
@@ -795,6 +812,7 @@ export function ProposalBriefCard({
                             className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                             aria-label={`Confirm ${item.label}`}
                             onClick={() => {
+                              const actionJobId = jobId;
                               commitAfterReviewAction(
                                 () => onApproveReviewItem(item),
                                 () => {
@@ -806,6 +824,7 @@ export function ProposalBriefCard({
                                     },
                                   }));
                                 },
+                                () => activeJobIdRef.current === actionJobId,
                               );
                             }}
                           >

@@ -1416,11 +1416,19 @@ function buildExtractionProjection(args: {
 
 async function resolveVisibleExtractionForJob(ctx: any, job: any) {
   const flagEnabled = isJobLlmVisibleExtractionEnabled();
-  const shadowRows = flagEnabled
-    ? await ctx.db
+  const shadowQuery = flagEnabled
+    ? ctx.db
         .query("job_extraction_shadow")
         .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
-        .collect()
+    : null;
+  const orderedShadowQuery =
+    shadowQuery && typeof shadowQuery.order === "function"
+      ? shadowQuery.order("desc")
+      : shadowQuery;
+  const shadowRows = orderedShadowQuery
+    ? typeof orderedShadowQuery.take === "function"
+      ? await orderedShadowQuery.take(VISIBLE_JOB_EXTRACTION_SHADOW_ROWS_LIMIT)
+      : await orderedShadowQuery.collect()
     : [];
   return selectVisibleJobExtractionForJob({
     job,
@@ -3337,6 +3345,7 @@ export const approveReviewItem = mutation({
   args: {
     jobId: v.string(),
     reviewItemId: v.string(),
+    expectedSuggestedValue: v.optional(v.any()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -3351,6 +3360,17 @@ export const approveReviewItem = mutation({
       reviewItems: job.reviewItems ?? [],
       visibleExtraction,
     });
+    const currentItem = projectedReviewItems.find(
+      (item) => item.id === args.reviewItemId,
+    );
+    if (
+      !currentItem ||
+      args.expectedSuggestedValue === undefined ||
+      JSON.stringify(currentItem.suggestedValue) !==
+        JSON.stringify(args.expectedSuggestedValue)
+    ) {
+      throw new Error("Job Brief changed; reload before confirming");
+    }
     const reviewItems = resolveReviewItemsAfterApprove({
       reviewItems: projectedReviewItems,
       reviewItemId: args.reviewItemId,

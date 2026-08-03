@@ -476,6 +476,7 @@ export function JobDetail({
         {handoffPanel}
         <div className="dasti-jobs-detail__content">
           <ProposalBriefCard
+            jobId={selectedJob.id}
             sourceJobTitle={selectedJobTitle}
             outputDocumentTitle={null}
             jobDescription={selectedJob.rawDescription}

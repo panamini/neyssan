@@ -3828,6 +3828,138 @@ describe("jobsPublic.updateField", () => {
 });
 
 describe("jobsPublic.approveReviewItem", () => {
+  it("rejects a stale approval when the visible suggestion changed", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const job = {
+      _id: "job_alpha",
+      userId: "profile_primary",
+      title: "Security Guard",
+      summary: "Heuristic summary",
+      rawLanguageDetected: "en",
+      mustHaves: ["Customer service"],
+      keywords: ["retail security"],
+      reviewItems: [
+        {
+          id: "llm_visible_keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["retail security"],
+          sourceText: "retail security",
+          confidence: 0.9,
+          updatedAt: 100,
+        },
+      ],
+    };
+    const patches: Array<Record<string, unknown>> = [];
+
+    await expect(
+      approveReviewItem._handler(
+        {
+          auth: {
+            getUserIdentity: async () => ({ subject: "clerk_123" }),
+          },
+          db: {
+            normalizeId: (_table: string, id: string) => id,
+            get: async () => job,
+            patch: async (_id: string, patch: Record<string, unknown>) => {
+              patches.push(patch);
+            },
+            query(table: string) {
+              if (table === "userProfiles") {
+                return {
+                  withIndex(_indexName: string, buildIndex: any) {
+                    const scope = {
+                      eq(_field: string, value: string) {
+                        return value;
+                      },
+                    };
+                    buildIndex(scope);
+                    return {
+                      collect: async () => [
+                        {
+                          _id: "profile_primary",
+                          clerkId: "clerk_123",
+                          createdAt: 100,
+                          updatedAt: 100,
+                          version: 1,
+                        },
+                      ],
+                    };
+                  },
+                };
+              }
+              if (table === "job_extraction_shadow") {
+                return {
+                  withIndex(_indexName: string, buildIndex: any) {
+                    const scope = {
+                      eq(_field: string, _value: string) {
+                        return this;
+                      },
+                    };
+                    buildIndex(scope);
+                    const rows = [
+                      {
+                        job_id: job._id,
+                        llm_normalized_output: {
+                          summary_short: "Retail security role.",
+                          role_title_normalized: "Security Guard",
+                          requirements: [
+                            {
+                              value: "Customer service",
+                              type: "skill",
+                              required: true,
+                            },
+                          ],
+                          keywords_canonical: ["loss prevention"],
+                          licenses_or_certifications: [],
+                          schedule_constraints: [],
+                          environment: {
+                            customer_facing: true,
+                            retail: true,
+                            physical_standing: true,
+                            onsite: true,
+                          },
+                          confidence: "high",
+                        },
+                        validation_status: "valid",
+                        fallback_used: false,
+                        model: "ministral-3b-2512",
+                        prompt_version: "p9_v2",
+                        created_at: 200,
+                      },
+                    ];
+                    const result = {
+                      order(direction: "asc" | "desc") {
+                        expect(direction).toBe("desc");
+                        return result;
+                      },
+                      take: async (limit: number) => {
+                        expect(limit).toBe(8);
+                        return rows;
+                      },
+                      collect: async () => {
+                        throw new Error("approval shadow read must be bounded");
+                      },
+                    };
+                    return result;
+                  },
+                };
+              }
+              throw new Error(`Unexpected table: ${table}`);
+            },
+          },
+        } as any,
+        {
+          jobId: job._id,
+          reviewItemId: "llm_visible_keywords",
+          expectedSuggestedValue: ["retail security"],
+        },
+      ),
+    ).rejects.toThrow("Job Brief changed; reload before confirming");
+    expect(patches).toEqual([]);
+  });
+
   it("approves review items on visible jobs owned by linked profiles", async () => {
     const linkedProfiles = [
       {
@@ -3939,7 +4071,11 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_legacy", reviewItemId: "summary" },
+      {
+        jobId: "job_legacy",
+        reviewItemId: "summary",
+        expectedSuggestedValue: "Approved linked-profile summary",
+      },
     );
 
     expect(result).toBeNull();
@@ -4140,7 +4276,15 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_alpha", reviewItemId: "keywords" },
+      {
+        jobId: "job_alpha",
+        reviewItemId: "keywords",
+        expectedSuggestedValue: [
+          "security guard",
+          "retail security",
+          "loss prevention",
+        ],
+      },
     );
 
     expect(result).toBeNull();
@@ -4272,7 +4416,11 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_alpha", reviewItemId: "must_haves" },
+      {
+        jobId: "job_alpha",
+        reviewItemId: "must_haves",
+        expectedSuggestedValue: ["Valid state security guard license"],
+      },
     );
 
     expect(mustHavesResult).toBeNull();
@@ -4398,7 +4546,11 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_alpha", reviewItemId: "summary" },
+      {
+        jobId: "job_alpha",
+        reviewItemId: "summary",
+        expectedSuggestedValue: "Retail security role.",
+      },
     );
 
     expect(summaryResult).toBeNull();

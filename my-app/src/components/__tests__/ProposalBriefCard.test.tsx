@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -292,6 +293,7 @@ describe("resolveProposalBriefCardTitle", () => {
           keywords={["location", "status", "compensation"]}
           visibleKeywords={["location", "status", "compensation"]}
           extractionUnavailable={true}
+          onSaveField={vi.fn()}
           reviewItems={[
             {
               id: "responsibilities",
@@ -460,6 +462,140 @@ describe("resolveProposalBriefCardTitle", () => {
       expect.objectContaining({ id: "keywords" }),
       ["hospitality", "guest service"],
     );
+  });
+
+  it("does not apply a late Confirm completion to the next job", async () => {
+    let resolveConfirm: (() => void) | undefined;
+    const confirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        }),
+    );
+    const firstItem = {
+      id: "llm_visible_keywords",
+      fieldKey: "keywords",
+      label: "Keywords",
+      reviewStatus: "pending",
+      suggestedValue: ["hospitality"],
+      sourceText: "hospitality",
+    };
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          jobId="job-a"
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[firstItem]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
+    rerender(
+      <MemoryRouter>
+        <ProposalBriefCard
+          jobId="job-b"
+          sourceJobTitle="Retail Associate"
+          jobDescription="Help customers."
+          visibleKeywords={["retail"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              ...firstItem,
+              suggestedValue: ["retail"],
+              sourceText: "retail",
+            },
+          ]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    await act(async () => {
+      resolveConfirm?.();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("retail")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirm Keywords" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Requirements editable after the user clears the section", () => {
+    const saveField = vi.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleRequirements={["Guest service"]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Requirements" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Requirements" }));
+    expect(saveField).toHaveBeenCalledWith("mustHaves", []);
+
+    rerender(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleRequirements={[]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Edit Requirements" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Keywords editable after the user clears the section", () => {
+    const saveField = vi.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleKeywords={["hospitality"]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Keywords" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Keywords" }));
+    expect(saveField).toHaveBeenCalledWith("keywords", []);
+
+    rerender(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleKeywords={[]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
   });
 
   it("renders each authoritative section once and prefers an approved summary edit", () => {
