@@ -2343,6 +2343,15 @@ describe("JobsPage", () => {
         expect(action.style.maxInlineSize).toBe("100%");
         expect(action.style.boxSizing).toBe("border-box");
       }
+
+      const useCompleteResumeAction = within(jobActions).getByRole("button", {
+        name: "Use my complete resume without tailoring",
+      });
+      expect(useCompleteResumeAction).toHaveTextContent(/^Use complete resume$/);
+      expect(useCompleteResumeAction).toHaveAttribute(
+        "title",
+        "Use my complete resume without tailoring",
+      );
     } finally {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,
@@ -5194,6 +5203,7 @@ describe("JobsPage", () => {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
       resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready" as const,
     };
     cvLibraryResult = {
       cvs: [

@@ -18,7 +18,6 @@ import { buildScoringProfileFieldsFromCvDocument } from "./profiles";
 import {
   buildCanonicalJobDraftFromSource,
   buildNormalizedJobExtractionFromHeuristic,
-  detectJobPostingLanguage,
   flattenExtractionValues,
   type CanonicalJobExtraction,
   resolveReparsedCompany,
@@ -48,6 +47,7 @@ import {
 import {
   isJobLlmVisibleExtractionEnabled,
   projectReviewItemsWithVisibleExtraction,
+  resolveEffectiveJobRawLanguageDetected,
   resolveVisibleJobBriefReviewState,
   selectVisibleJobExtractionForJob,
   type VisibleJobExtractionSelection,
@@ -200,20 +200,6 @@ const NEXT_STEP_FALLBACK_ACTION_ORDER = [
 ] as const;
 type NextStepAction = (typeof NEXT_STEP_FALLBACK_ACTION_ORDER)[number];
 
-function resolveEffectiveJobRawLanguageDetected(job: {
-  rawLanguageDetected?: string | null;
-  rawDescription?: string | null;
-  title?: string | null;
-}): string {
-  const stored = String(job.rawLanguageDetected ?? "").trim();
-  const detected = detectJobPostingLanguage(
-    `${job.title ?? ""}\n${job.rawDescription ?? ""}`,
-  );
-  if (stored.toLowerCase().startsWith("en") && detected !== "en") {
-    return detected;
-  }
-  return stored || detected;
-}
 type NextStepBlock = {
   headline: string;
   usesCohortData: boolean;
@@ -2230,10 +2216,14 @@ export const getById = query({
     }
 
     const primaryProfile = await getMostRecentProfileForClerk(ctx, clerkId);
+    const storedResume = resolveStoredResumeSelection({
+      job,
+      primaryProfile: primaryProfile ?? ownerProfile,
+    });
     const explicitProfile = await resolveProfileForClerkAndResumeId({
       ctx,
       clerkId,
-      resumeId: job.lastResumeId ?? null,
+      resumeId: storedResume.resumeId,
     });
     const profiles = normalizeProjectionProfiles(
       [primaryProfile, ownerProfile, explicitProfile].filter(Boolean) as any[],
@@ -2276,10 +2266,6 @@ export const getById = query({
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
     const primaryProfileForMatch = profiles[0] ?? null;
-    const storedResume = resolveStoredResumeSelection({
-      job,
-      primaryProfile: primaryProfileForMatch,
-    });
     const matchReadProfile = resolveMatchReadSourceProfile({
       job,
       primaryProfile: primaryProfileForMatch,

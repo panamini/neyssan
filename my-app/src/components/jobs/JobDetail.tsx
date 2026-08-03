@@ -396,6 +396,7 @@ export function JobDetail({
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--full-resume"
                 style={JOB_ACTION_CONTROL_STYLE}
                 aria-label="Use my complete resume without tailoring"
+                title="Use my complete resume without tailoring"
                 aria-describedby={
                   tailoringUnavailableReason
                     ? `job-tailoring-help-${selectedJob.id}`
@@ -404,7 +405,7 @@ export function JobDetail({
                 disabled={!canUseFullSourceCv}
                 onClick={onUseFullSourceCv}
               >
-                <span>Use my complete resume without tailoring</span>
+                <span>Use complete resume</span>
               </button>
               <button
                 type="button"

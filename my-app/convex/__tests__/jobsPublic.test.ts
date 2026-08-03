@@ -933,15 +933,7 @@ describe("jobsPublic.getById", () => {
     identity = { subject: "clerk_123" },
     failUnboundedDetailReads = false,
     failProfileCollection = false,
-  }: {
-    job: any;
-    shadowRows?: any[];
-    linkedProposalRows?: any[];
-    identity?: { subject: string; email?: string };
-    failUnboundedDetailReads?: boolean;
-    failProfileCollection?: boolean;
-  }) {
-    const linkedProfiles = [
+    linkedProfiles = [
       {
         _id: "profile_primary",
         _creationTime: 100,
@@ -954,8 +946,16 @@ describe("jobsPublic.getById", () => {
         keywords: ["legacy ops"],
         email: "primary@example.com",
       },
-    ];
-
+    ],
+  }: {
+    job: any;
+    shadowRows?: any[];
+    linkedProposalRows?: any[];
+    identity?: { subject: string; email?: string };
+    failUnboundedDetailReads?: boolean;
+    failProfileCollection?: boolean;
+    linkedProfiles?: any[];
+  }) {
     return {
       auth: {
         getUserIdentity: async () => identity,
@@ -1206,6 +1206,67 @@ describe("jobsPublic.getById", () => {
     expect(result).toMatchObject({
       id: job._id,
       title: job.title,
+    });
+  });
+
+  it("derives reviewed proposal authority from the selected default resume", async () => {
+    const resumeId = "source-cv-variant:v1:default-reviewed";
+    const job = buildProjectionJob({ lastResumeId: null });
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        defaultResumeId: resumeId,
+        defaultResumeName: "Reviewed default resume",
+        skills: ["Legacy React"],
+        keywords: ["legacy ops"],
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_reviewed",
+        _creationTime: 90,
+        profileId: resumeId,
+        clerkId: "clerk_123",
+        updatedAt: 90,
+        createdAt: 90,
+        version: 1,
+        email: "reviewed@example.com",
+        cvDocument: {
+          id: resumeId,
+          title: "Reviewed default resume",
+          metadata: {
+            createdAt: "2026-08-03T00:00:00.000Z",
+            updatedAt: "2026-08-03T00:00:00.000Z",
+            version: 1,
+            reviewedSourceCvVariant: {
+              kind: "reviewed_source_cv_variant",
+              sourceCvId: "cv_primary",
+              jobId: job._id,
+              applicationContextId: `application-context:${job._id}`,
+              applicationContextHash: `application-context-hash:${job._id}`,
+              reviewedPlanId: "resume-variant-plan:reviewed",
+              version: 1,
+            },
+          },
+          sections: [],
+        },
+      },
+    ];
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({ job, linkedProfiles }),
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      resumeId,
+      resumeSource: "default",
+      resumeProposalAuthority: "reviewed_ready",
     });
   });
 

@@ -1,4 +1,5 @@
 import {
+  detectJobPostingLanguage,
   resolveCanonicalJobReviewState,
   type CanonicalJobReviewItem,
   type CanonicalJobReviewState,
@@ -27,6 +28,21 @@ export type VisibleJobExtractionShadowRow = {
   created_at?: number | null;
   _creationTime?: number | null;
 };
+
+export function resolveEffectiveJobRawLanguageDetected(job: {
+  rawLanguageDetected?: string | null;
+  rawDescription?: string | null;
+  title?: string | null;
+}): string {
+  const stored = String(job.rawLanguageDetected ?? "").trim();
+  const detected = detectJobPostingLanguage(
+    `${job.title ?? ""}\n${job.rawDescription ?? ""}`,
+  );
+  if (stored.toLowerCase().startsWith("en") && detected !== "en") {
+    return detected;
+  }
+  return stored || detected;
+}
 
 type VisibleJobExtractionJob = {
   summary?: string | null;

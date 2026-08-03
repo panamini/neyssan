@@ -5,7 +5,10 @@ import {
 } from "../../../src/modules/resume-variant-materialization/materializeSourceCvVariant";
 import { resolveReviewableCandidateCvItemReference } from "../../../src/modules/candidate-evidence/cvItemReferences";
 import type { CvDocument } from "../../../src/types/cvDocument";
-import { safeParseCvDocument } from "../../../src/schemas/cvDocument.schema";
+import {
+  ISODateStringSchema,
+  safeParseCvDocument,
+} from "../../../src/schemas/cvDocument.schema";
 import { decodeCvDocumentFromConvex } from "../../../src/adapters/cvDocumentPersistence";
 import type { ResumeVariantPlanReviewDecisionV1 } from "../../../src/modules/resume-variant-plan/reviewResumeVariantPlan";
 import type {
@@ -28,6 +31,7 @@ import {
 import { resolveResumeProfileById } from "./matchRead";
 import {
   isJobLlmVisibleExtractionEnabled,
+  resolveEffectiveJobRawLanguageDetected,
   resolveVisibleJobBriefReviewState,
   selectVisibleJobExtractionForJob,
 } from "./visibleJobExtraction";
@@ -352,7 +356,7 @@ async function buildOwnedCvTailoringComposition(
     job,
     shadowRows,
     flagEnabled: visibleExtractionFlagEnabled,
-    rawLanguageDetected: job.rawLanguageDetected,
+    rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
   });
   const visibleReviewState = resolveVisibleJobBriefReviewState({
     reviewItems: job.reviewItems ?? [],
@@ -618,19 +622,22 @@ function withRequiredCvMetadata(
       sourceProfile._creationTime ??
       now,
   );
-  const createdAt =
-    typeof metadata.createdAt === "string" && metadata.createdAt.trim()
-      ? metadata.createdAt
-      : new Date(
-          Number.isFinite(createdAtFallback) ? createdAtFallback : now,
-        ).toISOString();
-  const updatedAt =
-    typeof metadata.updatedAt === "string" && metadata.updatedAt.trim()
-      ? metadata.updatedAt
-      : new Date(
-          Number.isFinite(updatedAtFallback) ? updatedAtFallback : now,
-        ).toISOString();
-  const version = Number(metadata.version);
+  const createdAt = ISODateStringSchema.safeParse(metadata.createdAt).success
+    ? (metadata.createdAt as string)
+    : new Date(
+        Number.isFinite(createdAtFallback) ? createdAtFallback : now,
+      ).toISOString();
+  const updatedAt = ISODateStringSchema.safeParse(metadata.updatedAt).success
+    ? (metadata.updatedAt as string)
+    : new Date(
+        Number.isFinite(updatedAtFallback) ? updatedAtFallback : now,
+      ).toISOString();
+  const version =
+    typeof metadata.version === "number" &&
+    Number.isInteger(metadata.version) &&
+    metadata.version > 0
+      ? metadata.version
+      : 1;
 
   return {
     ...sourceCv,
@@ -638,7 +645,7 @@ function withRequiredCvMetadata(
       ...metadata,
       createdAt,
       updatedAt,
-      version: Number.isFinite(version) && version > 0 ? version : 1,
+      version,
     },
   };
 }

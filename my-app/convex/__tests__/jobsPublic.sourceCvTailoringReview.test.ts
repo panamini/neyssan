@@ -162,6 +162,8 @@ function makeContext(
     educationFieldOfStudy?: string;
     reviewItems?: Array<Record<string, unknown>>;
     shadowRows?: StoredRow[];
+    rawDescription?: string;
+    rawLanguageDetected?: string;
   } = {},
 ) {
   const attachedProfileId = overrides.siblingAttachedCv
@@ -215,7 +217,9 @@ function makeContext(
     title: "Bakery sales associate",
     company: "Bakery One",
     sourceUrl: "https://example.test/jobs/bakery",
-    rawDescription: "Customer service in a bakery.",
+    rawDescription:
+      overrides.rawDescription ?? "Customer service in a bakery.",
+    rawLanguageDetected: overrides.rawLanguageDetected ?? "en",
     mustHaves: [...(overrides.mustHaves ?? ["Customer service"])],
     responsibilities: ["Customer service"],
     keywords: [...(overrides.keywords ?? [])],
@@ -726,6 +730,50 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(fixture.writes).toEqual([]);
   });
 
+  it("uses the effective posting language when authorizing the visible brief", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [],
+      rawLanguageDetected: "en",
+      rawDescription:
+        "Experiencia en gestión de operación y seguridad. Disponibilidad para trabajar turnos y fines de semana.",
+      shadowRows: [
+        {
+          _id: "shadow-english-translation",
+          _creationTime: T,
+          job_id: JOB_ID,
+          llm_normalized_output: {
+            summary_short: "This role requires customer service.",
+            role_title_normalized: "Bakery sales associate",
+            requirements: [
+              { value: "Customer service", type: "skill", required: true },
+            ],
+            keywords_canonical: ["bakery", "customer service"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              retail: true,
+              physical_standing: null,
+              onsite: true,
+            },
+            confidence: "high",
+          },
+          validation_status: "valid",
+          fallback_used: false,
+          model: "ministral-3b-2512",
+          prompt_version: "p9_v2",
+          created_at: T,
+        },
+      ],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).resolves.toMatchObject({ mode: "auto_recommended" });
+  });
+
   it("persists only review state and keeps an equivalent public retry write-free", async () => {
     const fixture = makeContext();
     const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
@@ -764,12 +812,16 @@ describe("authenticated source CV tailoring review boundary", () => {
     ).toBe(false);
   });
 
-  it("materializes one derived profile from only jobId and expectedPlanId, then attaches a safe identity", async () => {
+  it("materializes one derived profile with schema-valid metadata, then attaches a safe identity", async () => {
     const fixture = makeContext({
       cvSummary: "Customer-focused bakery professional",
       skillNames: ["Customer service"],
     });
-    delete (fixture.profile.cvDocument as Record<string, unknown>).metadata;
+    (fixture.profile.cvDocument as Record<string, unknown>).metadata = {
+      createdAt: "now",
+      updatedAt: "not-a-date",
+      version: 1.5,
+    };
     const sourceBefore = structuredClone(fixture.profile.cvDocument);
     const jobBefore = structuredClone(fixture.tables.jobs[0]);
     const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
@@ -814,8 +866,8 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(derivedProfiles[0]?.cvDocument).toMatchObject({
       id: result.resumeId,
       metadata: {
-        createdAt: expect.any(String),
-        updatedAt: expect.any(String),
+        createdAt: new Date(T).toISOString(),
+        updatedAt: new Date(T).toISOString(),
         version: 1,
         reviewedSourceCvVariant: {
           kind: "reviewed_source_cv_variant",

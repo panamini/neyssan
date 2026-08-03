@@ -1941,36 +1941,38 @@ function JobsPageContent(): JSX.Element {
   const selectedJobReviewedResumeReadiness: ReviewedResumeReadiness =
     !selectedJobIsReviewedVariant
       ? "source"
-      : selectedJob?.resumeProposalAuthority === "reviewed_ready"
-        ? "derived_ready"
-        : selectedJob?.resumeProposalAuthority === "reviewed_invalid"
-          ? "derived_unavailable"
-      : !selectedJobAttachedCv
-        ? reviewedResumeHydration?.key === selectedJobAttachmentKey
-          ? reviewedResumeHydration.status === "ready"
-            ? "derived_ready"
-            : reviewedResumeHydration.status === "loading"
-              ? "derived_loading"
-              : "derived_unavailable"
-          : "derived_unavailable"
-        : !selectedJobReviewedVariantBinding
-          ? selectedJobReviewedResumeHydrationReady
-            ? "derived_ready"
-            : reviewedResumeHydration?.key === selectedJobAttachmentKey &&
-                reviewedResumeHydration.status === "error"
-              ? "derived_unavailable"
-              : "derived_loading"
-          : selectedJobReviewedVariantBinding.jobId !== selectedJob?.id
-            ? "derived_wrong_job"
-            : selectedJobAttachmentKey === briefInvalidatedAttachmentKey
-              ? "derived_invalidated"
-              : isHydratedCvLibraryDocument(selectedJobAttachedCv) ||
-                  selectedJobReviewedResumeHydrationReady
-                ? "derived_ready"
-                : reviewedResumeHydration?.key === selectedJobAttachmentKey &&
-                    reviewedResumeHydration.status === "error"
-                  ? "derived_unavailable"
-                  : "derived_loading";
+      : selectedJobAttachmentKey === briefInvalidatedAttachmentKey
+        ? "derived_invalidated"
+        : selectedJob?.resumeProposalAuthority === "reviewed_ready"
+          ? "derived_ready"
+          : selectedJob?.resumeProposalAuthority === "reviewed_invalid"
+            ? "derived_unavailable"
+            : !selectedJobAttachedCv
+              ? reviewedResumeHydration?.key === selectedJobAttachmentKey
+                ? reviewedResumeHydration.status === "ready"
+                  ? "derived_ready"
+                  : reviewedResumeHydration.status === "loading"
+                    ? "derived_loading"
+                    : "derived_unavailable"
+                : "derived_unavailable"
+              : !selectedJobReviewedVariantBinding
+                ? selectedJobReviewedResumeHydrationReady
+                  ? "derived_ready"
+                  : reviewedResumeHydration?.key ===
+                        selectedJobAttachmentKey &&
+                      reviewedResumeHydration.status === "error"
+                    ? "derived_unavailable"
+                    : "derived_loading"
+                : selectedJobReviewedVariantBinding.jobId !== selectedJob?.id
+                  ? "derived_wrong_job"
+                  : isHydratedCvLibraryDocument(selectedJobAttachedCv) ||
+                      selectedJobReviewedResumeHydrationReady
+                    ? "derived_ready"
+                    : reviewedResumeHydration?.key ===
+                          selectedJobAttachmentKey &&
+                        reviewedResumeHydration.status === "error"
+                      ? "derived_unavailable"
+                      : "derived_loading";
   const selectedJobReviewedResumeUnavailable =
     selectedJobReviewedResumeReadiness !== "source" &&
     selectedJobReviewedResumeReadiness !== "derived_ready";
