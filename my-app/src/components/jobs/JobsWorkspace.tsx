@@ -2766,6 +2766,7 @@ function JobsPageContent(): JSX.Element {
               resumeId: materialized.resumeId,
               resumeName: materialized.resumeName,
               resumeSource: "job",
+              resumeProposalAuthority: "reviewed_ready",
             }
           : current,
       );

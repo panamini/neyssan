@@ -238,8 +238,10 @@ const selectedJob = {
 let listResult: typeof jobsList | undefined = jobsList;
 let archivedListResult: typeof archivedJobsList | undefined = [];
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
-let selectedJobResultByRefreshKey: Record<number, typeof selectedJob | null> =
-  {};
+let selectedJobResultByRefreshKey: Record<
+  number,
+  typeof selectedJob | null | undefined
+> = {};
 let jobDetailQueryResultById: Record<string, typeof selectedJob | null> = {};
 let debugPayload: Record<string, unknown> | null = null;
 let listError: Error | null = null;
@@ -3707,6 +3709,7 @@ describe("JobsPage", () => {
 
   it("submits decisions only for pending selectable items and materializes with the returned reviewed plan id", async () => {
     selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = undefined;
     const sourceCvBefore = JSON.stringify(cvLibraryResult.cvs[0]);
     prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
     submitCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
@@ -3754,6 +3757,9 @@ describe("JobsPage", () => {
     });
     expect(JSON.stringify(cvLibraryResult.cvs[0])).toBe(sourceCvBefore);
     expect(screen.getByText("Tailored resume ready")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Generate proposal" }),
+    ).toBeEnabled();
     await waitFor(() => {
       expect(trackEventMock).toHaveBeenCalledWith(
         expect.objectContaining({
