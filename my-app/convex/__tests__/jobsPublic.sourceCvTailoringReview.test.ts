@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   materializeCvTailoringReview,
@@ -6,12 +6,87 @@ import {
   submitCvTailoringReview,
 } from "../jobsPublic";
 import { listProfilesForClerk } from "../lib/userProfiles";
+import { resolveReviewedResumeProposalAuthority } from "../lib/jobs/sourceCvTailoringReview";
 
 const T = Date.UTC(2026, 6, 30);
 const CLERK_ID = "clerk-owner";
 const PROFILE_ID = "profile-owner";
 const SIBLING_PROFILE_ID = "profile-sibling";
 const JOB_ID = "job-owner";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+it("derives reviewed proposal authority from the complete persisted document and exact job binding", () => {
+  const resumeId = "source-cv-variant:v1:farman-ali";
+  const document = sourceCv(resumeId);
+  document.metadata = {
+    ...document.metadata,
+    reviewedSourceCvVariant: {
+      kind: "reviewed_source_cv_variant",
+      sourceCvId: PROFILE_ID,
+      jobId: JOB_ID,
+      applicationContextId: `application-context:${JOB_ID}`,
+      applicationContextHash: `application-context-hash:${JOB_ID}`,
+      reviewedPlanId: "resume-variant-plan:reviewed",
+      version: 1,
+    },
+  } as typeof document.metadata;
+
+  expect(
+    resolveReviewedResumeProposalAuthority({
+      resumeId,
+      jobId: JOB_ID,
+      profile: { profileId: resumeId, cvDocument: document },
+    }),
+  ).toBe("reviewed_ready");
+  expect(
+    resolveReviewedResumeProposalAuthority({
+      resumeId,
+      jobId: "job-other",
+      profile: { profileId: resumeId, cvDocument: document },
+    }),
+  ).toBe("reviewed_invalid");
+  expect(
+    resolveReviewedResumeProposalAuthority({
+      resumeId,
+      jobId: JOB_ID,
+      profile: { profileId: resumeId, cvDocument: { ...document, id: "stale" } },
+    }),
+  ).toBe("reviewed_invalid");
+});
+
+it("reconstructs transport-stripped metadata before checking reviewed proposal authority", () => {
+  const resumeId = "source-cv-variant:v1:farman-ali";
+  const document = sourceCv(resumeId);
+  document.metadata = {
+    reviewedSourceCvVariant: {
+      kind: "reviewed_source_cv_variant",
+      sourceCvId: PROFILE_ID,
+      jobId: JOB_ID,
+      applicationContextId: `application-context:${JOB_ID}`,
+      applicationContextHash: `application-context-hash:${JOB_ID}`,
+      reviewedPlanId: "resume-variant-plan:reviewed",
+      version: 1,
+    },
+  } as typeof document.metadata;
+
+  expect(
+    resolveReviewedResumeProposalAuthority({
+      resumeId,
+      jobId: JOB_ID,
+      profile: {
+        _creationTime: T,
+        profileId: resumeId,
+        cvDocument: document,
+        createdAt: T,
+        updatedAt: T,
+        version: 1,
+      },
+    }),
+  ).toBe("reviewed_ready");
+});
 
 type StoredRow = Record<string, unknown> & {
   _id: string;
@@ -91,6 +166,40 @@ function sourceCv(
   };
 }
 
+function validVisibleShadowRow(
+  id: string,
+  summary: string,
+  createdAt = T,
+): StoredRow {
+  return {
+    _id: id,
+    _creationTime: createdAt,
+    job_id: JOB_ID,
+    llm_normalized_output: {
+      summary_short: summary,
+      role_title_normalized: "Bakery sales associate",
+      requirements: [
+        { value: "Customer service", type: "skill", required: true },
+      ],
+      keywords_canonical: ["bakery", "customer service"],
+      licenses_or_certifications: [],
+      schedule_constraints: [],
+      environment: {
+        customer_facing: true,
+        retail: true,
+        physical_standing: null,
+        onsite: true,
+      },
+      confidence: "high",
+    },
+    validation_status: "valid",
+    fallback_used: false,
+    model: "ministral-3b-2512",
+    prompt_version: "p9_v2",
+    created_at: createdAt,
+  };
+}
+
 function readPath(row: StoredRow, path: string): unknown {
   return path.split(".").reduce<unknown>((value, key) => {
     if (!value || typeof value !== "object") {
@@ -100,22 +209,28 @@ function readPath(row: StoredRow, path: string): unknown {
   }, row);
 }
 
-function makeContext(overrides: {
-  authenticated?: boolean;
-  jobOwnerId?: string;
-  archivedAt?: number | null;
-  parseStatus?: string;
-  reviewState?: string;
-  lastResumeId?: string | null;
-  cvId?: string;
-  legacyCvIds?: boolean;
-  siblingAttachedCv?: boolean;
-  mustHaves?: readonly string[];
-  skillNames?: readonly string[];
-  keywords?: readonly string[];
-  cvSummary?: string;
-  educationFieldOfStudy?: string;
-} = {}) {
+function makeContext(
+  overrides: {
+    authenticated?: boolean;
+    jobOwnerId?: string;
+    archivedAt?: number | null;
+    parseStatus?: string;
+    reviewState?: string;
+    lastResumeId?: string | null;
+    cvId?: string;
+    legacyCvIds?: boolean;
+    siblingAttachedCv?: boolean;
+    mustHaves?: readonly string[];
+    skillNames?: readonly string[];
+    keywords?: readonly string[];
+    cvSummary?: string;
+    educationFieldOfStudy?: string;
+    reviewItems?: Array<Record<string, unknown>>;
+    shadowRows?: StoredRow[];
+    rawDescription?: string;
+    rawLanguageDetected?: string;
+  } = {},
+) {
   const attachedProfileId = overrides.siblingAttachedCv
     ? SIBLING_PROFILE_ID
     : PROFILE_ID;
@@ -167,10 +282,13 @@ function makeContext(overrides: {
     title: "Bakery sales associate",
     company: "Bakery One",
     sourceUrl: "https://example.test/jobs/bakery",
-    rawDescription: "Customer service in a bakery.",
+    rawDescription:
+      overrides.rawDescription ?? "Customer service in a bakery.",
+    rawLanguageDetected: overrides.rawLanguageDetected ?? "en",
     mustHaves: [...(overrides.mustHaves ?? ["Customer service"])],
     responsibilities: ["Customer service"],
     keywords: [...(overrides.keywords ?? [])],
+    reviewItems: overrides.reviewItems ?? [],
     createdAt: T,
     updatedAt: T,
   };
@@ -179,6 +297,7 @@ function makeContext(overrides: {
       ? [profile, attachedProfile]
       : [profile],
     jobs: [job],
+    job_extraction_shadow: overrides.shadowRows ?? [],
     applicationContexts: [],
     applicationArtifacts: [],
   };
@@ -225,19 +344,33 @@ function makeContext(overrides: {
               ([field, value]) => readPath(row, field) === value,
             ),
           );
-          return {
+          let projectedRows = rows;
+          const result = {
+            order(direction: "asc" | "desc") {
+              projectedRows = [...projectedRows].sort((left, right) =>
+                direction === "desc"
+                  ? right._creationTime - left._creationTime
+                  : left._creationTime - right._creationTime,
+              );
+              return result;
+            },
+            take: async (limit: number) => {
+              readCount += 1;
+              return projectedRows.slice(0, limit);
+            },
             collect: async () => {
               readCount += 1;
-              return rows;
+              return projectedRows;
             },
             unique: async () => {
               readCount += 1;
-              if (rows.length > 1) {
+              if (projectedRows.length > 1) {
                 throw new Error(`Expected unique ${table} row`);
               }
-              return rows[0] ?? null;
+              return projectedRows[0] ?? null;
             },
           };
+          return result;
         },
       };
     },
@@ -369,27 +502,23 @@ describe("authenticated source CV tailoring review boundary", () => {
           }
         )?.value === "auto_recommended",
     );
-    const planFields = (
-      autoRecommended?.value.plan?.fieldType.value as
-        | Record<
-            string,
-            {
-              fieldType: {
-                type: string;
-                value?: unknown;
-              };
-            }
-          >
-        | undefined
-    );
-    const itemFields = (
-      (
-        planFields?.items?.fieldType.value as {
-          type?: string;
-          value?: Record<string, unknown>;
-        }
-      )?.value ?? {}
-    ) as Record<string, unknown>;
+    const planFields = autoRecommended?.value.plan?.fieldType.value as
+      | Record<
+          string,
+          {
+            fieldType: {
+              type: string;
+              value?: unknown;
+            };
+          }
+        >
+      | undefined;
+    const itemFields = ((
+      planFields?.items?.fieldType.value as {
+        type?: string;
+        value?: Record<string, unknown>;
+      }
+    )?.value ?? {}) as Record<string, unknown>;
 
     expect(planFields).toHaveProperty("requiredDemandIds");
     expect(itemFields).toHaveProperty("displayLabel");
@@ -472,9 +601,7 @@ describe("authenticated source CV tailoring review boundary", () => {
 
   it("resolves an attached sibling CV when the owning profile has no CV document", async () => {
     const fixture = makeContext({ siblingAttachedCv: true });
-    const sourceCvBefore = structuredClone(
-      fixture.attachedProfile.cvDocument,
-    );
+    const sourceCvBefore = structuredClone(fixture.attachedProfile.cvDocument);
 
     const result = await prepareCvTailoringReview._handler(fixture.ctx, {
       jobId: JOB_ID,
@@ -617,7 +744,6 @@ describe("authenticated source CV tailoring review boundary", () => {
       makeContext({ jobOwnerId: "profile-foreign" }),
       makeContext({ archivedAt: T + 1 }),
       makeContext({ parseStatus: "parsing" }),
-      makeContext({ reviewState: "needs_review" }),
       makeContext({ lastResumeId: null }),
       makeContext({ cvId: "cv-other" }),
     ]) {
@@ -628,6 +754,146 @@ describe("authenticated source CV tailoring review boundary", () => {
       expect(fixture.tables.applicationArtifacts).toEqual([]);
       expect(fixture.writes).toEqual([]);
     }
+  });
+
+  it("ignores a stale stored review flag when the visible heuristic brief has no pending items", async () => {
+    const fixture = makeContext({
+      reviewState: "needs_review",
+      reviewItems: [],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).resolves.toMatchObject({ mode: "auto_recommended" });
+  });
+
+  it("blocks tailoring until a newly visible LLM brief is reviewed", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [],
+      shadowRows: [
+        validVisibleShadowRow(
+          "shadow-current",
+          "Customer-facing bakery sales role.",
+        ),
+      ],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).rejects.toThrow(/Job Brief must be parsed and ready/i);
+    expect(fixture.writes).toEqual([]);
+  });
+
+  it("blocks tailoring while a consumed Responsibilities item remains pending", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const summary = "Customer-facing bakery sales role.";
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [
+        {
+          id: "llm_visible_summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "approved",
+          suggestedValue: summary,
+          approvedValue: summary,
+          sourceText: summary,
+          confidence: 0.9,
+          updatedAt: T,
+        },
+        {
+          id: "llm_visible_must_haves",
+          fieldKey: "mustHaves",
+          label: "Requirements",
+          reviewStatus: "approved",
+          suggestedValue: ["Customer service"],
+          approvedValue: ["Customer service"],
+          sourceText: "Customer service",
+          confidence: 0.9,
+          updatedAt: T,
+        },
+        {
+          id: "llm_visible_keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "approved",
+          suggestedValue: ["bakery", "customer service"],
+          approvedValue: ["bakery", "customer service"],
+          sourceText: "bakery\ncustomer service",
+          confidence: 0.9,
+          updatedAt: T,
+        },
+        {
+          id: "responsibilities",
+          fieldKey: "responsibilities",
+          label: "Responsibilities",
+          reviewStatus: "pending",
+          suggestedValue: ["Customer service"],
+          sourceText: "Customer service",
+          confidence: 0.4,
+          updatedAt: T,
+        },
+      ],
+      shadowRows: [validVisibleShadowRow("shadow-current", summary)],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).rejects.toThrow(/Job Brief must be parsed and ready/i);
+    expect(fixture.writes).toEqual([]);
+  });
+
+  it("uses the effective posting language when authorizing the visible brief", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [],
+      rawLanguageDetected: "en",
+      rawDescription:
+        "Experiencia en gestión de operación y seguridad. Disponibilidad para trabajar turnos y fines de semana.",
+      shadowRows: [
+        validVisibleShadowRow(
+          "shadow-english-translation",
+          "This role requires customer service.",
+        ),
+      ],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).resolves.toMatchObject({ mode: "auto_recommended" });
+  });
+
+  it("uses the same latest-eight shadow window as the visible Job Brief", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const invalidRows = Array.from({ length: 8 }, (_, index) => ({
+      _id: `shadow-invalid-${index}`,
+      _creationTime: T + 10_000 - index,
+      job_id: JOB_ID,
+      llm_normalized_output: {},
+      validation_status: "schema_invalid",
+      fallback_used: false,
+      model: "ministral-3b-2512",
+      prompt_version: "p9_v2",
+      created_at: T + 10_000 - index,
+    }));
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [],
+      shadowRows: [
+        ...invalidRows,
+        validVisibleShadowRow(
+          "shadow-valid-but-outside-visible-window",
+          "Hidden older LLM summary.",
+        ),
+      ],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).resolves.toMatchObject({ mode: "auto_recommended" });
   });
 
   it("persists only review state and keeps an equivalent public retry write-free", async () => {
@@ -659,9 +925,7 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(replayed).toEqual(reviewed);
     expect(fixture.writes).toEqual(writesAfterFirstReview);
     expect(
-      fixture.writes.filter(
-        (write) => write === "insert:applicationArtifacts",
-      ),
+      fixture.writes.filter((write) => write === "insert:applicationArtifacts"),
     ).toHaveLength(1);
     expect(
       fixture.writes.some((write) =>
@@ -670,11 +934,16 @@ describe("authenticated source CV tailoring review boundary", () => {
     ).toBe(false);
   });
 
-  it("materializes one derived profile from only jobId and expectedPlanId, then attaches a safe identity", async () => {
+  it("materializes one derived profile with schema-valid metadata, then attaches a safe identity", async () => {
     const fixture = makeContext({
       cvSummary: "Customer-focused bakery professional",
       skillNames: ["Customer service"],
     });
+    (fixture.profile.cvDocument as Record<string, unknown>).metadata = {
+      createdAt: "now",
+      updatedAt: "not-a-date",
+      version: 1.5,
+    };
     const sourceBefore = structuredClone(fixture.profile.cvDocument);
     const jobBefore = structuredClone(fixture.tables.jobs[0]);
     const prepared = await prepareCvTailoringReview._handler(fixture.ctx, {
@@ -695,14 +964,12 @@ describe("authenticated source CV tailoring review boundary", () => {
       throw new Error("Expected reviewed plan");
     }
     const writesBeforeMaterialization = [...fixture.writes];
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(T + 1_000);
 
-    const result = await materializeCvTailoringReview._handler(
-      fixture.ctx,
-      {
-        jobId: JOB_ID,
-        expectedPlanId: reviewed.plan.id,
-      },
-    );
+    const result = await materializeCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: reviewed.plan.id,
+    });
 
     expect(result).toEqual({
       jobId: JOB_ID,
@@ -721,6 +988,9 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(derivedProfiles[0]?.cvDocument).toMatchObject({
       id: result.resumeId,
       metadata: {
+        createdAt: new Date(T).toISOString(),
+        updatedAt: new Date(T).toISOString(),
+        version: 1,
         reviewedSourceCvVariant: {
           kind: "reviewed_source_cv_variant",
           sourceCvId: PROFILE_ID,
@@ -760,6 +1030,17 @@ describe("authenticated source CV tailoring review boundary", () => {
         /candidateFacts|candidateSourceDocuments/.test(write),
       ),
     ).toBe(false);
+
+    const profileCountBeforeReplay = fixture.tables.userProfiles.length;
+    dateNow.mockReturnValue(T + 2_000);
+    const replayed = await materializeCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: reviewed.plan.id,
+    });
+
+    expect(replayed).toEqual({ ...result, reused: true });
+    expect(fixture.tables.userProfiles).toHaveLength(profileCountBeforeReplay);
+    dateNow.mockRestore();
   });
 
   it("keeps a newer reviewed source-CV variant behind the canonical primary profile", async () => {
@@ -823,31 +1104,24 @@ describe("authenticated source CV tailoring review boundary", () => {
     derived.cvDocument = editedDocument;
     const profileCountBeforeReplay = fixture.tables.userProfiles.length;
 
-    const replayed = await materializeCvTailoringReview._handler(
-      fixture.ctx,
-      {
-        jobId: JOB_ID,
-        expectedPlanId: reviewed.plan.id,
-      },
-    );
+    const replayed = await materializeCvTailoringReview._handler(fixture.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: reviewed.plan.id,
+    });
 
     expect(replayed).toEqual({
       ...first,
       resumeName: "User-edited tailored CV",
       reused: true,
     });
-    expect(fixture.tables.userProfiles).toHaveLength(
-      profileCountBeforeReplay,
-    );
+    expect(fixture.tables.userProfiles).toHaveLength(profileCountBeforeReplay);
     expect(derived.cvDocument).toBe(editedDocument);
     expect(fixture.tables.jobs[0]?.lastResumeId).toBe(first.resumeId);
     expect(fixture.tables.jobs[0]?.lastResumeName).toBe(
       "User-edited tailored CV",
     );
     expect(
-      fixture.writes.filter(
-        (write) => write === "insert:userProfiles",
-      ),
+      fixture.writes.filter((write) => write === "insert:userProfiles"),
     ).toHaveLength(1);
   });
 
@@ -921,10 +1195,9 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(wrongJob.writes).toEqual([]);
 
     const pending = makeContext();
-    const pendingPlan = await prepareCvTailoringReview._handler(
-      pending.ctx,
-      { jobId: JOB_ID },
-    );
+    const pendingPlan = await prepareCvTailoringReview._handler(pending.ctx, {
+      jobId: JOB_ID,
+    });
     if (!pendingPlan.plan) {
       throw new Error("Expected pending plan");
     }
@@ -974,17 +1247,14 @@ describe("authenticated source CV tailoring review boundary", () => {
     if (!readyPending.plan) {
       throw new Error("Expected ready plan");
     }
-    const readyReviewed = await submitCvTailoringReview._handler(
-      ready.ctx,
-      {
-        jobId: JOB_ID,
-        expectedPlanId: readyPending.plan.id,
-        decisions: readyPending.plan.items.map((item) => ({
-          planItemId: item.id,
-          reviewState: "accepted" as const,
-        })),
-      },
-    );
+    const readyReviewed = await submitCvTailoringReview._handler(ready.ctx, {
+      jobId: JOB_ID,
+      expectedPlanId: readyPending.plan.id,
+      decisions: readyPending.plan.items.map((item) => ({
+        planItemId: item.id,
+        reviewState: "accepted" as const,
+      })),
+    });
     if (!readyReviewed.plan) {
       throw new Error("Expected reviewed ready plan");
     }
@@ -1012,9 +1282,7 @@ describe("authenticated source CV tailoring review boundary", () => {
     ).rejects.toThrow();
     expect(
       ready.tables.userProfiles.some((profile) =>
-        String(profile.profileId ?? "").startsWith(
-          "source-cv-variant:v1:",
-        ),
+        String(profile.profileId ?? "").startsWith("source-cv-variant:v1:"),
       ),
     ).toBe(false);
   });

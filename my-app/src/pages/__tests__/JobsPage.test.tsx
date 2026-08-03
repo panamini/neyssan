@@ -8,12 +8,19 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { JobsPage } from "../JobsPage";
 import {
   PROPOSAL_EXTENSION_INSTALL_LINK,
   getProposalExtensionSourceLinks,
 } from "../../lib/proposal-source-platforms";
+import { generateCvTemplateV1 } from "../../lib/cv-template";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const archiveJobMock = vi.fn().mockResolvedValue(null);
@@ -43,6 +50,11 @@ const windowOpenMock = vi.fn();
 const showToastMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 let rerenderJobsDetail: (() => void) | null = null;
+
+async function findJobsListElement(): Promise<HTMLElement> {
+  const jobsPane = await screen.findByLabelText("Jobs list");
+  return within(jobsPane).getByRole("list");
+}
 
 const jobsList = [
   {
@@ -333,6 +345,9 @@ vi.mock("@clerk/clerk-react", () => ({
 
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
+    profilesPublic: {
+      getByProfileId: "profilesPublic.getByProfileId",
+    },
     jobsPublic: {
       listForUser: "jobsPublic.listForUser",
       getById: "jobsPublic.getById",
@@ -380,6 +395,20 @@ function LocationProbe(): JSX.Element {
     >
       {`${location.pathname}${location.search}`}
     </div>
+  );
+}
+
+function JobsLifecycleRouteControls(): JSX.Element {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button type="button" onClick={() => navigate("/jobs?view=list")}>
+        Test route away
+      </button>
+      <button type="button" onClick={() => navigate("/jobs/job_alpha")}>
+        Test route back
+      </button>
+    </>
   );
 }
 
@@ -496,7 +525,7 @@ function reviewedVariantCv({
 function renderJobsDetail(
   initialEntry = "/jobs/job_alpha",
 ): ReturnType<typeof render> {
-  const element = (
+  const buildElement = () => (
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route
@@ -521,8 +550,8 @@ function renderJobsDetail(
       </Routes>
     </MemoryRouter>
   );
-  const result = render(element);
-  rerenderJobsDetail = () => result.rerender(element);
+  const result = render(buildElement());
+  rerenderJobsDetail = () => result.rerender(buildElement());
   return result;
 }
 
@@ -711,9 +740,19 @@ describe("JobsPage", () => {
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
-    expect(await screen.findByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
-    expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
-    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "Support recurring operations and unblock coordination work.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Responsibilities")).toBeInTheDocument();
+    expect(
+      screen.getAllByLabelText("Needs your review").length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getByRole("button", { name: "Confirm Responsibilities" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("EXTRACTION. PAUSED.")).not.toBeInTheDocument();
     expect(
       await screen.findByRole("link", {
         name: /Open linked proposal Operations Associate cover letter/i,
@@ -721,8 +760,10 @@ describe("JobsPage", () => {
     ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_1");
     expect(
       document.querySelector(".dasti-jobs-detail__status-line"),
-    ).toHaveTextContent(/Ready\s*·\s*2 linked documents/);
-    expect((await screen.findAllByText("Ready")).length).toBeGreaterThan(0);
+    ).toHaveTextContent(/Review needed\s*·\s*2 linked documents/);
+    expect(
+      (await screen.findAllByText("Review needed")).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("Check fields")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
     const jobActions = screen.getByLabelText("Job actions");
@@ -841,9 +882,9 @@ describe("JobsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Keep" }),
     ).not.toBeInTheDocument();
-    expect(screen.getAllByLabelText("Validated").length).toBeGreaterThanOrEqual(
-      3,
-    );
+    expect(
+      screen.getAllByLabelText("Needs your review").length,
+    ).toBeGreaterThanOrEqual(3);
     expect(screen.getAllByText("Summary").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Requirements").length).toBeGreaterThanOrEqual(
       1,
@@ -872,13 +913,13 @@ describe("JobsPage", () => {
     expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
   });
 
-  it("shows a branded unavailable state instead of heuristic extraction fallback", async () => {
+  it("keeps heuristic extraction visible and reviewable while preserving the posting", async () => {
     selectedJobResult = {
       ...selectedJob,
-      summary: "Heuristic summary should stay hidden.",
-      visibleSummary: "Heuristic visible summary should stay hidden.",
-      mustHaves: ["Heuristic requirement should stay hidden"],
-      visibleRequirements: ["Heuristic visible requirement should stay hidden"],
+      summary: "Heuristic summary remains reviewable.",
+      visibleSummary: "Heuristic visible summary remains reviewable.",
+      mustHaves: ["Heuristic requirement remains reviewable"],
+      visibleRequirements: ["Heuristic visible requirement remains reviewable"],
       keywords: ["location", "status", "compensation"],
       visibleKeywords: ["location", "status", "compensation"],
       visibleExtractionSource: "heuristic",
@@ -919,9 +960,26 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
-    expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
-    expect(screen.getByText(/Posting stays intact/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText("Heuristic visible summary remains reviewable."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Heuristic visible requirement remains reviewable"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("location")).toBeInTheDocument();
+    expect(screen.getByText("status")).toBeInTheDocument();
+    expect(screen.getByText("compensation")).toBeInTheDocument();
+    expect(screen.getByText("Responsibilities")).toBeInTheDocument();
+    expect(
+      screen.getByText("At Texas Roadhouse, we are a people-first company."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByLabelText("Needs your review").length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      screen.getAllByRole("button", { name: /^Confirm / }).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("EXTRACTION. PAUSED.")).not.toBeInTheDocument();
     expect(screen.getByText("Imported Posting")).toBeInTheDocument();
     expect(
       screen.queryByText("Raw source remains visible for this job."),
@@ -931,20 +989,7 @@ describe("JobsPage", () => {
       screen.getByText("Raw source remains visible for this job."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Heuristic summary should stay hidden."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Heuristic visible requirement should stay hidden"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("location, status, compensation"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("location status compensation"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("At Texas Roadhouse, we are a people-first company."),
+      screen.queryByText(/Job read is out of order/i),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(screen.queryByText("Verdict")).not.toBeInTheDocument();
@@ -1555,7 +1600,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     const selectedRow = within(jobsListElement)
       .getByText("Operations Associate")
       .closest("article");
@@ -1931,7 +1976,7 @@ describe("JobsPage", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("Select job").length).toBeGreaterThan(0);
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
 
     await waitFor(() => {
@@ -1979,7 +2024,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
 
     await waitFor(() => {
@@ -2050,7 +2095,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
 
     await waitFor(() => {
@@ -2110,7 +2155,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
 
     await waitFor(() => {
@@ -2151,7 +2196,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
 
     await waitFor(() => {
@@ -2272,6 +2317,47 @@ describe("JobsPage", () => {
         mode: "auto_recommended",
       });
     });
+  });
+
+  it("keeps every Job action inside the available 375px detail width", async () => {
+    const initialViewportWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 375,
+    });
+
+    try {
+      selectedJobResult = readyJobWithAttachedResume();
+      renderJobsDetail();
+
+      expect(
+        await screen.findByRole("button", { name: "Back to jobs" }),
+      ).toBeInTheDocument();
+      const jobActions = screen.getByLabelText("Job actions");
+      expect(jobActions.style.inlineSize).toBe("100%");
+      expect(jobActions.style.maxInlineSize).toBe("100%");
+      expect(jobActions.style.minInlineSize).toBe("0px");
+      expect(jobActions.style.boxSizing).toBe("border-box");
+
+      for (const action of within(jobActions).getAllByRole("button")) {
+        expect(action.style.maxInlineSize).toBe("100%");
+        expect(action.style.boxSizing).toBe("border-box");
+      }
+
+      const useCompleteResumeAction = within(jobActions).getByRole("button", {
+        name: "Use my complete resume without tailoring",
+      });
+      expect(useCompleteResumeAction).toHaveTextContent(/^Use complete resume$/);
+      expect(useCompleteResumeAction).toHaveAttribute(
+        "title",
+        "Use my complete resume without tailoring",
+      );
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: initialViewportWidth,
+      });
+    }
   });
 
   it("detaches the selected job resume from the paperclip picker", async () => {
@@ -2591,7 +2677,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     expect(
       within(jobsListElement).queryByRole("button", {
         name: "Mark Operations Associate as favorite",
@@ -2679,7 +2765,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     const supportRow = within(jobsListElement)
       .getByText("Support Specialist")
       .closest("article");
@@ -2716,7 +2802,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     const operationsRow = within(jobsListElement)
       .getByText("Operations Associate")
       .closest("article");
@@ -2965,7 +3051,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     expect(
       within(jobsListElement).getAllByText("Operations Associate").length,
     ).toBeGreaterThan(0);
@@ -3035,7 +3121,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(screen.getByRole("button", { name: "New" }));
 
     await waitFor(() => {
@@ -3064,7 +3150,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3116,7 +3202,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3200,7 +3286,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3240,7 +3326,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3268,7 +3354,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3297,7 +3383,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3363,7 +3449,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3426,7 +3512,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const jobsListElement = await screen.findByRole("list");
+    const jobsListElement = await findJobsListElement();
     fireEvent.click(
       within(jobsListElement).getByRole("button", {
         name: "More actions for Operations Associate",
@@ -3452,7 +3538,7 @@ describe("JobsPage", () => {
         "/jobs/job_duplicate",
       );
       expect(
-        within(screen.getByRole("list")).getByText("Operations Associate Copy"),
+        within(jobsListElement).getByText("Operations Associate Copy"),
       ).toBeInTheDocument();
     });
   });
@@ -3760,6 +3846,68 @@ describe("JobsPage", () => {
     });
   });
 
+  it("recovers materialized proposal authority during hydration without requiring a reload", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: false,
+    });
+    const hydratedVariant = reviewedVariantCv();
+    hydrateCvDocumentMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(hydratedVariant);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create tailored resume" }),
+    );
+
+    expect(
+      await screen.findByText(/created.*could not be loaded.*reload/i),
+    ).toBeInTheDocument();
+    const generateProposalButton = screen.getByRole("button", {
+      name: "Generate proposal",
+    });
+    expect(generateProposalButton).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume · Operations Associate",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(selectedJob.summary, { exact: true }),
+    ).toHaveLength(1);
+
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        reviewedVariantCv({ summaryOnly: true }),
+      ],
+      currentCv: null,
+    };
+    rerenderJobsDetail?.();
+
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
+      expect(generateProposalButton).toBeEnabled();
+    });
+    expect(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume · Operations Associate",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(selectedJob.summary, { exact: true }),
+    ).toHaveLength(1);
+  });
+
   it("keeps proposal navigation disabled for a summary-only derived attachment", async () => {
     selectedJobResult = {
       ...readyJobWithAttachedResume(),
@@ -3847,6 +3995,177 @@ describe("JobsPage", () => {
 
     await waitFor(() => {
       expect(generateProposalButton).toBeEnabled();
+    });
+  });
+
+  it("keeps reviewed-resume proposal authority stable when remote library hydration replaces the reload summary", async () => {
+    const reviewedJob = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready" as const,
+    };
+    const generatedReviewedVariant = generateCvTemplateV1("Primary resume");
+    const reviewedBinding = reviewedVariantCv().metadata.reviewedSourceCvVariant;
+    const fullReviewedVariant = {
+      ...generatedReviewedVariant,
+      id: "source-cv-variant:v1:reviewed",
+      title: "Primary resume",
+      metadata: {
+        ...generatedReviewedVariant.metadata,
+        reviewedSourceCvVariant: reviewedBinding,
+      },
+    };
+    const summaryReviewedVariant = {
+      ...fullReviewedVariant,
+      metadata: {
+        ...fullReviewedVariant.metadata,
+        librarySummaryOnly: true,
+      },
+      sections: [],
+    };
+    const remoteFallbackWithoutReviewedBinding = {
+      ...fullReviewedVariant,
+      metadata: {
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z",
+        version: 1,
+      },
+    };
+
+    selectedJobResult = reviewedJob;
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        fullReviewedVariant,
+      ],
+      currentCv: null,
+    };
+
+    const buildLifecycleElement = () => (
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <JobsLifecycleRouteControls />
+        <Routes>
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const beforeReload = render(buildLifecycleElement());
+    expect(
+      await screen.findByRole("button", { name: "Generate proposal" }),
+    ).toBeEnabled();
+    beforeReload.unmount();
+
+    const initialHydration = createDeferred<typeof fullReviewedVariant>();
+    hydrateCvDocumentMock
+      .mockReset()
+      .mockReturnValueOnce(initialHydration.promise)
+      .mockResolvedValue(remoteFallbackWithoutReviewedBinding);
+    debugInspectMatchInputMock.mockImplementation(
+      async (reference: string, args?: { jobId?: string; profileId?: string }) => {
+        if (
+          reference === "profilesPublic.getByProfileId" &&
+          args?.profileId === fullReviewedVariant.id
+        ) {
+          return {
+            profileId: fullReviewedVariant.id,
+            cvDocument: fullReviewedVariant,
+          };
+        }
+        if (reference === "jobsPublic.getById" && args?.jobId) {
+          return args.jobId === "job_alpha" ? selectedJobResult : null;
+        }
+        return debugPayload;
+      },
+    );
+    selectedJobResult = undefined;
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        summaryReviewedVariant,
+      ],
+      currentCv: null,
+    };
+
+    const afterReload = render(buildLifecycleElement());
+    const rerenderLifecycle = () => afterReload.rerender(buildLifecycleElement());
+    expect(
+      screen.queryByRole("button", { name: "Generate proposal" }),
+    ).not.toBeInTheDocument();
+
+    selectedJobResult = reviewedJob;
+    rerenderLifecycle();
+    const generateProposalButton = await screen.findByRole("button", {
+      name: "Generate proposal",
+    });
+    expect(generateProposalButton).toBeEnabled();
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(1);
+    });
+    expect(generateProposalButton).toBeEnabled();
+
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        remoteFallbackWithoutReviewedBinding,
+      ],
+      currentCv: null,
+    };
+    rerenderLifecycle();
+
+    await waitFor(() => {
+      expect(debugInspectMatchInputMock).toHaveBeenCalledWith(
+        "profilesPublic.getByProfileId",
+        { profileId: fullReviewedVariant.id },
+      );
+      expect(generateProposalButton).toBeEnabled();
+    });
+    expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    });
+    expect(generateProposalButton).toBeEnabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume · Operations Associate",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(selectedJob.summary, { exact: true }),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Test route away" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs?view=list",
+      );
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Test route back" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_alpha",
+      );
+      expect(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      ).toBeEnabled();
     });
   });
 
@@ -4045,9 +4364,7 @@ describe("JobsPage", () => {
         name: /Operations Lead · Example Co/i,
       }),
     );
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /Process mapping/i }),
-    );
+    fireEvent.click(screen.getByRole("checkbox", { name: /Process mapping/i }));
 
     expect(
       screen.getByText(/keep at least one resume item/i),
@@ -4143,9 +4460,9 @@ describe("JobsPage", () => {
       await screen.findByRole("button", { name: "Tailor resume" }),
     );
 
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent("Required evidence is missing.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Required evidence is missing.",
+    );
     expect(
       screen.getByRole("button", { name: "Create tailored resume" }),
     ).toBeDisabled();
@@ -4153,7 +4470,9 @@ describe("JobsPage", () => {
     prepareCvTailoringReviewMock.mockResolvedValueOnce(
       pendingCvTailoringReview,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Reload recommendations" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reload recommendations" }),
+    );
     await screen.findByRole("checkbox", { name: /Process mapping/i });
     submitCvTailoringReviewMock.mockRejectedValue(
       new Error("stale ResumeVariantPlan review"),
@@ -4170,9 +4489,7 @@ describe("JobsPage", () => {
       "/jobs/job_alpha",
     );
 
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /Process mapping/i }),
-    );
+    fireEvent.click(screen.getByRole("checkbox", { name: /Process mapping/i }));
     expect(screen.getByText(/review changed.*reload/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reload recommendations" }),
@@ -4182,7 +4499,9 @@ describe("JobsPage", () => {
   it("disables proposal navigation throughout the tailoring transaction", async () => {
     selectedJobResult = readyJobWithAttachedResume();
     prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
-    let resolveSubmit: (value: typeof reviewedCvTailoringReview) => void = () => {};
+    let resolveSubmit: (
+      value: typeof reviewedCvTailoringReview,
+    ) => void = () => {};
     submitCvTailoringReviewMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -4884,6 +5203,7 @@ describe("JobsPage", () => {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
       resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready" as const,
     };
     cvLibraryResult = {
       cvs: [
@@ -4973,9 +5293,7 @@ describe("JobsPage", () => {
       target: { value: "Updated canonical summary" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save summary" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Generate proposal" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
@@ -5082,7 +5400,9 @@ describe("JobsPage", () => {
       .mockReturnValueOnce(secondUpdate.promise);
 
     renderJobsDetail();
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Summary" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Edit Summary" }),
+    );
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "First concurrent change" },
     });
@@ -5137,7 +5457,9 @@ describe("JobsPage", () => {
       .mockReturnValueOnce(secondUpdate.promise);
 
     renderJobsDetail();
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Summary" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Edit Summary" }),
+    );
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "First failed concurrent change" },
     });
@@ -5292,7 +5614,9 @@ describe("JobsPage", () => {
     renderJobsDetail();
 
     expect(
-      await screen.findByText(/Finish the Job Brief review before tailoring/i),
+      await screen.findByText(
+        /Review the highlighted Job Brief details before tailoring/i,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Tailor resume" }),
@@ -5516,12 +5840,14 @@ describe("JobsPage", () => {
       ],
       currentCv: null,
     };
-    const fullSourceResponse =
-      createDeferred<typeof pendingCvTailoringReview | {
-        mode: "full_source_cv";
-        sourceCv: { id: string; contextHash: string };
-        plan: null;
-      }>();
+    const fullSourceResponse = createDeferred<
+      | typeof pendingCvTailoringReview
+      | {
+          mode: "full_source_cv";
+          sourceCv: { id: string; contextHash: string };
+          plan: null;
+        }
+    >();
     prepareCvTailoringReviewMock.mockReturnValueOnce(
       fullSourceResponse.promise,
     );

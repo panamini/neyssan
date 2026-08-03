@@ -56,9 +56,36 @@ type ProposalBriefCardProps = {
 };
 
 const SUMMARY_EDITOR_ID = "__summary__";
+const REQUIREMENTS_EDITOR_ID = "__requirements__";
+const KEYWORDS_EDITOR_ID = "__keywords__";
 const EMPTY_STRINGS: string[] = [];
 const EMPTY_REVIEW_ITEMS: ProposalBriefReviewItem[] = [];
 const EMPTY_LINKED_PROPOSALS: ProposalBriefLinkedProposal[] = [];
+
+function commitAfterReviewAction(
+  action: () => Promise<void> | void,
+  onSuccess: () => void,
+  isCurrent: () => boolean,
+): void {
+  try {
+    const result = action();
+    if (result && typeof result.then === "function") {
+      void result
+        .then(() => {
+          if (isCurrent()) {
+            onSuccess();
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+    if (isCurrent()) {
+      onSuccess();
+    }
+  } catch {
+    // The parent owns error messaging; keep the local item retryable.
+  }
+}
 
 function formatReviewValue(value: unknown): string {
   if (Array.isArray(value)) {
@@ -82,10 +109,15 @@ function formatReviewValueList(value: unknown): string[] {
     .filter(Boolean);
 }
 
-function normalizeComparableText(value: unknown): string {
+function formatReviewLineList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
   return String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function resolveTrustLabel(args: {
@@ -101,7 +133,7 @@ function resolveTrustLabel(args: {
   }
 
   if (args.trustState === "needs_review") {
-    return "Ready";
+    return "Review needed";
   }
 
   if (args.parseStatus === "parsed") {
@@ -143,6 +175,8 @@ function resolveSectionStatus(
   if (isEdited) return "edited";
   const normalized = String(reviewStatus ?? "").toLowerCase();
   if (
+    normalized === "pending" ||
+    normalized === "needs_review" ||
     normalized.includes("low") ||
     normalized.includes("confidence") ||
     normalized.includes("uncertain") ||
@@ -168,7 +202,7 @@ function SectionHeader({
 }): JSX.Element {
   const statusLabel =
     status === "uncertain"
-      ? "Needs your eyes"
+      ? "Needs your review"
       : status === "edited"
         ? "Edited"
         : "Validated";
@@ -268,12 +302,14 @@ export function ProposalBriefCard({
     Record<string, { reviewStatus: string; approvedValue?: unknown }>
   >({});
   const [isPostingOpen, setIsPostingOpen] = React.useState(false);
+  const activeJobIdRef = React.useRef(jobId);
+  activeJobIdRef.current = jobId;
 
   React.useEffect(() => {
     setEditingItemId(null);
     setDraftValues({});
     setResolvedItems({});
-  }, [reviewItems, summaryText, visibleSummaryText]);
+  }, [jobId, reviewItems, summaryText, visibleSummaryText]);
 
   const visibleReviewItems = extractionUnavailable
     ? []
@@ -288,9 +324,15 @@ export function ProposalBriefCard({
     sourceJobTitle,
     outputDocumentTitle,
   });
-  const { summaryText: resolvedSummaryText } = extractionUnavailable
+  const {
+    summaryText: resolvedSummaryText,
+    requirements: resolvedRequirements,
+    keywords: resolvedKeywords,
+  } = extractionUnavailable
     ? {
         summaryText: null,
+        requirements: EMPTY_STRINGS,
+        keywords: EMPTY_STRINGS,
       }
     : resolveProposalBriefCardDisplayContent({
         summaryText,
@@ -301,19 +343,29 @@ export function ProposalBriefCard({
         visibleKeywords,
       });
   const summaryValue = String(resolvedSummaryText ?? "").trim();
-  const hasDuplicateSummaryReviewItem =
-    summaryValue.length > 0 &&
-    visibleReviewItems.some(
-      (item) =>
-        String(item.fieldKey ?? "") === "summary" &&
-        normalizeComparableText(
-          formatReviewValue(item.approvedValue ?? item.suggestedValue),
-        ) === normalizeComparableText(summaryValue),
-    );
+  const visibleReviewFieldKeys = new Set(
+    visibleReviewItems.map((item) => String(item.fieldKey ?? "")),
+  );
+  const hasSummaryReviewItem = visibleReviewFieldKeys.has("summary");
+  const hasRequirementsReviewItem =
+    visibleReviewFieldKeys.has("mustHaves") ||
+    visibleReviewFieldKeys.has("requirements");
+  const hasKeywordsReviewItem = visibleReviewFieldKeys.has("keywords");
   const shouldRenderExtractedSummary =
-    Boolean(resolvedSummaryText) && !hasDuplicateSummaryReviewItem;
+    Boolean(resolvedSummaryText) && !hasSummaryReviewItem;
   const isSummaryEditing = editingItemId === SUMMARY_EDITOR_ID;
   const summaryDraft = draftValues[SUMMARY_EDITOR_ID] ?? summaryValue;
+  const isRequirementsEditing = editingItemId === REQUIREMENTS_EDITOR_ID;
+  const requirementsValue = resolvedRequirements.join("\n");
+  const requirementsDraft =
+    draftValues[REQUIREMENTS_EDITOR_ID] ?? requirementsValue;
+  const isKeywordsEditing = editingItemId === KEYWORDS_EDITOR_ID;
+  const keywordsValue = resolvedKeywords.join("\n");
+  const keywordsDraft = draftValues[KEYWORDS_EDITOR_ID] ?? keywordsValue;
+  const needsQuickCheck =
+    !extractionUnavailable &&
+    (trustState === "needs_review" ||
+      visibleReviewItems.some((item) => item.reviewStatus === "pending"));
 
   if (focusMode) {
     return (
@@ -448,6 +500,17 @@ export function ProposalBriefCard({
         <div className="dasti-brief-card__summary">
           <div className="dasti-brief-card__workspace">
             <div className="dasti-brief-card__review-column">
+              {needsQuickCheck ? (
+                <div className="ds-card ds-card--muted dasti-brief-card__review-item">
+                  <div className="ds-card__eyebrow dasti-brief-card__review-label">
+                    Quick check before tailoring
+                  </div>
+                  <p className="ds-card__body dasti-brief-card__summary-copy">
+                    Confirm the highlighted details or edit anything that needs
+                    a correction.
+                  </p>
+                </div>
+              ) : null}
               {extractionUnavailable ? (
                 <div className="ds-card ds-card--muted dasti-brief-card__review-item dasti-brief-card__review-item--unavailable">
                   <div className="ds-card__eyebrow dasti-brief-card__review-label">
@@ -467,7 +530,7 @@ export function ProposalBriefCard({
                 >
                   <SectionHeader
                     label="Summary"
-                    status={resolveSectionStatus("approved", false)}
+                    status={resolveSectionStatus(trustState, false)}
                     isEditing={isSummaryEditing}
                     canEdit={Boolean(onSaveField)}
                     onToggleEdit={() => {
@@ -512,6 +575,133 @@ export function ProposalBriefCard({
                     <p className="ds-card__body dasti-brief-card__summary-copy">
                       {resolvedSummaryText}
                     </p>
+                  )}
+                </div>
+              ) : null}
+              {!extractionUnavailable &&
+              (resolvedRequirements.length > 0 || Boolean(onSaveField)) &&
+              !hasRequirementsReviewItem ? (
+                <div
+                  className="ds-card dasti-brief-card__review-item"
+                  id="job-requirements"
+                >
+                  <SectionHeader
+                    label="Requirements"
+                    status={resolveSectionStatus(trustState, false)}
+                    isEditing={isRequirementsEditing}
+                    canEdit={Boolean(onSaveField)}
+                    onToggleEdit={() => {
+                      setEditingItemId((current) =>
+                        current === REQUIREMENTS_EDITOR_ID
+                          ? null
+                          : REQUIREMENTS_EDITOR_ID,
+                      );
+                      setDraftValues((current) => ({
+                        ...current,
+                        [REQUIREMENTS_EDITOR_ID]:
+                          current[REQUIREMENTS_EDITOR_ID] ?? requirementsValue,
+                      }));
+                    }}
+                  />
+                  {isRequirementsEditing ? (
+                    <div className="dasti-brief-card__editor">
+                      <textarea
+                        className="dasti-brief-card__textarea"
+                        value={requirementsDraft}
+                        onChange={(event) =>
+                          setDraftValues((current) => ({
+                            ...current,
+                            [REQUIREMENTS_EDITOR_ID]: event.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
+                        aria-label="Save Requirements"
+                        onClick={() => {
+                          setEditingItemId(null);
+                          void onSaveField?.(
+                            "mustHaves",
+                            formatReviewLineList(requirementsDraft),
+                          );
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <ul className="dasti-brief-card__review-bullets">
+                      {resolvedRequirements.map((entry) => (
+                        <li key={entry}>{entry}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+              {!extractionUnavailable &&
+              (resolvedKeywords.length > 0 || Boolean(onSaveField)) &&
+              !hasKeywordsReviewItem ? (
+                <div
+                  className="ds-card dasti-brief-card__review-item"
+                  id="job-keywords"
+                >
+                  <SectionHeader
+                    label="Keywords"
+                    status={resolveSectionStatus(trustState, false)}
+                    isEditing={isKeywordsEditing}
+                    canEdit={Boolean(onSaveField)}
+                    onToggleEdit={() => {
+                      setEditingItemId((current) =>
+                        current === KEYWORDS_EDITOR_ID
+                          ? null
+                          : KEYWORDS_EDITOR_ID,
+                      );
+                      setDraftValues((current) => ({
+                        ...current,
+                        [KEYWORDS_EDITOR_ID]:
+                          current[KEYWORDS_EDITOR_ID] ?? keywordsValue,
+                      }));
+                    }}
+                  />
+                  {isKeywordsEditing ? (
+                    <div className="dasti-brief-card__editor">
+                      <textarea
+                        className="dasti-brief-card__textarea"
+                        value={keywordsDraft}
+                        onChange={(event) =>
+                          setDraftValues((current) => ({
+                            ...current,
+                            [KEYWORDS_EDITOR_ID]: event.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
+                        aria-label="Save Keywords"
+                        onClick={() => {
+                          setEditingItemId(null);
+                          void onSaveField?.(
+                            "keywords",
+                            formatReviewValueList(keywordsDraft),
+                          );
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="dasti-brief-card__review-chips">
+                      {resolvedKeywords.map((entry) => (
+                        <span
+                          key={entry}
+                          className="dasti-brief-card__review-chip"
+                        >
+                          {entry}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -573,6 +763,7 @@ export function ProposalBriefCard({
                               className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                               aria-label={`Save ${item.label}`}
                               onClick={() => {
+                                const actionJobId = jobId;
                                 const nextValue = Array.isArray(
                                   item.suggestedValue,
                                 )
@@ -581,15 +772,20 @@ export function ProposalBriefCard({
                                       .map((entry) => entry.trim())
                                       .filter(Boolean)
                                   : draftValue.trim();
-                                setResolvedItems((current) => ({
-                                  ...current,
-                                  [item.id]: {
-                                    reviewStatus: "approved",
-                                    approvedValue: nextValue,
+                                commitAfterReviewAction(
+                                  () => onSaveReviewItem?.(item, nextValue),
+                                  () => {
+                                    setResolvedItems((current) => ({
+                                      ...current,
+                                      [item.id]: {
+                                        reviewStatus: "approved",
+                                        approvedValue: nextValue,
+                                      },
+                                    }));
+                                    setEditingItemId(null);
                                   },
-                                }));
-                                setEditingItemId(null);
-                                void onSaveReviewItem?.(item, nextValue);
+                                  () => activeJobIdRef.current === actionJobId,
+                                );
                               }}
                             >
                               Save
@@ -616,9 +812,36 @@ export function ProposalBriefCard({
                           </div>
                         ) : (
                           <div className="dasti-brief-card__review-source">
-                            {item.sourceText}
+                            {currentValue}
                           </div>
                         )}
+                        {item.reviewStatus === "pending" &&
+                        onApproveReviewItem &&
+                        !isEditing ? (
+                          <button
+                            type="button"
+                            className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
+                            aria-label={`Confirm ${item.label}`}
+                            onClick={() => {
+                              const actionJobId = jobId;
+                              commitAfterReviewAction(
+                                () => onApproveReviewItem(item),
+                                () => {
+                                  setResolvedItems((current) => ({
+                                    ...current,
+                                    [item.id]: {
+                                      reviewStatus: "approved",
+                                      approvedValue: item.suggestedValue,
+                                    },
+                                  }));
+                                },
+                                () => activeJobIdRef.current === actionJobId,
+                              );
+                            }}
+                          >
+                            Confirm
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}

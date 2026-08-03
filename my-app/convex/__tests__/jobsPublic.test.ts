@@ -326,6 +326,20 @@ describe("jobsPublic.listForUser", () => {
               };
             }
 
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq() {
+                      return scope;
+                    },
+                  };
+                  buildIndex(scope);
+                  return { collect: async () => [] };
+                },
+              };
+            }
+
             throw new Error(`Unexpected table: ${table}`);
           },
         },
@@ -919,15 +933,7 @@ describe("jobsPublic.getById", () => {
     identity = { subject: "clerk_123" },
     failUnboundedDetailReads = false,
     failProfileCollection = false,
-  }: {
-    job: any;
-    shadowRows?: any[];
-    linkedProposalRows?: any[];
-    identity?: { subject: string; email?: string };
-    failUnboundedDetailReads?: boolean;
-    failProfileCollection?: boolean;
-  }) {
-    const linkedProfiles = [
+    linkedProfiles = [
       {
         _id: "profile_primary",
         _creationTime: 100,
@@ -940,8 +946,16 @@ describe("jobsPublic.getById", () => {
         keywords: ["legacy ops"],
         email: "primary@example.com",
       },
-    ];
-
+    ],
+  }: {
+    job: any;
+    shadowRows?: any[];
+    linkedProposalRows?: any[];
+    identity?: { subject: string; email?: string };
+    failUnboundedDetailReads?: boolean;
+    failProfileCollection?: boolean;
+    linkedProfiles?: any[];
+  }) {
     return {
       auth: {
         getUserIdentity: async () => identity,
@@ -1195,6 +1209,67 @@ describe("jobsPublic.getById", () => {
     });
   });
 
+  it("derives reviewed proposal authority from the selected default resume", async () => {
+    const resumeId = "source-cv-variant:v1:default-reviewed";
+    const job = buildProjectionJob({ lastResumeId: null });
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        defaultResumeId: resumeId,
+        defaultResumeName: "Reviewed default resume",
+        skills: ["Legacy React"],
+        keywords: ["legacy ops"],
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_reviewed",
+        _creationTime: 90,
+        profileId: resumeId,
+        clerkId: "clerk_123",
+        updatedAt: 90,
+        createdAt: 90,
+        version: 1,
+        email: "reviewed@example.com",
+        cvDocument: {
+          id: resumeId,
+          title: "Reviewed default resume",
+          metadata: {
+            createdAt: "2026-08-03T00:00:00.000Z",
+            updatedAt: "2026-08-03T00:00:00.000Z",
+            version: 1,
+            reviewedSourceCvVariant: {
+              kind: "reviewed_source_cv_variant",
+              sourceCvId: "cv_primary",
+              jobId: job._id,
+              applicationContextId: `application-context:${job._id}`,
+              applicationContextHash: `application-context-hash:${job._id}`,
+              reviewedPlanId: "resume-variant-plan:reviewed",
+              version: 1,
+            },
+          },
+          sections: [],
+        },
+      },
+    ];
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({ job, linkedProfiles }),
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      resumeId,
+      resumeSource: "default",
+      resumeProposalAuthority: "reviewed_ready",
+    });
+  });
+
   it("projects eligible visible LLM extraction and structured match-read fields", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
     const job = buildProjectionJob({
@@ -1277,10 +1352,12 @@ describe("jobsPublic.getById", () => {
           reviewStatus: "pending",
           updatedAt: expect.any(Number),
         }),
+        expect.objectContaining({
+          fieldKey: "responsibilities",
+          suggestedValue: ["Legacy responsibility"],
+          reviewStatus: "pending",
+        }),
       ]),
-    );
-    expect(result?.reviewItems.map((item) => item.fieldKey)).not.toContain(
-      "responsibilities",
     );
     expect(result?.matchRead).toMatchObject({
       score: 25,
@@ -1331,7 +1408,9 @@ describe("jobsPublic.getById", () => {
     );
 
     expect(result?.linkedProposalCount).toBeGreaterThan(0);
-    expect(result?.linkedProposals.length).toBeLessThan(linkedProposalRows.length);
+    expect(result?.linkedProposals.length).toBeLessThan(
+      linkedProposalRows.length,
+    );
     expect(result?.visibleExtractionSource).toBe("llm");
   });
 
@@ -1510,7 +1589,10 @@ describe("jobsPublic.getById", () => {
   it("projects structured shadow summary only for allowlisted internal UI", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
     vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_UI", "true");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "internal@example.com",
+    );
     const job = buildProjectionJob();
 
     const result = await getById._handler(
@@ -1672,7 +1754,10 @@ describe("jobsPublic.getById", () => {
   it("does not project structured shadow summary when rollback UI flag is off", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
     vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_UI", "false");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "internal@example.com",
+    );
     const job = buildProjectionJob();
 
     const result = await getById._handler(
@@ -2206,7 +2291,10 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
 
   it("exposes structured shadow comparison only when flag and internal viewer gates pass", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "clerk_123,admin@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "clerk_123,admin@example.com",
+    );
 
     const linkedProfiles = [
       {
@@ -2377,7 +2465,10 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
 describe("jobsPublic.recordStructuredMatchReview", () => {
   it("logs reviewer label with current production and structured values without mutating production match", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "internal@example.com",
+    );
     vi.stubEnv("STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA", "abc123review");
 
     const linkedProfiles = [
@@ -2485,7 +2576,9 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
             return "structured_review_1";
           },
           patch: async () => {
-            throw new Error("review logging must not mutate production records");
+            throw new Error(
+              "review logging must not mutate production records",
+            );
           },
           query(table: string) {
             if (table === "userProfiles") {
@@ -2580,7 +2673,10 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
 
   it("rejects invalid extraction verdict values", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "internal@example.com",
+    );
     vi.stubEnv("STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA", "abc123review");
 
     await expect(
@@ -2594,7 +2690,9 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
           },
           db: {
             query: () => {
-              throw new Error("verdict validation should happen before db reads");
+              throw new Error(
+                "verdict validation should happen before db reads",
+              );
             },
           },
         } as any,
@@ -2611,7 +2709,10 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
 
   it("rejects review records that cannot be tied to an app git commit", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "internal@example.com",
+    );
 
     await expect(
       recordStructuredMatchReview._handler(
@@ -2624,7 +2725,9 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
           },
           db: {
             query: () => {
-              throw new Error("versioning failure should happen before db reads");
+              throw new Error(
+                "versioning failure should happen before db reads",
+              );
             },
           },
         } as any,
@@ -2640,7 +2743,10 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
 
   it("uses the short app git commit fallback for local Convex collection", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
-    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv(
+      "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS",
+      "internal@example.com",
+    );
     vi.stubEnv("APP_GIT_COMMIT_SHA", "localfallbacksha");
 
     const linkedProfiles = [
@@ -2724,7 +2830,11 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
                           summary_short: "Operations role.",
                           role_title_normalized: "Operations Manager",
                           requirements: [
-                            { value: "Airtable", type: "skill", required: true },
+                            {
+                              value: "Airtable",
+                              type: "skill",
+                              required: true,
+                            },
                           ],
                           keywords_canonical: ["Airtable"],
                           licenses_or_certifications: [],
@@ -3378,8 +3488,10 @@ describe("jobsPublic archive recovery mutations", () => {
       archivedAt: null,
       reviewItems: [],
     };
-    const insertCalls: Array<{ table: string; value: Record<string, unknown> }> =
-      [];
+    const insertCalls: Array<{
+      table: string;
+      value: Record<string, unknown>;
+    }> = [];
 
     const result = await (duplicateJob as any)._handler(
       {
@@ -3620,9 +3732,236 @@ describe("jobsPublic.updateField", () => {
       }),
     ]);
   });
+
+  it("saves a human edit on the currently projected LLM summary", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const profile = {
+      _id: "profile_owner",
+      _creationTime: 100,
+      clerkId: "clerk_123",
+      profileId: "profile_owner",
+      email: "owner@example.test",
+      createdAt: 100,
+      updatedAt: 100,
+      version: 1,
+    };
+    const job = {
+      _id: "job_owner",
+      userId: profile._id,
+      title: "Host",
+      rawDescription: "Welcome guests and manage the wait list.",
+      rawLanguageDetected: "en",
+      summary: "Heuristic summary",
+      mustHaves: [],
+      mustHavesExtraction: [],
+      keywords: [],
+      keywordsExtraction: [],
+      reviewItems: [],
+      reviewState: "ready",
+    };
+    const shadow = {
+      llm_normalized_output: {
+        summary_short: "Coordinates guest arrivals and the wait list.",
+        role_title_normalized: "Host",
+        requirements: [
+          { value: "Guest service", type: "skill", required: true },
+        ],
+        keywords_canonical: ["hospitality"],
+        licenses_or_certifications: [],
+        schedule_constraints: [],
+        environment: {
+          customer_facing: true,
+          retail: false,
+          physical_standing: null,
+          onsite: true,
+        },
+        confidence: "high",
+      },
+      validation_status: "valid",
+      fallback_used: false,
+      model: "ministral-3b-2512",
+      prompt_version: "p9_v2",
+      created_at: 100,
+    };
+    const patches: Array<Record<string, unknown>> = [];
+
+    await updateField._handler(
+      {
+        auth: { getUserIdentity: async () => ({ subject: profile.clerkId }) },
+        db: {
+          normalizeId: (_table: string, id: string) => id,
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (_id: string, patch: Record<string, unknown>) => {
+            patches.push(patch);
+          },
+          query(table: string) {
+            return {
+              withIndex(_indexName: string, buildIndex: any) {
+                const scope = {
+                  eq() {
+                    return scope;
+                  },
+                };
+                buildIndex(scope);
+                return {
+                  collect: async () =>
+                    table === "userProfiles" ? [profile] : [shadow],
+                };
+              },
+            };
+          },
+        },
+      } as any,
+      { jobId: job._id, fieldKey: "summary", value: "Human summary" },
+    );
+
+    expect(patches[0]).toMatchObject({
+      summary: "Human summary",
+      reviewState: "needs_review",
+      reviewItems: expect.arrayContaining([
+        expect.objectContaining({
+          id: "llm_visible_summary",
+          reviewStatus: "approved",
+          approvedValue: "Human summary",
+        }),
+      ]),
+    });
+  });
 });
 
 describe("jobsPublic.approveReviewItem", () => {
+  it("rejects a stale approval when the visible suggestion changed", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const job = {
+      _id: "job_alpha",
+      userId: "profile_primary",
+      title: "Security Guard",
+      summary: "Heuristic summary",
+      rawLanguageDetected: "en",
+      mustHaves: ["Customer service"],
+      keywords: ["retail security"],
+      reviewItems: [
+        {
+          id: "llm_visible_keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["retail security"],
+          sourceText: "retail security",
+          confidence: 0.9,
+          updatedAt: 100,
+        },
+      ],
+    };
+    const patches: Array<Record<string, unknown>> = [];
+
+    await expect(
+      approveReviewItem._handler(
+        {
+          auth: {
+            getUserIdentity: async () => ({ subject: "clerk_123" }),
+          },
+          db: {
+            normalizeId: (_table: string, id: string) => id,
+            get: async () => job,
+            patch: async (_id: string, patch: Record<string, unknown>) => {
+              patches.push(patch);
+            },
+            query(table: string) {
+              if (table === "userProfiles") {
+                return {
+                  withIndex(_indexName: string, buildIndex: any) {
+                    const scope = {
+                      eq(_field: string, value: string) {
+                        return value;
+                      },
+                    };
+                    buildIndex(scope);
+                    return {
+                      collect: async () => [
+                        {
+                          _id: "profile_primary",
+                          clerkId: "clerk_123",
+                          createdAt: 100,
+                          updatedAt: 100,
+                          version: 1,
+                        },
+                      ],
+                    };
+                  },
+                };
+              }
+              if (table === "job_extraction_shadow") {
+                return {
+                  withIndex(_indexName: string, buildIndex: any) {
+                    const scope = {
+                      eq(_field: string, _value: string) {
+                        return this;
+                      },
+                    };
+                    buildIndex(scope);
+                    const rows = [
+                      {
+                        job_id: job._id,
+                        llm_normalized_output: {
+                          summary_short: "Retail security role.",
+                          role_title_normalized: "Security Guard",
+                          requirements: [
+                            {
+                              value: "Customer service",
+                              type: "skill",
+                              required: true,
+                            },
+                          ],
+                          keywords_canonical: ["loss prevention"],
+                          licenses_or_certifications: [],
+                          schedule_constraints: [],
+                          environment: {
+                            customer_facing: true,
+                            retail: true,
+                            physical_standing: true,
+                            onsite: true,
+                          },
+                          confidence: "high",
+                        },
+                        validation_status: "valid",
+                        fallback_used: false,
+                        model: "ministral-3b-2512",
+                        prompt_version: "p9_v2",
+                        created_at: 200,
+                      },
+                    ];
+                    const result = {
+                      order(direction: "asc" | "desc") {
+                        expect(direction).toBe("desc");
+                        return result;
+                      },
+                      take: async (limit: number) => {
+                        expect(limit).toBe(8);
+                        return rows;
+                      },
+                      collect: async () => {
+                        throw new Error("approval shadow read must be bounded");
+                      },
+                    };
+                    return result;
+                  },
+                };
+              }
+              throw new Error(`Unexpected table: ${table}`);
+            },
+          },
+        } as any,
+        {
+          jobId: job._id,
+          reviewItemId: "llm_visible_keywords",
+          expectedSuggestedValue: ["retail security"],
+        },
+      ),
+    ).rejects.toThrow("Job Brief changed; reload before confirming");
+    expect(patches).toEqual([]);
+  });
+
   it("approves review items on visible jobs owned by linked profiles", async () => {
     const linkedProfiles = [
       {
@@ -3734,7 +4073,11 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_legacy", reviewItemId: "summary" },
+      {
+        jobId: "job_legacy",
+        reviewItemId: "summary",
+        expectedSuggestedValue: "Approved linked-profile summary",
+      },
     );
 
     expect(result).toBeNull();
@@ -3775,10 +4118,16 @@ describe("jobsPublic.approveReviewItem", () => {
       userId: "profile_primary",
       title: "Security Guard",
       summary: "Heuristic summary",
-      summaryExtraction: { value: "Heuristic summary", confidence: 0.6, sourceSpan: null },
+      summaryExtraction: {
+        value: "Heuristic summary",
+        confidence: 0.6,
+        sourceSpan: null,
+      },
       rawLanguageDetected: "en",
       mustHaves: ["Location Miami"],
-      mustHavesExtraction: [{ value: "Location Miami", confidence: 0.4, sourceSpan: null }],
+      mustHavesExtraction: [
+        { value: "Location Miami", confidence: 0.4, sourceSpan: null },
+      ],
       keywords: ["location", "miami", "status"],
       keywordsExtraction: [
         { value: "location", confidence: 0.4, sourceSpan: null },
@@ -3929,7 +4278,15 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_alpha", reviewItemId: "keywords" },
+      {
+        jobId: "job_alpha",
+        reviewItemId: "keywords",
+        expectedSuggestedValue: [
+          "security guard",
+          "retail security",
+          "loss prevention",
+        ],
+      },
     );
 
     expect(result).toBeNull();
@@ -3944,7 +4301,11 @@ describe("jobsPublic.approveReviewItem", () => {
         expect.objectContaining({
           fieldKey: "keywords",
           reviewStatus: "approved",
-          approvedValue: ["security guard", "retail security", "loss prevention"],
+          approvedValue: [
+            "security guard",
+            "retail security",
+            "loss prevention",
+          ],
         }),
       ]),
     );
@@ -4057,7 +4418,11 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_alpha", reviewItemId: "must_haves" },
+      {
+        jobId: "job_alpha",
+        reviewItemId: "must_haves",
+        expectedSuggestedValue: ["Valid state security guard license"],
+      },
     );
 
     expect(mustHavesResult).toBeNull();
@@ -4183,7 +4548,11 @@ describe("jobsPublic.approveReviewItem", () => {
           },
         },
       } as any,
-      { jobId: "job_alpha", reviewItemId: "summary" },
+      {
+        jobId: "job_alpha",
+        reviewItemId: "summary",
+        expectedSuggestedValue: "Retail security role.",
+      },
     );
 
     expect(summaryResult).toBeNull();
@@ -4220,7 +4589,10 @@ describe("jobsPublic.refreshStructuredMatch", () => {
       rawDescription: "Required: guard card and retail loss prevention.",
       updatedAt: 100,
     };
-    const scheduleCalls: Array<{ delay: number; args: Record<string, unknown> }> = [];
+    const scheduleCalls: Array<{
+      delay: number;
+      args: Record<string, unknown>;
+    }> = [];
 
     return {
       scheduleCalls,
@@ -4367,8 +4739,12 @@ describe("jobsPublic.parseCreatedJob shadow extraction", () => {
       sourceType: "manual",
       applicationUrl: "",
     };
-    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> = [];
-    const scheduleCalls: Array<{ delay: number; args: Record<string, unknown> }> = [];
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+    const scheduleCalls: Array<{
+      delay: number;
+      args: Record<string, unknown>;
+    }> = [];
 
     return {
       patchCalls,
@@ -4431,7 +4807,7 @@ describe("jobsPublic.parseCreatedJob shadow extraction", () => {
 describe("jobsPublic job extraction shadow cache", () => {
   const validRow = {
     _creationTime: 100,
-    llm_raw_output: "{\"summary_short\":\"ok\"}",
+    llm_raw_output: '{"summary_short":"ok"}',
     llm_normalized_output: { summary_short: "ok" },
     validation_status: "valid",
     fallback_used: false,
@@ -4568,21 +4944,23 @@ describe("jobsPublic job extraction shadow cache", () => {
         {
           ...validRow,
           _creationTime: 300,
-          llm_raw_output: "{\"summary_short\":\"same-created-at-newer-creation\"}",
-          llm_normalized_output: { summary_short: "same-created-at-newer-creation" },
+          llm_raw_output: '{"summary_short":"same-created-at-newer-creation"}',
+          llm_normalized_output: {
+            summary_short: "same-created-at-newer-creation",
+          },
           created_at: 300,
         },
         {
           ...validRow,
           _creationTime: 500,
-          llm_raw_output: "{\"summary_short\":\"newest-tie-break\"}",
+          llm_raw_output: '{"summary_short":"newest-tie-break"}',
           llm_normalized_output: { summary_short: "newest-tie-break" },
           created_at: 300,
         },
         {
           ...validRow,
           _creationTime: 900,
-          llm_raw_output: "{\"summary_short\":\"fallback-newer\"}",
+          llm_raw_output: '{"summary_short":"fallback-newer"}',
           llm_normalized_output: { summary_short: "fallback-newer" },
           fallback_used: true,
           created_at: 400,
@@ -4590,7 +4968,7 @@ describe("jobsPublic job extraction shadow cache", () => {
         {
           ...validRow,
           _creationTime: 1000,
-          llm_raw_output: "{\"summary_short\":\"old\"}",
+          llm_raw_output: '{"summary_short":"old"}',
           llm_normalized_output: { summary_short: "old" },
           created_at: 100,
         },
@@ -4622,7 +5000,7 @@ describe("jobsPublic job extraction shadow cache", () => {
       {
         jobId: "job_shadow" as any,
         jobTextHash: "hash_1",
-        llmRawOutput: "{\"summary_short\":\"partial\"",
+        llmRawOutput: '{"summary_short":"partial"',
         llmNormalizedOutput: null,
         validationStatus: "invalid_json",
         fallbackUsed: true,
@@ -4637,7 +5015,7 @@ describe("jobsPublic job extraction shadow cache", () => {
 
     expect(inserts[0]).toEqual(
       expect.objectContaining({
-        llm_raw_output: "{\"summary_short\":\"partial\"",
+        llm_raw_output: '{"summary_short":"partial"',
         llm_normalized_output: null,
         validation_status: "invalid_json",
         fallback_used: true,

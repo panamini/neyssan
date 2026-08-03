@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 import {
   ProposalBriefCard,
@@ -80,7 +87,7 @@ describe("resolveProposalBriefCardTitle", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
     expect(screen.queryByText("Check fields")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
     expect(screen.queryByText(/Review state:/i)).not.toBeInTheDocument();
@@ -109,9 +116,7 @@ describe("resolveProposalBriefCardTitle", () => {
         name: "Open original job offer on LinkedIn",
       }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Operations role summary"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Operations role summary")).toBeInTheDocument();
   });
 
   it("renders review cards with current suggested values and keeps review actions", () => {
@@ -151,7 +156,9 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(screen.getByText("Mistral summary")).toBeInTheDocument();
     expect(screen.getByText("Mistral requirement")).toBeInTheDocument();
     expect(screen.getAllByText(/security guard/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/location miami status/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/location miami status/i),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
@@ -163,13 +170,17 @@ describe("resolveProposalBriefCardTitle", () => {
         .find((card) => card !== null) ?? null;
     expect(keywordsCard).not.toBeNull();
     const card = within(keywordsCard as HTMLElement);
-    expect(keywordsCard).toHaveAttribute("data-state", "validated");
-    expect(card.getByLabelText("Validated")).toHaveClass(
-      "dasti-brief-card__section-status--validated",
+    expect(keywordsCard).toHaveAttribute("data-state", "uncertain");
+    expect(card.getByLabelText("Needs your review")).toHaveClass(
+      "dasti-brief-card__section-status--uncertain",
     );
-    expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(
+      card.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
     expect(card.queryByText("Check")).not.toBeInTheDocument();
-    expect(card.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+    expect(
+      card.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
   });
 
   it("marks approved review cards with validated state instead of pending warning", () => {
@@ -203,7 +214,9 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(card.getByLabelText("Validated")).toHaveClass(
       "dasti-brief-card__section-status--validated",
     );
-    expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(
+      card.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
     expect(card.queryByText("Saved")).not.toBeInTheDocument();
   });
 
@@ -252,11 +265,19 @@ describe("resolveProposalBriefCardTitle", () => {
     ).toHaveLength(1);
     expect(screen.getAllByText("Guest service").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/guest service/).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Check")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Requirements" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
   });
 
   it("renders unavailable state instead of heuristic extraction or review cards", () => {
@@ -272,13 +293,16 @@ describe("resolveProposalBriefCardTitle", () => {
           keywords={["location", "status", "compensation"]}
           visibleKeywords={["location", "status", "compensation"]}
           extractionUnavailable={true}
+          onSaveField={vi.fn()}
           reviewItems={[
             {
               id: "responsibilities",
               fieldKey: "responsibilities",
               label: "Responsibilities",
               reviewStatus: "pending",
-              suggestedValue: ["At Texas Roadhouse, we are a people-first company."],
+              suggestedValue: [
+                "At Texas Roadhouse, we are a people-first company.",
+              ],
               sourceText: "At Texas Roadhouse, we are a people-first company.",
             },
             {
@@ -299,18 +323,331 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(screen.getByText(/Posting stays intact/i)).toBeInTheDocument();
     expect(screen.getByText("Imported Posting")).toBeInTheDocument();
     expect(screen.getByText("Original text stays intact.")).toBeInTheDocument();
-    expect(screen.queryByText("Raw source stays visible here.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Raw source stays visible here."),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open Posting" }));
-    expect(screen.getByText("Raw source stays visible here.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Raw source stays visible here."),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Heuristic summary")).not.toBeInTheDocument();
-    expect(screen.queryByText("Heuristic visible requirement")).not.toBeInTheDocument();
-    expect(screen.queryByText("location, status, compensation")).not.toBeInTheDocument();
-    expect(screen.queryByText("location status compensation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Heuristic visible requirement"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("location, status, compensation"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("location status compensation"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit Keywords" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit Keywords" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows reviewable heuristic content without claiming validation", () => {
+    const confirm = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests and manage the queue."
+          visibleSummaryText="Coordinates guest arrivals."
+          visibleRequirements={["Guest service"]}
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["hospitality"],
+              sourceText: "hospitality",
+            },
+          ]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("Quick check before tailoring"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Coordinates guest arrivals.")).toBeInTheDocument();
+    expect(screen.getByText("Guest service")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "keywords" }),
+    );
+  });
+
+  it("keeps a rejected Confirm item pending so the user can retry", async () => {
+    const confirm = vi.fn().mockRejectedValue(new Error("Approval failed"));
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests and manage the queue."
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["hospitality"],
+              sourceText: "hospitality",
+            },
+          ]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Keywords" }),
+      ).toBeInTheDocument();
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a rejected review edit open so the user can retry", async () => {
+    const save = vi.fn().mockRejectedValue(new Error("Save failed"));
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests and manage the queue."
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["hospitality"],
+              sourceText: "hospitality",
+            },
+          ]}
+          onSaveReviewItem={save}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Keywords" }));
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "hospitality\nguest service" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Keywords" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Save Keywords" }),
+      ).toBeInTheDocument();
+    });
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "keywords" }),
+      ["hospitality", "guest service"],
+    );
+  });
+
+  it("does not apply a late Confirm completion to the next job", async () => {
+    let resolveConfirm: (() => void) | undefined;
+    const confirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        }),
+    );
+    const firstItem = {
+      id: "llm_visible_keywords",
+      fieldKey: "keywords",
+      label: "Keywords",
+      reviewStatus: "pending",
+      suggestedValue: ["hospitality"],
+      sourceText: "hospitality",
+    };
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          jobId="job-a"
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[firstItem]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
+    rerender(
+      <MemoryRouter>
+        <ProposalBriefCard
+          jobId="job-b"
+          sourceJobTitle="Retail Associate"
+          jobDescription="Help customers."
+          visibleKeywords={["retail"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              ...firstItem,
+              suggestedValue: ["retail"],
+              sourceText: "retail",
+            },
+          ]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    await act(async () => {
+      resolveConfirm?.();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("retail")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirm Keywords" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Requirements editable after the user clears the section", () => {
+    const saveField = vi.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleRequirements={["Guest service"]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Requirements" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Requirements" }));
+    expect(saveField).toHaveBeenCalledWith("mustHaves", []);
+
+    rerender(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleRequirements={[]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Edit Requirements" }),
+    ).toBeInTheDocument();
+  });
+
+  it("preserves commas inside a requirement when saving it unchanged", () => {
+    const requirement = "Lead design, development, and testing";
+    const saveField = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Design Lead"
+          jobDescription="Lead the product design practice."
+          visibleRequirements={[requirement]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Requirements" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Requirements" }));
+
+    expect(saveField).toHaveBeenCalledWith("mustHaves", [requirement]);
+  });
+
+  it("keeps Keywords editable after the user clears the section", () => {
+    const saveField = vi.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleKeywords={["hospitality"]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Keywords" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Keywords" }));
+    expect(saveField).toHaveBeenCalledWith("keywords", []);
+
+    rerender(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests."
+          visibleKeywords={[]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders each authoritative section once and prefers an approved summary edit", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Original posting"
+          visibleSummaryText="Machine summary"
+          visibleRequirements={["Guest service"]}
+          visibleKeywords={["hospitality"]}
+          reviewItems={[
+            {
+              id: "summary",
+              fieldKey: "summary",
+              label: "Summary",
+              reviewStatus: "approved",
+              suggestedValue: "Machine summary",
+              approvedValue: "Human summary",
+              sourceText: "Original source excerpt",
+            },
+          ]}
+          onSaveReviewItem={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText("Summary")).toHaveLength(1);
+    expect(screen.getByText("Human summary")).toBeInTheDocument();
+    expect(screen.queryByText("Machine summary")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Requirements")).toHaveLength(1);
+    expect(screen.getAllByText("Keywords")).toHaveLength(1);
   });
 });

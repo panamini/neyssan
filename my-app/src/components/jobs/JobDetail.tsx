@@ -43,8 +43,23 @@ type JobDetailProps = {
   onDismissJob: (jobId: string) => void;
   onRefreshSelectedJobMatch: () => void;
   onSaveField: (fieldKey: string, nextValue: string | string[]) => void;
-  onApproveReviewItem: (item: any) => void;
-  onSaveReviewItem: (item: any, nextValue: string | string[]) => void;
+  onApproveReviewItem: (item: any) => Promise<void> | void;
+  onSaveReviewItem: (
+    item: any,
+    nextValue: string | string[],
+  ) => Promise<void> | void;
+};
+
+const JOB_ACTION_GROUP_STYLE: React.CSSProperties = {
+  inlineSize: "100%",
+  maxInlineSize: "100%",
+  minInlineSize: "0px",
+  boxSizing: "border-box",
+};
+
+const JOB_ACTION_CONTROL_STYLE: React.CSSProperties = {
+  maxInlineSize: "100%",
+  boxSizing: "border-box",
 };
 
 function resolveLocationModeLabel(value: string): string {
@@ -83,8 +98,12 @@ function resolveDetailStatusLabel(args: {
     return "Needs attention";
   }
 
-  if (args.trustState === "ready" || args.trustState === "needs_review") {
+  if (args.trustState === "ready") {
     return "Ready";
+  }
+
+  if (args.trustState === "needs_review") {
+    return "Review needed";
   }
 
   if (args.parseStatus === "parsed") {
@@ -273,14 +292,17 @@ export function JobDetail({
             <div
               className="dasti-jobs-detail__header-actions"
               aria-label="Job actions"
+              style={JOB_ACTION_GROUP_STYLE}
             >
               <div
                 ref={resumePickerRef}
                 className="dasti-jobs-detail__resume-picker dasti-jobs-detail__header-resume"
+                style={JOB_ACTION_CONTROL_STYLE}
               >
                 <button
                   type="button"
                   className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--resume"
+                  style={JOB_ACTION_CONTROL_STYLE}
                   aria-controls={`job-resume-picker-${selectedJob.id}`}
                   aria-expanded={isResumePickerOpen}
                   aria-haspopup="dialog"
@@ -357,6 +379,7 @@ export function JobDetail({
               <button
                 type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--tailor"
+                style={JOB_ACTION_CONTROL_STYLE}
                 aria-describedby={
                   tailoringUnavailableReason
                     ? `job-tailoring-help-${selectedJob.id}`
@@ -374,7 +397,9 @@ export function JobDetail({
               <button
                 type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--full-resume"
+                style={JOB_ACTION_CONTROL_STYLE}
                 aria-label="Use my complete resume without tailoring"
+                title="Use my complete resume without tailoring"
                 aria-describedby={
                   tailoringUnavailableReason
                     ? `job-tailoring-help-${selectedJob.id}`
@@ -383,11 +408,12 @@ export function JobDetail({
                 disabled={!canUseFullSourceCv}
                 onClick={onUseFullSourceCv}
               >
-                <span>Use my complete resume without tailoring</span>
+                <span>Use complete resume</span>
               </button>
               <button
                 type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--proposal"
+                style={JOB_ACTION_CONTROL_STYLE}
                 disabled={proposalActionDisabled}
                 onClick={() => onCreateProposal(selectedJob.id)}
               >
@@ -396,6 +422,7 @@ export function JobDetail({
               <button
                 type="button"
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--skip"
+                style={JOB_ACTION_CONTROL_STYLE}
                 aria-label="Skip and archive job"
                 onClick={() => onDismissJob(selectedJob.id)}
               >
@@ -449,6 +476,7 @@ export function JobDetail({
         {handoffPanel}
         <div className="dasti-jobs-detail__content">
           <ProposalBriefCard
+            jobId={selectedJob.id}
             sourceJobTitle={selectedJobTitle}
             outputDocumentTitle={null}
             jobDescription={selectedJob.rawDescription}
@@ -462,7 +490,8 @@ export function JobDetail({
             keywords={selectedJob.keywords}
             visibleKeywords={selectedJob.visibleKeywords}
             extractionUnavailable={
-              selectedJob.visibleExtractionSource !== "llm"
+              selectedJob.parseStatus === "failed" ||
+              selectedJob.visibleExtractionSource === "empty"
             }
             parseStatus={selectedJob.parseStatus}
             trustState={selectedJob.reviewState}
