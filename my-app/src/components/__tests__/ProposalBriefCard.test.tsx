@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -80,7 +80,7 @@ describe("resolveProposalBriefCardTitle", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
     expect(screen.queryByText("Check fields")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
     expect(screen.queryByText(/Review state:/i)).not.toBeInTheDocument();
@@ -109,9 +109,7 @@ describe("resolveProposalBriefCardTitle", () => {
         name: "Open original job offer on LinkedIn",
       }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Operations role summary"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Operations role summary")).toBeInTheDocument();
   });
 
   it("renders review cards with current suggested values and keeps review actions", () => {
@@ -151,7 +149,9 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(screen.getByText("Mistral summary")).toBeInTheDocument();
     expect(screen.getByText("Mistral requirement")).toBeInTheDocument();
     expect(screen.getAllByText(/security guard/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/location miami status/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/location miami status/i),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
@@ -163,13 +163,17 @@ describe("resolveProposalBriefCardTitle", () => {
         .find((card) => card !== null) ?? null;
     expect(keywordsCard).not.toBeNull();
     const card = within(keywordsCard as HTMLElement);
-    expect(keywordsCard).toHaveAttribute("data-state", "validated");
-    expect(card.getByLabelText("Validated")).toHaveClass(
-      "dasti-brief-card__section-status--validated",
+    expect(keywordsCard).toHaveAttribute("data-state", "uncertain");
+    expect(card.getByLabelText("Needs your review")).toHaveClass(
+      "dasti-brief-card__section-status--uncertain",
     );
-    expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(
+      card.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
     expect(card.queryByText("Check")).not.toBeInTheDocument();
-    expect(card.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+    expect(
+      card.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
   });
 
   it("marks approved review cards with validated state instead of pending warning", () => {
@@ -203,7 +207,9 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(card.getByLabelText("Validated")).toHaveClass(
       "dasti-brief-card__section-status--validated",
     );
-    expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(
+      card.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
     expect(card.queryByText("Saved")).not.toBeInTheDocument();
   });
 
@@ -252,11 +258,19 @@ describe("resolveProposalBriefCardTitle", () => {
     ).toHaveLength(1);
     expect(screen.getAllByText("Guest service").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/guest service/).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Check")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Requirements" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
   });
 
   it("renders unavailable state instead of heuristic extraction or review cards", () => {
@@ -278,7 +292,9 @@ describe("resolveProposalBriefCardTitle", () => {
               fieldKey: "responsibilities",
               label: "Responsibilities",
               reviewStatus: "pending",
-              suggestedValue: ["At Texas Roadhouse, we are a people-first company."],
+              suggestedValue: [
+                "At Texas Roadhouse, we are a people-first company.",
+              ],
               sourceText: "At Texas Roadhouse, we are a people-first company.",
             },
             {
@@ -299,18 +315,101 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(screen.getByText(/Posting stays intact/i)).toBeInTheDocument();
     expect(screen.getByText("Imported Posting")).toBeInTheDocument();
     expect(screen.getByText("Original text stays intact.")).toBeInTheDocument();
-    expect(screen.queryByText("Raw source stays visible here.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Raw source stays visible here."),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open Posting" }));
-    expect(screen.getByText("Raw source stays visible here.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Raw source stays visible here."),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Heuristic summary")).not.toBeInTheDocument();
-    expect(screen.queryByText("Heuristic visible requirement")).not.toBeInTheDocument();
-    expect(screen.queryByText("location, status, compensation")).not.toBeInTheDocument();
-    expect(screen.queryByText("location status compensation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Heuristic visible requirement"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("location, status, compensation"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("location status compensation"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit Keywords" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit Keywords" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows reviewable heuristic content without claiming validation", () => {
+    const confirm = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests and manage the queue."
+          visibleSummaryText="Coordinates guest arrivals."
+          visibleRequirements={["Guest service"]}
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["hospitality"],
+              sourceText: "hospitality",
+            },
+          ]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("Quick check before tailoring"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Coordinates guest arrivals.")).toBeInTheDocument();
+    expect(screen.getByText("Guest service")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "keywords" }),
+    );
+  });
+
+  it("renders each authoritative section once and prefers an approved summary edit", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Original posting"
+          visibleSummaryText="Machine summary"
+          visibleRequirements={["Guest service"]}
+          visibleKeywords={["hospitality"]}
+          reviewItems={[
+            {
+              id: "summary",
+              fieldKey: "summary",
+              label: "Summary",
+              reviewStatus: "approved",
+              suggestedValue: "Machine summary",
+              approvedValue: "Human summary",
+              sourceText: "Original source excerpt",
+            },
+          ]}
+          onSaveReviewItem={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText("Summary")).toHaveLength(1);
+    expect(screen.getByText("Human summary")).toBeInTheDocument();
+    expect(screen.queryByText("Machine summary")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Requirements")).toHaveLength(1);
+    expect(screen.getAllByText("Keywords")).toHaveLength(1);
   });
 });

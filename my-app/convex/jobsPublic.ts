@@ -47,7 +47,9 @@ import {
 } from "./lib/jobs/llmExtractJob";
 import {
   isJobLlmVisibleExtractionEnabled,
-  selectVisibleJobExtraction,
+  projectReviewItemsWithVisibleExtraction,
+  resolveVisibleJobBriefReviewState,
+  selectVisibleJobExtractionForJob,
   type VisibleJobExtractionSelection,
 } from "./lib/jobs/visibleJobExtraction";
 import {
@@ -70,6 +72,7 @@ import { buildLiveMatchReviewRecord } from "./lib/jobs/liveMatchReviewExport";
 import {
   materializeOwnedCvTailoringReview,
   prepareOwnedCvTailoringReview,
+  resolveReviewedResumeProposalAuthority,
   submitOwnedCvTailoringReview,
 } from "./lib/jobs/sourceCvTailoringReview";
 
@@ -468,7 +471,9 @@ function normalizeDebugToken(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function parseStructuredInternalAllowlist(rawValue: string | undefined): Set<string> {
+function parseStructuredInternalAllowlist(
+  rawValue: string | undefined,
+): Set<string> {
   return new Set(
     String(rawValue ?? "")
       .split(/[,\n]/g)
@@ -479,10 +484,9 @@ function parseStructuredInternalAllowlist(rawValue: string | undefined): Set<str
 
 function isStructuredMatchReadInternalViewer(
   identity: StructuredInternalIdentity | null,
-  rawAllowlist:
-    | string
-    | undefined = process.env[STRUCTURED_MATCH_READ_INTERNAL_VIEWERS_ENV] ??
-    process.env[STRUCTURED_MATCH_READ_INTERNAL_EMAILS_ENV],
+  rawAllowlist: string | undefined = process.env[
+    STRUCTURED_MATCH_READ_INTERNAL_VIEWERS_ENV
+  ] ?? process.env[STRUCTURED_MATCH_READ_INTERNAL_EMAILS_ENV],
 ): boolean {
   if (!identity) {
     return false;
@@ -493,11 +497,9 @@ function isStructuredMatchReadInternalViewer(
     return false;
   }
 
-  return [
-    identity.subject,
-    identity.email,
-    identity.tokenIdentifier,
-  ].some((value) => allowlist.has(normalizeDebugToken(value)));
+  return [identity.subject, identity.email, identity.tokenIdentifier].some(
+    (value) => allowlist.has(normalizeDebugToken(value)),
+  );
 }
 
 function isStructuredMatchReadInternalUiEnabled(
@@ -555,11 +557,9 @@ function isStructuredMatchReadBetaViewer(
     return false;
   }
 
-  return [
-    identity.subject,
-    identity.email,
-    identity.tokenIdentifier,
-  ].some((value) => allowlist.has(normalizeDebugToken(value)));
+  return [identity.subject, identity.email, identity.tokenIdentifier].some(
+    (value) => allowlist.has(normalizeDebugToken(value)),
+  );
 }
 
 function isStructuredMatchReviewLabel(
@@ -670,7 +670,9 @@ function hasStructuredLanguagePreserved(args: {
   ]
     .map(normalizeDebugToken)
     .join("\n");
-  return /\b(francais|français|support client|gestion des demandes)\b/i.test(values);
+  return /\b(francais|français|support client|gestion des demandes)\b/i.test(
+    values,
+  );
 }
 
 function buildStructuredShadowSummary(args: {
@@ -1041,8 +1043,18 @@ export const getValidJobExtractionShadowByHash = internalQuery({
       fallback_used: v.boolean(),
       model: v.string(),
       prompt_version: v.string(),
-      model_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
-      final_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+      model_confidence: v.union(
+        v.literal("high"),
+        v.literal("medium"),
+        v.literal("low"),
+        v.null(),
+      ),
+      final_confidence: v.union(
+        v.literal("high"),
+        v.literal("medium"),
+        v.literal("low"),
+        v.null(),
+      ),
     }),
   ),
   handler: async (ctx, args) => {
@@ -1094,8 +1106,18 @@ export const storeJobExtractionShadow = internalMutation({
     model: v.string(),
     promptVersion: v.string(),
     latencyMs: v.number(),
-    modelConfidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
-    finalConfidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    modelConfidence: v.union(
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low"),
+      v.null(),
+    ),
+    finalConfidence: v.union(
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low"),
+      v.null(),
+    ),
     createdAt: v.number(),
   },
   returns: v.null(),
@@ -1146,20 +1168,23 @@ export const runShadowJobExtraction = internalAction({
     );
 
     if (cached) {
-      await ctx.runMutation((internal as any).jobsPublic.storeJobExtractionShadow, {
-        jobId: args.jobId,
-        jobTextHash,
-        llmRawOutput: cached.llm_raw_output,
-        llmNormalizedOutput: cached.llm_normalized_output,
-        validationStatus: "valid",
-        fallbackUsed: cached.fallback_used,
-        model: cached.model,
-        promptVersion: cached.prompt_version || PROMPT_VERSION,
-        latencyMs: 0,
-        modelConfidence: cached.model_confidence ?? null,
-        finalConfidence: cached.final_confidence ?? null,
-        createdAt: Date.now(),
-      });
+      await ctx.runMutation(
+        (internal as any).jobsPublic.storeJobExtractionShadow,
+        {
+          jobId: args.jobId,
+          jobTextHash,
+          llmRawOutput: cached.llm_raw_output,
+          llmNormalizedOutput: cached.llm_normalized_output,
+          validationStatus: "valid",
+          fallbackUsed: cached.fallback_used,
+          model: cached.model,
+          promptVersion: cached.prompt_version || PROMPT_VERSION,
+          latencyMs: 0,
+          modelConfidence: cached.model_confidence ?? null,
+          finalConfidence: cached.final_confidence ?? null,
+          createdAt: Date.now(),
+        },
+      );
       return null;
     }
 
@@ -1178,20 +1203,23 @@ export const runShadowJobExtraction = internalAction({
         }),
     });
 
-    await ctx.runMutation((internal as any).jobsPublic.storeJobExtractionShadow, {
-      jobId: args.jobId,
-      jobTextHash,
-      llmRawOutput: result.rawOutput,
-      llmNormalizedOutput: result.llmNormalizedOutput,
-      validationStatus: result.validationStatus,
-      fallbackUsed: result.fallbackUsed,
-      model: result.model,
-      promptVersion: result.promptVersion,
-      latencyMs: result.latencyMs,
-      modelConfidence: result.modelConfidence,
-      finalConfidence: result.finalConfidence,
-      createdAt: Date.now(),
-    });
+    await ctx.runMutation(
+      (internal as any).jobsPublic.storeJobExtractionShadow,
+      {
+        jobId: args.jobId,
+        jobTextHash,
+        llmRawOutput: result.rawOutput,
+        llmNormalizedOutput: result.llmNormalizedOutput,
+        validationStatus: result.validationStatus,
+        fallbackUsed: result.fallbackUsed,
+        model: result.model,
+        promptVersion: result.promptVersion,
+        latencyMs: result.latencyMs,
+        modelConfidence: result.modelConfidence,
+        finalConfidence: result.finalConfidence,
+        createdAt: Date.now(),
+      },
+    );
 
     return null;
   },
@@ -1288,14 +1316,17 @@ async function resolveNextStepBlock(
   const normalizedOutcomeCandidates: Array<{
     tier: string;
     outcome: "cover_letter" | "resume" | null;
-  }> = (metrics as any[])
-    .map((metric: any): {
+  }> = (metrics as any[]).map(
+    (
+      metric: any,
+    ): {
       tier: string;
       outcome: "cover_letter" | "resume" | null;
     } => ({
       tier: String(metric?.labels?.tier ?? ""),
       outcome: normalizeDecisionOutcome(String(metric?.labels?.outcome ?? "")),
-    }));
+    }),
+  );
   const normalizedOutcomes = normalizedOutcomeCandidates.filter(
     (
       entry,
@@ -1397,131 +1428,18 @@ function buildExtractionProjection(args: {
   }));
 }
 
-function projectReviewItemsWithVisibleExtraction(args: {
-  reviewItems: any[];
-  visibleExtraction: VisibleJobExtractionSelection;
-}) {
-  if (args.visibleExtraction.source !== "llm") {
-    return args.reviewItems;
-  }
-
-  const allowedReviewItems = args.reviewItems.filter(
-    (item) => String(item.fieldKey ?? "") !== "responsibilities",
-  );
-
-  const buildLlmReviewItem = (args: {
-    id: string;
-    fieldKey: string;
-    label: string;
-    suggestedValue: string | string[];
-  }) => {
-    const existing = allowedReviewItems.find(
-      (item) => String(item.fieldKey ?? "") === args.fieldKey,
-    );
-    const approvedValueMatches =
-      existing?.reviewStatus === "approved" &&
-      JSON.stringify(existing.approvedValue) === JSON.stringify(args.suggestedValue);
-    return {
-      ...(existing ?? {}),
-      id: existing?.id ?? args.id,
-      fieldKey: args.fieldKey,
-      label: existing?.label ?? args.label,
-      reviewStatus: approvedValueMatches ? "approved" : "pending",
-      suggestedValue: args.suggestedValue,
-      approvedValue: approvedValueMatches ? existing.approvedValue : undefined,
-      sourceText: Array.isArray(args.suggestedValue)
-        ? args.suggestedValue.join("\n")
-        : args.suggestedValue,
-      confidence: Math.max(Number(existing?.confidence ?? 0), 0.9),
-      updatedAt:
-        typeof existing?.updatedAt === "number" ? existing.updatedAt : 0,
-    };
-  };
-
-  const llmBackedItems = [
-    ...(args.visibleExtraction.summary
-      ? [
-          buildLlmReviewItem({
-            id: "llm_visible_summary",
-            fieldKey: "summary",
-            label: "Summary",
-            suggestedValue: args.visibleExtraction.summary,
-          }),
-        ]
-      : []),
-    ...(args.visibleExtraction.requirements.length > 0
-      ? [
-          buildLlmReviewItem({
-            id: "llm_visible_must_haves",
-            fieldKey: "mustHaves",
-            label: "Requirements",
-            suggestedValue: args.visibleExtraction.requirements,
-          }),
-        ]
-      : []),
-    ...(args.visibleExtraction.keywords.length > 0
-      ? [
-          buildLlmReviewItem({
-            id: "llm_visible_keywords",
-            fieldKey: "keywords",
-            label: "Keywords",
-            suggestedValue: args.visibleExtraction.keywords,
-          }),
-        ]
-      : []),
-  ];
-
-  return llmBackedItems.flatMap((item) => {
-    const fieldKey = String(item.fieldKey ?? "");
-    const nextSuggestedValue =
-      fieldKey === "keywords"
-        ? args.visibleExtraction.keywords
-        : fieldKey === "mustHaves" || fieldKey === "requirements"
-          ? args.visibleExtraction.requirements
-          : fieldKey === "summary" && args.visibleExtraction.summary
-            ? args.visibleExtraction.summary
-            : undefined;
-
-    if (nextSuggestedValue === undefined) {
-      return [item];
-    }
-
-    return [{
-      ...item,
-      suggestedValue: nextSuggestedValue,
-      sourceText: Array.isArray(nextSuggestedValue)
-        ? nextSuggestedValue.join("\n")
-        : String(nextSuggestedValue),
-      confidence: Math.max(Number(item.confidence ?? 0), 0.9),
-    }];
-  });
-}
-
 async function resolveVisibleExtractionForJob(ctx: any, job: any) {
-  const shadowRows = await ctx.db
-    .query("job_extraction_shadow")
-    .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
-    .collect();
-  const visibleFallbackMustHaves =
-    Array.isArray(job.mustHavesExtraction) && job.mustHavesExtraction.length > 0
-      ? flattenExtractionValues(job.mustHavesExtraction)
-      : (job.mustHaves ?? []);
-  const visibleFallbackKeywords =
-    Array.isArray(job.keywordsExtraction) && job.keywordsExtraction.length > 0
-      ? flattenExtractionValues(job.keywordsExtraction)
-      : (job.keywords ?? []);
-
-  return selectVisibleJobExtraction({
-    flagEnabled: isJobLlmVisibleExtractionEnabled(),
+  const flagEnabled = isJobLlmVisibleExtractionEnabled();
+  const shadowRows = flagEnabled
+    ? await ctx.db
+        .query("job_extraction_shadow")
+        .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
+        .collect()
+    : [];
+  return selectVisibleJobExtractionForJob({
+    job,
+    flagEnabled,
     shadowRows,
-    heuristic: {
-      summary:
-        typeof job.summaryExtraction?.value === "string"
-          ? job.summaryExtraction.value
-          : job.summary,
-      requirements: visibleFallbackMustHaves,
-      keywords: visibleFallbackKeywords,
-    },
     rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
   });
 }
@@ -1611,13 +1529,9 @@ function buildJobProjection(
       };
   const visibleSelection =
     visibleExtraction ??
-    selectVisibleJobExtraction({
+    selectVisibleJobExtractionForJob({
+      job,
       flagEnabled: false,
-      heuristic: {
-        summary: summaryExtraction.value,
-        requirements: flattenExtractionValues(mustHavesExtraction),
-        keywords: flattenExtractionValues(keywordsExtraction),
-      },
       rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
     });
   const reviewItems = projectReviewItemsWithVisibleExtraction({
@@ -1638,10 +1552,10 @@ function buildJobProjection(
     sourceType: job.sourceType,
     applicationUrl: job.applicationUrl,
     parseStatus: job.parseStatus,
-    reviewState:
-      visibleSelection.source === "llm"
-        ? resolveCanonicalJobReviewState(reviewItems)
-        : job.reviewState,
+    reviewState: resolveVisibleJobBriefReviewState({
+      reviewItems: job.reviewItems ?? [],
+      visibleExtraction: visibleSelection,
+    }),
     summary: summaryExtraction.value,
     summaryExtraction,
     visibleSummary: visibleSelection.summary,
@@ -1753,7 +1667,7 @@ async function requireCanonicalUserProfile(ctx: any) {
 async function getMostRecentProfileForClerk(ctx: any, clerkId: string) {
   const query = ctx.db
     .query("userProfiles")
-    .withIndex("by_clerk_updated_at", (q: any) => q.eq("clerkId", clerkId))
+    .withIndex("by_clerk_updated_at", (q: any) => q.eq("clerkId", clerkId));
   const orderedQuery =
     typeof query.order === "function" ? query.order("desc") : query;
   const rows =
@@ -1909,88 +1823,91 @@ async function listProjectedJobsForProfiles(
     visibleJobs,
   );
 
-  const projections = await Promise.all(visibleJobs.map(async (job: any) => {
-    const storedResume = resolveStoredResumeSelection({
-      job,
-      primaryProfile,
-    });
-    const matchReadProfile = resolveMatchReadSourceProfile({
-      job,
-      primaryProfile,
-      profiles: normalizedProfiles,
-    });
-    const matchRead = computeMatchRead({
-      job: {
+  const projections = await Promise.all(
+    visibleJobs.map(async (job: any) => {
+      const storedResume = resolveStoredResumeSelection({
+        job,
+        primaryProfile,
+      });
+      const matchReadProfile = resolveMatchReadSourceProfile({
+        job,
+        primaryProfile,
+        profiles: normalizedProfiles,
+      });
+      const matchRead = computeMatchRead({
+        job: {
+          id: String(job._id),
+          parseVersion: job.parseVersion,
+          parseStatus: job.parseStatus,
+          mustHaves: job.mustHaves,
+          keywords: job.keywords,
+          mustHavesExtraction: job.mustHavesExtraction,
+          keywordsExtraction: job.keywordsExtraction,
+        },
+        profile: buildMatchReadProfile(matchReadProfile),
+      });
+      const pendingMatchRead = buildStructuredPendingMatchRead({
+        jobId: String(job._id),
+        profileId: String(
+          (matchReadProfile as any)?.profileId ??
+            (matchReadProfile as any)?._id ??
+            (matchReadProfile as any)?.id ??
+            "",
+        ),
+      });
+      const shadowRows = await ctx.db
+        .query("job_extraction_shadow")
+        .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
+        .order("desc")
+        .take(JOB_LIST_SHADOW_ROWS_LIMIT);
+      const structuredDebug = buildStructuredMatchReadDebug({
+        old: pendingMatchRead,
+        job: {
+          id: String(job._id),
+          rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
+        },
+        profile: matchReadProfile,
+        shadowRows,
+      });
+      const visibleMatchRead = buildVisibleMatchReadFromStructuredDebug({
+        pendingMatchRead,
+        debug: structuredDebug,
+      });
+      const matchReview =
+        buildJobMatchReviewFromStructuredDebug(structuredDebug);
+      const stats = linkedProposalStats.get(String(job._id));
+      const lastActivityAt = Math.max(
+        job.updatedAt ?? 0,
+        job.lastOpenedAt ?? 0,
+        stats?.latestUpdatedAt ?? 0,
+      );
+      return {
         id: String(job._id),
-        parseVersion: job.parseVersion,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        sourceLanguage: resolveEffectiveJobRawLanguageDetected(job) || null,
+        isSample: Boolean(job.isSample),
+        isFavorite: Boolean(job.isFavorite),
+        sourceUrl: job.sourceUrl,
+        sourceDomain: job.sourceDomain,
+        sourceType: job.sourceType,
         parseStatus: job.parseStatus,
-        mustHaves: job.mustHaves,
-        keywords: job.keywords,
-        mustHavesExtraction: job.mustHavesExtraction,
-        keywordsExtraction: job.keywordsExtraction,
-      },
-      profile: buildMatchReadProfile(matchReadProfile),
-    });
-    const pendingMatchRead = buildStructuredPendingMatchRead({
-      jobId: String(job._id),
-      profileId: String(
-        (matchReadProfile as any)?.profileId ??
-          (matchReadProfile as any)?._id ??
-          (matchReadProfile as any)?.id ??
-          "",
-      ),
-    });
-    const shadowRows = await ctx.db
-      .query("job_extraction_shadow")
-      .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
-      .order("desc")
-      .take(JOB_LIST_SHADOW_ROWS_LIMIT);
-    const structuredDebug = buildStructuredMatchReadDebug({
-      old: pendingMatchRead,
-      job: {
-        id: String(job._id),
-        rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
-      },
-      profile: matchReadProfile,
-      shadowRows,
-    });
-    const visibleMatchRead = buildVisibleMatchReadFromStructuredDebug({
-      pendingMatchRead,
-      debug: structuredDebug,
-    });
-    const matchReview = buildJobMatchReviewFromStructuredDebug(structuredDebug);
-    const stats = linkedProposalStats.get(String(job._id));
-    const lastActivityAt = Math.max(
-      job.updatedAt ?? 0,
-      job.lastOpenedAt ?? 0,
-      stats?.latestUpdatedAt ?? 0,
-    );
-    return {
-      id: String(job._id),
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      sourceLanguage: resolveEffectiveJobRawLanguageDetected(job) || null,
-      isSample: Boolean(job.isSample),
-      isFavorite: Boolean(job.isFavorite),
-      sourceUrl: job.sourceUrl,
-      sourceDomain: job.sourceDomain,
-      sourceType: job.sourceType,
-      parseStatus: job.parseStatus,
-      reviewState: job.reviewState,
-      matchTier: normalizeStoredMatchTier(job.matchTier) ?? matchRead.tier,
-      matchRead: {
-        tier: visibleMatchRead.tier,
-      },
-      matchReview,
-      status: job.status,
-      importedAt: job.importedAt,
-      updatedAt: job.updatedAt,
-      lastOpenedAt: job.lastOpenedAt,
-      lastActivityAt,
-      linkedDocumentCount: stats?.count ?? 0,
-    };
-  }));
+        reviewState: job.reviewState,
+        matchTier: normalizeStoredMatchTier(job.matchTier) ?? matchRead.tier,
+        matchRead: {
+          tier: visibleMatchRead.tier,
+        },
+        matchReview,
+        status: job.status,
+        importedAt: job.importedAt,
+        updatedAt: job.updatedAt,
+        lastOpenedAt: job.lastOpenedAt,
+        lastActivityAt,
+        linkedDocumentCount: stats?.count ?? 0,
+      };
+    }),
+  );
 
   return projections.sort((left: any, right: any) => {
     const leftActivity = Number(left.lastActivityAt ?? left.updatedAt ?? 0);
@@ -2204,6 +2121,11 @@ export const getById = query({
       resumeId: v.optional(v.string()),
       resumeName: v.optional(v.string()),
       resumeSource: v.optional(v.union(v.literal("job"), v.literal("default"))),
+      resumeProposalAuthority: v.union(
+        v.literal("source"),
+        v.literal("reviewed_ready"),
+        v.literal("reviewed_invalid"),
+      ),
       matchRead: v.union(
         v.null(),
         v.object({
@@ -2265,7 +2187,10 @@ export const getById = query({
           updatedAt: v.number(),
         }),
       ),
-      structuredShadowSummary: v.union(v.null(), structuredShadowSummaryValidator),
+      structuredShadowSummary: v.union(
+        v.null(),
+        structuredShadowSummaryValidator,
+      ),
       reviewItems: v.array(
         v.object({
           id: v.string(),
@@ -2391,25 +2316,10 @@ export const getById = query({
     });
     const matchReview = buildJobMatchReviewFromStructuredDebug(structuredDebug);
     const nextStepBlock = await resolveNextStepBlock(ctx, matchRead.tier);
-    const visibleFallbackMustHaves =
-      Array.isArray(job.mustHavesExtraction) && job.mustHavesExtraction.length > 0
-        ? flattenExtractionValues(job.mustHavesExtraction)
-        : (job.mustHaves ?? []);
-    const visibleFallbackKeywords =
-      Array.isArray(job.keywordsExtraction) && job.keywordsExtraction.length > 0
-        ? flattenExtractionValues(job.keywordsExtraction)
-        : (job.keywords ?? []);
-    const visibleExtraction = selectVisibleJobExtraction({
+    const visibleExtraction = selectVisibleJobExtractionForJob({
+      job,
       flagEnabled: isJobLlmVisibleExtractionEnabled(),
       shadowRows,
-      heuristic: {
-        summary:
-          typeof job.summaryExtraction?.value === "string"
-            ? job.summaryExtraction.value
-            : job.summary,
-        requirements: visibleFallbackMustHaves,
-        keywords: visibleFallbackKeywords,
-      },
       rawLanguageDetected: effectiveRawLanguageDetected,
     });
     const structuredShadowSummary =
@@ -2424,19 +2334,26 @@ export const getById = query({
         shadowRows,
       });
 
-    return buildJobProjection(
-      job,
-      matchRead,
-      storedResume,
-      nextStepBlock,
-      linkedProposals.length,
-      projectedLinkedProposals,
-      draftProposals.length,
-      projectedDraftProposals,
-      visibleExtraction,
-      structuredShadowSummary,
-      matchReview,
-    );
+    return {
+      ...buildJobProjection(
+        job,
+        matchRead,
+        storedResume,
+        nextStepBlock,
+        linkedProposals.length,
+        projectedLinkedProposals,
+        draftProposals.length,
+        projectedDraftProposals,
+        visibleExtraction,
+        structuredShadowSummary,
+        matchReview,
+      ),
+      resumeProposalAuthority: resolveReviewedResumeProposalAuthority({
+        resumeId: storedResume.resumeId,
+        jobId: String(job._id),
+        profile: explicitProfile,
+      }),
+    };
   },
 });
 
@@ -2509,7 +2426,10 @@ export const debugInspectMatchInputByJobId = query({
     const structuredShadow = !structuredShadowFlagEnabled
       ? buildUnavailableStructuredShadow(pendingMatchRead, "shadow_disabled")
       : !structuredShadowInternalViewer
-        ? buildUnavailableStructuredShadow(pendingMatchRead, "internal_viewer_required")
+        ? buildUnavailableStructuredShadow(
+            pendingMatchRead,
+            "internal_viewer_required",
+          )
         : buildStructuredMatchReadDebug({
             old: pendingMatchRead,
             job: {
@@ -2850,8 +2770,12 @@ export const exportLiveMatchReviewRecordsForUser = query({
           pendingMatchRead,
           debug: structuredDebug,
         });
-        const matchReview = buildJobMatchReviewFromStructuredDebug(structuredDebug);
-        const visibleExtraction = await resolveVisibleExtractionForJob(ctx, job);
+        const matchReview =
+          buildJobMatchReviewFromStructuredDebug(structuredDebug);
+        const visibleExtraction = await resolveVisibleExtractionForJob(
+          ctx,
+          job,
+        );
         const hardGateMissingCount =
           structuredDebug.structured.status === "available"
             ? structuredDebug.structured.hardGateMissing.length
@@ -3326,7 +3250,10 @@ export const markOpened = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { normalizedJobId } = await requireJobForLinkedProfile(ctx, args.jobId);
+    const { normalizedJobId } = await requireJobForLinkedProfile(
+      ctx,
+      args.jobId,
+    );
 
     const now = Date.now();
     await ctx.db.patch(normalizedJobId, {
@@ -3397,8 +3324,13 @@ export const updateField = mutation({
     );
 
     const now = Date.now();
-    const reviewItems = resolveReviewItemsAfterFieldUpdate({
+    const visibleExtraction = await resolveVisibleExtractionForJob(ctx, job);
+    const projectedReviewItems = projectReviewItemsWithVisibleExtraction({
       reviewItems: job.reviewItems ?? [],
+      visibleExtraction,
+    });
+    const reviewItems = resolveReviewItemsAfterFieldUpdate({
+      reviewItems: projectedReviewItems,
       fieldKey: args.fieldKey,
       nextValue: args.value,
       now,

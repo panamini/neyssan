@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   isUiSafeVisibleJobExtraction,
+  projectReviewItemsWithVisibleExtraction,
+  resolveVisibleJobBriefReviewState,
   selectVisibleJobExtraction,
+  selectVisibleJobExtractionForJob,
   type VisibleJobExtractionShadowRow,
 } from "../visibleJobExtraction";
 import type { NormalizedJobExtraction } from "../jobExtractionSchema";
@@ -34,11 +37,28 @@ const englishOutput: NormalizedJobExtraction = {
   summary_short: "Monitors hotel security systems and supports guest safety.",
   role_title_normalized: "Security Attendant",
   requirements: [
-    { value: "Monitor CCTV, access control, and alarm systems", type: "skill", required: true },
-    { value: "Document security incidents in detail", type: "skill", required: true },
-    { value: "High school diploma or equivalent", type: "education", required: true },
+    {
+      value: "Monitor CCTV, access control, and alarm systems",
+      type: "skill",
+      required: true,
+    },
+    {
+      value: "Document security incidents in detail",
+      type: "skill",
+      required: true,
+    },
+    {
+      value: "High school diploma or equivalent",
+      type: "education",
+      required: true,
+    },
   ],
-  keywords_canonical: ["hotel security", "CCTV", "access control", "guest safety"],
+  keywords_canonical: [
+    "hotel security",
+    "CCTV",
+    "access control",
+    "guest safety",
+  ],
   licenses_or_certifications: ["CT Guard Card"],
   schedule_constraints: ["Overnight shifts", "Weekends", "Holidays"],
   environment: {
@@ -55,9 +75,14 @@ const spanishSecurityOutput: NormalizedJobExtraction = {
     "Vigilancia y seguridad en hotel con atención a huéspedes y manejo de sistemas de monitoreo.",
   role_title_normalized: "Asistente de Seguridad",
   requirements: [
-    { value: "Educación secundaria o equivalente", type: "education", required: true },
     {
-      value: "Experiencia en gestión de sistemas de circuito cerrado de televisión (CCTV)",
+      value: "Educación secundaria o equivalente",
+      type: "education",
+      required: true,
+    },
+    {
+      value:
+        "Experiencia en gestión de sistemas de circuito cerrado de televisión (CCTV)",
       type: "experience",
       required: true,
     },
@@ -67,7 +92,11 @@ const spanishSecurityOutput: NormalizedJobExtraction = {
       required: true,
     },
   ],
-  keywords_canonical: ["seguridad hotelera", "monitoreo CCTV", "atención a huéspedes"],
+  keywords_canonical: [
+    "seguridad hotelera",
+    "monitoreo CCTV",
+    "atención a huéspedes",
+  ],
   licenses_or_certifications: ["CT Guard Card"],
   schedule_constraints: ["turnos nocturnos", "fines de semana", "festivos"],
   environment: {
@@ -85,8 +114,16 @@ const italianSecurityOutput: NormalizedJobExtraction = {
     "Sicurezza alberghiera con gestione degli ospiti e monitoraggio dei sistemi.",
   role_title_normalized: "Addetto alla Sicurezza",
   requirements: [
-    { value: "Esperienza nella gestione dei sistemi CCTV", type: "experience", required: true },
-    { value: "Disponibilità a lavorare su turni e fine settimana", type: "constraint", required: true },
+    {
+      value: "Esperienza nella gestione dei sistemi CCTV",
+      type: "experience",
+      required: true,
+    },
+    {
+      value: "Disponibilità a lavorare su turni e fine settimana",
+      type: "constraint",
+      required: true,
+    },
   ],
   keywords_canonical: ["sicurezza", "gestione ospiti", "turni"],
   schedule_constraints: ["turni", "fine settimana", "festivi"],
@@ -98,8 +135,16 @@ const portugueseSecurityOutput: NormalizedJobExtraction = {
     "Segurança hoteleira com atendimento a hóspedes e monitoramento de sistemas.",
   role_title_normalized: "Assistente de Segurança",
   requirements: [
-    { value: "Experiência em gestão de sistemas CCTV", type: "experience", required: true },
-    { value: "Disponibilidade para trabalhar em turnos e fins de semana", type: "constraint", required: true },
+    {
+      value: "Experiência em gestão de sistemas CCTV",
+      type: "experience",
+      required: true,
+    },
+    {
+      value: "Disponibilidade para trabalhar em turnos e fins de semana",
+      type: "constraint",
+      required: true,
+    },
   ],
   keywords_canonical: ["segurança", "hóspedes", "turnos"],
   schedule_constraints: ["turnos", "fins de semana", "feriados"],
@@ -111,8 +156,16 @@ const germanSecurityOutput: NormalizedJobExtraction = {
     "Hotelsicherheit mit Betreuung von Gästen und Überwachung von Systemen.",
   role_title_normalized: "Sicherheitsmitarbeiter",
   requirements: [
-    { value: "Erfahrung mit der Verwaltung von CCTV-Systemen", type: "experience", required: true },
-    { value: "Verfügbarkeit für Schichten, Wochenenden und Feiertage", type: "constraint", required: true },
+    {
+      value: "Erfahrung mit der Verwaltung von CCTV-Systemen",
+      type: "experience",
+      required: true,
+    },
+    {
+      value: "Verfügbarkeit für Schichten, Wochenenden und Feiertage",
+      type: "constraint",
+      required: true,
+    },
   ],
   keywords_canonical: ["Sicherheit", "Gäste", "Schichten"],
   schedule_constraints: ["Schichten", "Wochenenden", "Feiertage"],
@@ -122,9 +175,21 @@ const technicalEnglishOutput: NormalizedJobExtraction = {
   ...englishOutput,
   summary_short: "Builds SaaS reporting tools with React, SQL, and HIPAA-aware workflows.",
   requirements: [
-    { value: "React and TypeScript application development", type: "skill", required: true },
-    { value: "SQL data modeling for SaaS analytics", type: "tool", required: true },
-    { value: "HIPAA-aware workflow implementation", type: "constraint", required: true },
+    {
+      value: "React and TypeScript application development",
+      type: "skill",
+      required: true,
+    },
+    {
+      value: "SQL data modeling for SaaS analytics",
+      type: "tool",
+      required: true,
+    },
+    {
+      value: "HIPAA-aware workflow implementation",
+      type: "constraint",
+      required: true,
+    },
   ],
   keywords_canonical: ["React", "SQL", "SaaS", "HIPAA", "API"],
   licenses_or_certifications: [],
@@ -190,10 +255,12 @@ describe("selectVisibleJobExtraction", () => {
   });
 
   it("falls back for old model rows", () => {
-    expect(select({ shadowRows: [row({ model: "old-model" })] })).toMatchObject({
-      source: "heuristic",
-      summary: "Heuristic summary",
-    });
+    expect(select({ shadowRows: [row({ model: "old-model" })] })).toMatchObject(
+      {
+        source: "heuristic",
+        summary: "Heuristic summary",
+      },
+    );
   });
 
   it("ignores mistral-small-latest rows when current policy is Ministral 3 3B", () => {
@@ -226,14 +293,18 @@ describe("selectVisibleJobExtraction", () => {
   });
 
   it("falls back for fallback-used rows", () => {
-    expect(select({ shadowRows: [row({ fallback_used: true })] })).toMatchObject({
+    expect(
+      select({ shadowRows: [row({ fallback_used: true })] }),
+    ).toMatchObject({
       source: "heuristic",
     });
   });
 
   it("falls back for schema-invalid normalized output", () => {
     expect(
-      select({ shadowRows: [row({ llm_normalized_output: { summary_short: "ok" } })] }),
+      select({
+        shadowRows: [row({ llm_normalized_output: { summary_short: "ok" } })],
+      }),
     ).toMatchObject({
       source: "heuristic",
     });
@@ -372,9 +443,10 @@ describe("selectVisibleJobExtraction", () => {
       shadowRows: [row({ llm_normalized_output: output })],
     });
 
-    expect(result.source).toBe("llm");
-    expect(result.summary).toBe(output.summary_short);
-  });
+      expect(result.source).toBe("llm");
+      expect(result.summary).toBe(output.summary_short);
+    },
+  );
 
   it("does not treat technical acronyms and named codes as wrong-language signals", () => {
     expect(
@@ -413,6 +485,118 @@ describe("selectVisibleJobExtraction", () => {
       source: "llm",
       requirements: expect.arrayContaining(["JavaScript"]),
       keywords: expect.arrayContaining(["javascript"]),
+    });
+  });
+});
+
+describe("visible Job Brief review authority", () => {
+  it("keeps canonical human edits authoritative over stale heuristic extraction metadata", () => {
+    expect(
+      selectVisibleJobExtractionForJob({
+        flagEnabled: false,
+        job: {
+          summary: "Human-reviewed summary",
+          summaryExtraction: { value: "Machine summary" },
+          mustHaves: ["Human-reviewed requirement"],
+          mustHavesExtraction: [{ value: "Machine requirement" }],
+          keywords: ["human-reviewed keyword"],
+          keywordsExtraction: [{ value: "machine keyword" }],
+        },
+      }),
+    ).toMatchObject({
+      source: "heuristic",
+      summary: "Human-reviewed summary",
+      requirements: ["Human-reviewed requirement"],
+      keywords: ["human-reviewed keyword"],
+    });
+  });
+
+  it("does not mark an empty visible Job Brief as ready", () => {
+    expect(
+      resolveVisibleJobBriefReviewState({
+        reviewItems: [],
+        visibleExtraction: {
+          source: "empty",
+          summary: null,
+          requirements: [],
+          keywords: [],
+        },
+      }),
+    ).toBe("needs_review");
+  });
+
+  it("keeps heuristic review decisions authoritative", () => {
+    const pendingReview = {
+      id: "keywords",
+      fieldKey: "keywords",
+      label: "Keywords",
+      reviewStatus: "pending" as const,
+      suggestedValue: ["coordination"],
+      sourceText: "coordination",
+      confidence: 0.4,
+      updatedAt: 10,
+    };
+    const visibleExtraction = select({ flagEnabled: false, shadowRows: [] });
+
+    expect(
+      projectReviewItemsWithVisibleExtraction({
+        reviewItems: [pendingReview],
+        visibleExtraction,
+      }),
+    ).toEqual([pendingReview]);
+    expect(
+      resolveVisibleJobBriefReviewState({
+        reviewItems: [pendingReview],
+        visibleExtraction,
+      }),
+    ).toBe("needs_review");
+  });
+
+  it("requires confirmation when an LLM brief becomes visible", () => {
+    const visibleExtraction = select();
+    const projected = projectReviewItemsWithVisibleExtraction({
+      reviewItems: [],
+      visibleExtraction,
+    });
+
+    expect(projected.map((item) => item.fieldKey)).toEqual([
+      "summary",
+      "mustHaves",
+      "keywords",
+    ]);
+    expect(projected.every((item) => item.reviewStatus === "pending")).toBe(
+      true,
+    );
+    expect(
+      resolveVisibleJobBriefReviewState({
+        reviewItems: [],
+        visibleExtraction,
+      }),
+    ).toBe("needs_review");
+  });
+
+  it("retains a human edit while its source suggestion is unchanged", () => {
+    const visibleExtraction = select();
+    const projected = projectReviewItemsWithVisibleExtraction({
+      reviewItems: [
+        {
+          id: "llm_visible_summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "approved",
+          suggestedValue: visibleExtraction.summary ?? "",
+          approvedValue: "Human-reviewed summary",
+          sourceText: visibleExtraction.summary ?? "",
+          confidence: 0.9,
+          updatedAt: 10,
+        },
+      ],
+      visibleExtraction,
+    });
+
+    expect(projected[0]).toMatchObject({
+      reviewStatus: "approved",
+      approvedValue: "Human-reviewed summary",
     });
   });
 });

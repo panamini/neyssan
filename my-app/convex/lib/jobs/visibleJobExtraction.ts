@@ -1,4 +1,9 @@
 import {
+  resolveCanonicalJobReviewState,
+  type CanonicalJobReviewItem,
+  type CanonicalJobReviewState,
+} from "./canonicalJobs";
+import {
   NormalizedJobExtractionSchema,
   type NormalizedJobExtraction,
 } from "./jobExtractionSchema";
@@ -21,6 +26,15 @@ export type VisibleJobExtractionShadowRow = {
   prompt_version?: string | null;
   created_at?: number | null;
   _creationTime?: number | null;
+};
+
+type VisibleJobExtractionJob = {
+  summary?: string | null;
+  summaryExtraction?: { value?: unknown } | null;
+  mustHaves?: unknown;
+  mustHavesExtraction?: unknown;
+  keywords?: unknown;
+  keywordsExtraction?: unknown;
 };
 
 const MAX_SUMMARY_CHARS = 700;
@@ -142,7 +156,9 @@ const LANGUAGE_SIGNAL_GROUPS = [
   { language: "de", patterns: GERMAN_LANGUAGE_SIGNAL_RES },
 ] as const;
 
-type SupportedSourceLanguage = "en" | (typeof LANGUAGE_SIGNAL_GROUPS)[number]["language"];
+type SupportedSourceLanguage =
+  | "en"
+  | (typeof LANGUAGE_SIGNAL_GROUPS)[number]["language"];
 
 function compactWhitespace(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -170,8 +186,14 @@ function compactList(values: unknown): string[] {
   return result;
 }
 
-function hasDisplayData(selection: Omit<VisibleJobExtractionSelection, "source">): boolean {
-  return Boolean(selection.summary) || selection.requirements.length > 0 || selection.keywords.length > 0;
+function hasDisplayData(
+  selection: Omit<VisibleJobExtractionSelection, "source">,
+): boolean {
+  return (
+    Boolean(selection.summary) ||
+    selection.requirements.length > 0 ||
+    selection.keywords.length > 0
+  );
 }
 
 function includesUnsafeText(values: string[]): boolean {
@@ -229,7 +251,10 @@ function isMostlyFiller(value: string): boolean {
   return fillerCount / words.length > 0.72;
 }
 
-function hasConfidentLanguageSignal(value: string, patterns: RegExp[]): boolean {
+function hasConfidentLanguageSignal(
+  value: string,
+  patterns: RegExp[],
+): boolean {
   let matches = 0;
   for (const pattern of patterns) {
     if (pattern.test(value)) {
@@ -242,7 +267,9 @@ function hasConfidentLanguageSignal(value: string, patterns: RegExp[]): boolean 
   return false;
 }
 
-function resolveSupportedSourceLanguage(value: unknown): SupportedSourceLanguage | null {
+function resolveSupportedSourceLanguage(
+  value: unknown,
+): SupportedSourceLanguage | null {
   const language = compactWhitespace(value).toLowerCase();
   if (language.startsWith("en")) {
     return "en";
@@ -270,7 +297,9 @@ function violatesKnownLanguageSignal(args: {
   rawLanguageDetected?: string | null;
   values: string[];
 }): boolean {
-  const sourceLanguage = resolveSupportedSourceLanguage(args.rawLanguageDetected);
+  const sourceLanguage = resolveSupportedSourceLanguage(
+    args.rawLanguageDetected,
+  );
   if (!sourceLanguage) {
     return false;
   }
@@ -301,9 +330,13 @@ export function isUiSafeVisibleJobExtraction(args: {
   rawLanguageDetected?: string | null;
 }): boolean {
   const summary = compactWhitespace(args.output.summary_short);
-  const requirements = compactList(args.output.requirements.map((item) => item.value));
+  const requirements = compactList(
+    args.output.requirements.map((item) => item.value),
+  );
   const keywords = compactList(args.output.keywords_canonical);
-  const licensesOrCertifications = compactList(args.output.licenses_or_certifications);
+  const licensesOrCertifications = compactList(
+    args.output.licenses_or_certifications,
+  );
   const scheduleConstraints = compactList(args.output.schedule_constraints);
   const allValues = [
     summary,
@@ -357,7 +390,9 @@ function buildHeuristicSelection(args: {
   };
 }
 
-function toVisibleLlmSelection(output: NormalizedJobExtraction): VisibleJobExtractionSelection {
+function toVisibleLlmSelection(
+  output: NormalizedJobExtraction,
+): VisibleJobExtractionSelection {
   return {
     source: "llm",
     summary: compactWhitespace(output.summary_short) || null,
@@ -391,7 +426,9 @@ export function selectVisibleJobExtraction(args: {
     .filter((row) => row.validation_status === "valid")
     .filter((row) => row.fallback_used === false)
     .map((row) => {
-      const parsed = NormalizedJobExtractionSchema.safeParse(row.llm_normalized_output);
+      const parsed = NormalizedJobExtractionSchema.safeParse(
+        row.llm_normalized_output,
+      );
       if (!parsed.success) {
         return null;
       }
@@ -400,8 +437,13 @@ export function selectVisibleJobExtraction(args: {
         output: parsed.data,
       };
     })
-    .filter((entry): entry is { row: VisibleJobExtractionShadowRow; output: NormalizedJobExtraction } =>
-      entry !== null,
+    .filter(
+      (
+        entry,
+      ): entry is {
+        row: VisibleJobExtractionShadowRow;
+        output: NormalizedJobExtraction;
+      } => entry !== null,
     )
     .sort((left, right) => {
       const leftCreated = left.row.created_at ?? left.row._creationTime ?? 0;
@@ -422,4 +464,146 @@ export function selectVisibleJobExtraction(args: {
   }
 
   return toVisibleLlmSelection(winner.output);
+}
+
+function compactExtractionValues(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return compactList(
+    value.map((entry) =>
+      entry && typeof entry === "object" && !Array.isArray(entry)
+        ? (entry as { value?: unknown }).value
+        : entry,
+    ),
+  );
+}
+
+export function selectVisibleJobExtractionForJob(args: {
+  job: VisibleJobExtractionJob;
+  shadowRows?: VisibleJobExtractionShadowRow[];
+  flagEnabled?: boolean;
+  rawLanguageDetected?: string | null;
+  model?: string;
+  promptVersion?: string;
+}): VisibleJobExtractionSelection {
+  const canonicalRequirements = compactExtractionValues(args.job.mustHaves);
+  const canonicalKeywords = compactExtractionValues(args.job.keywords);
+  const extractedRequirements = compactExtractionValues(
+    args.job.mustHavesExtraction,
+  );
+  const extractedKeywords = compactExtractionValues(
+    args.job.keywordsExtraction,
+  );
+  return selectVisibleJobExtraction({
+    flagEnabled: args.flagEnabled,
+    shadowRows: args.shadowRows,
+    heuristic: {
+      summary:
+        typeof args.job.summary === "string"
+          ? args.job.summary
+          : typeof args.job.summaryExtraction?.value === "string"
+            ? args.job.summaryExtraction.value
+            : null,
+      requirements: Array.isArray(args.job.mustHaves)
+        ? canonicalRequirements
+        : extractedRequirements,
+      keywords: Array.isArray(args.job.keywords)
+        ? canonicalKeywords
+        : extractedKeywords,
+    },
+    rawLanguageDetected: args.rawLanguageDetected,
+    model: args.model,
+    promptVersion: args.promptVersion,
+  });
+}
+
+export function projectReviewItemsWithVisibleExtraction(args: {
+  reviewItems: CanonicalJobReviewItem[];
+  visibleExtraction: VisibleJobExtractionSelection;
+}): CanonicalJobReviewItem[] {
+  if (args.visibleExtraction.source !== "llm") {
+    return args.reviewItems;
+  }
+
+  const allowedReviewItems = args.reviewItems.filter(
+    (item) => item.fieldKey !== "responsibilities",
+  );
+
+  const buildReviewItem = (input: {
+    id: string;
+    fieldKey: string;
+    label: string;
+    suggestedValue: string | string[];
+  }): CanonicalJobReviewItem => {
+    const existing = allowedReviewItems.find(
+      (item) => item.fieldKey === input.fieldKey,
+    );
+    const sourceSuggestionUnchanged =
+      existing?.reviewStatus === "approved" &&
+      JSON.stringify(existing.suggestedValue) ===
+        JSON.stringify(input.suggestedValue);
+    return {
+      ...(existing ?? {}),
+      id: existing?.id ?? input.id,
+      fieldKey: input.fieldKey,
+      label: existing?.label ?? input.label,
+      reviewStatus: sourceSuggestionUnchanged ? "approved" : "pending",
+      suggestedValue: input.suggestedValue,
+      ...(sourceSuggestionUnchanged
+        ? { approvedValue: existing.approvedValue }
+        : { approvedValue: undefined }),
+      sourceText: Array.isArray(input.suggestedValue)
+        ? input.suggestedValue.join("\n")
+        : input.suggestedValue,
+      confidence: Math.max(Number(existing?.confidence ?? 0), 0.9),
+      updatedAt:
+        typeof existing?.updatedAt === "number" ? existing.updatedAt : 0,
+    };
+  };
+
+  return [
+    ...(args.visibleExtraction.summary
+      ? [
+          buildReviewItem({
+            id: "llm_visible_summary",
+            fieldKey: "summary",
+            label: "Summary",
+            suggestedValue: args.visibleExtraction.summary,
+          }),
+        ]
+      : []),
+    ...(args.visibleExtraction.requirements.length > 0
+      ? [
+          buildReviewItem({
+            id: "llm_visible_must_haves",
+            fieldKey: "mustHaves",
+            label: "Requirements",
+            suggestedValue: args.visibleExtraction.requirements,
+          }),
+        ]
+      : []),
+    ...(args.visibleExtraction.keywords.length > 0
+      ? [
+          buildReviewItem({
+            id: "llm_visible_keywords",
+            fieldKey: "keywords",
+            label: "Keywords",
+            suggestedValue: args.visibleExtraction.keywords,
+          }),
+        ]
+      : []),
+  ];
+}
+
+export function resolveVisibleJobBriefReviewState(args: {
+  reviewItems: CanonicalJobReviewItem[];
+  visibleExtraction: VisibleJobExtractionSelection;
+}): CanonicalJobReviewState {
+  if (args.visibleExtraction.source === "empty") {
+    return "needs_review";
+  }
+  return resolveCanonicalJobReviewState(
+    projectReviewItemsWithVisibleExtraction(args),
+  );
 }

@@ -3,10 +3,10 @@ import {
   materializeSourceCvVariant,
   type ReviewedSourceCvVariantProvenanceV1,
 } from "../../../src/modules/resume-variant-materialization/materializeSourceCvVariant";
-import {
-  resolveReviewableCandidateCvItemReference,
-} from "../../../src/modules/candidate-evidence/cvItemReferences";
+import { resolveReviewableCandidateCvItemReference } from "../../../src/modules/candidate-evidence/cvItemReferences";
 import type { CvDocument } from "../../../src/types/cvDocument";
+import { safeParseCvDocument } from "../../../src/schemas/cvDocument.schema";
+import { decodeCvDocumentFromConvex } from "../../../src/adapters/cvDocumentPersistence";
 import type { ResumeVariantPlanReviewDecisionV1 } from "../../../src/modules/resume-variant-plan/reviewResumeVariantPlan";
 import type {
   ResumeVariantPlanActionV1,
@@ -18,9 +18,7 @@ import type {
 } from "../../../src/modules/resume-variant-plan/schema";
 import { buildApplicationContextV1FromExistingData } from "../applicationContextBuilder";
 import { persistApplicationContext } from "../applicationContextPersistence";
-import {
-  buildSourceCvPlanFromPersistence,
-} from "../sourceCvPlanOrchestrator";
+import { buildSourceCvPlanFromPersistence } from "../sourceCvPlanOrchestrator";
 import { buildSourceCvPlanPersistence } from "../sourceCvPlanPersistence";
 import {
   loadPersistedSourceCvPlanReview,
@@ -28,6 +26,11 @@ import {
   reviewAndPersistSourceCvPlan,
 } from "../sourceCvPlanReviewPersistence";
 import { resolveResumeProfileById } from "./matchRead";
+import {
+  isJobLlmVisibleExtractionEnabled,
+  resolveVisibleJobBriefReviewState,
+  selectVisibleJobExtractionForJob,
+} from "./visibleJobExtraction";
 import { buildScoringProfileFieldsFromCvDocument } from "../../profiles";
 import {
   DEFAULT_PROFILE_PREFERENCES,
@@ -35,12 +38,38 @@ import {
   resolveCanonicalProfileKeywordsForWrite,
 } from "../userProfiles";
 
-export type CvTailoringReviewModeV1 =
-  | "auto_recommended"
-  | "full_source_cv";
+export type CvTailoringReviewModeV1 = "auto_recommended" | "full_source_cv";
 
 export type CvTailoringReviewDecisionV1 =
   ResumeVariantPlanReviewDecisionV1;
+
+export type ReviewedResumeProposalAuthority =
+  | "source"
+  | "reviewed_ready"
+  | "reviewed_invalid";
+
+export function resolveReviewedResumeProposalAuthority(args: {
+  resumeId: string | null | undefined;
+  jobId: string;
+  profile: Record<string, unknown> | null | undefined;
+}): ReviewedResumeProposalAuthority {
+  if (!args.resumeId?.startsWith("source-cv-variant:v1:")) {
+    return "source";
+  }
+
+  const decoded = decodeCvDocumentFromConvex(args.profile?.cvDocument);
+  const parsed = safeParseCvDocument(decoded);
+  if (!parsed.ok || parsed.value.id !== args.resumeId) {
+    return "reviewed_invalid";
+  }
+
+  const provenance = readReviewedSourceCvVariantProvenance(
+    parsed.value as unknown as Record<string, unknown>,
+  );
+  return provenance?.jobId === args.jobId
+    ? "reviewed_ready"
+    : "reviewed_invalid";
+}
 
 type CvTailoringReviewPlanItemDtoV1 = Readonly<{
   id: string;
@@ -109,10 +138,7 @@ export async function prepareOwnedCvTailoringReview(
     input.mode ?? "auto_recommended",
   );
   if (prepared.composition.mode === "full_source_cv") {
-    return projectCvTailoringReview(
-      prepared.composition,
-      prepared.sourceCv,
-    );
+    return projectCvTailoringReview(prepared.composition, prepared.sourceCv);
   }
   const resumed = await loadPersistedSourceCvPlanReview(
     ctx.db,
@@ -156,10 +182,7 @@ export async function materializeOwnedCvTailoringReview(
     expectedPlanId: string;
   }>,
 ): Promise<CvTailoringMaterializationDtoV1> {
-  const expectedPlanId = requireString(
-    input.expectedPlanId,
-    "expectedPlanId",
-  );
+  const expectedPlanId = requireString(input.expectedPlanId, "expectedPlanId");
   const prepared = await buildOwnedCvTailoringComposition(
     ctx,
     input.jobId,
@@ -188,26 +211,26 @@ export async function materializeOwnedCvTailoringReview(
     );
   }
 
+  const attachmentUpdatedAt = Date.now();
   const materialized = await materializeSourceCvVariant({
     applicationContext: prepared.applicationContext,
-    sourceCv: prepared.sourceCv,
+    sourceCv: withRequiredCvMetadata(
+      prepared.sourceCv,
+      prepared.sourceProfile,
+      attachmentUpdatedAt,
+    ),
     reviewedPlan: reviewed.plan,
   });
-  const attachmentUpdatedAt = Date.now();
   const candidates = await ctx.db
     .query("userProfiles")
-    .withIndex("by_profileId", (q) =>
-      q.eq("profileId", materialized.id),
-    )
+    .withIndex("by_profileId", (q) => q.eq("profileId", materialized.id))
     .collect();
   let reused = false;
   let resumeName = materialized.name;
 
   if (candidates.length > 0) {
     if (candidates.length !== 1) {
-      throw new TypeError(
-        "deterministic source CV variant identity collision",
-      );
+      throw new TypeError("deterministic source CV variant identity collision");
     }
     const existing = candidates[0];
     const existingDocument = readRecord(existing.cvDocument);
@@ -233,9 +256,7 @@ export async function materializeOwnedCvTailoringReview(
         ? existingDocument.title
         : materialized.name;
   } else {
-    const profilePreferences = readRecord(
-      prepared.sourceProfile.preferences,
-    );
+    const profilePreferences = readRecord(prepared.sourceProfile.preferences);
     const scoringFields = buildScoringProfileFieldsFromCvDocument(
       materialized.document,
     );
@@ -312,9 +333,7 @@ async function buildOwnedCvTailoringComposition(
   }
   const job = await ctx.db.get(normalizedJobId);
   const ownerProfile = job
-    ? profiles.find(
-        (profile) => String(profile._id) === String(job.userId),
-      )
+    ? profiles.find((profile) => String(profile._id) === String(job.userId))
     : null;
   if (!job || !ownerProfile) {
     throw new Error("Job not found");
@@ -322,20 +341,35 @@ async function buildOwnedCvTailoringComposition(
   if (job.archivedAt !== null && job.archivedAt !== undefined) {
     throw new Error("Archived Job cannot be tailored");
   }
-  if (job.parseStatus !== "parsed" || job.reviewState !== "ready") {
+  const visibleExtractionFlagEnabled = isJobLlmVisibleExtractionEnabled();
+  const shadowRows = visibleExtractionFlagEnabled
+    ? await ctx.db
+        .query("job_extraction_shadow")
+        .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
+        .collect()
+    : [];
+  const visibleExtraction = selectVisibleJobExtractionForJob({
+    job,
+    shadowRows,
+    flagEnabled: visibleExtractionFlagEnabled,
+    rawLanguageDetected: job.rawLanguageDetected,
+  });
+  const visibleReviewState = resolveVisibleJobBriefReviewState({
+    reviewItems: job.reviewItems ?? [],
+    visibleExtraction,
+  });
+  const authoritativeJob = {
+    ...job,
+    reviewState: visibleReviewState,
+  };
+  if (job.parseStatus !== "parsed" || visibleReviewState !== "ready") {
     throw new Error(
       "Canonical Job Brief must be parsed and ready for CV tailoring",
     );
   }
 
-  const attachedResumeId = requireString(
-    job.lastResumeId,
-    "attached resume",
-  );
-  const attachedProfile = resolveResumeProfileById(
-    profiles,
-    attachedResumeId,
-  );
+  const attachedResumeId = requireString(job.lastResumeId, "attached resume");
+  const attachedProfile = resolveResumeProfileById(profiles, attachedResumeId);
   if (!attachedProfile) {
     throw new Error("Attached resume not found");
   }
@@ -343,10 +377,7 @@ async function buildOwnedCvTailoringComposition(
     attachedProfile.profileId ?? attachedProfile._id ?? "",
   ).trim();
   const attachedCv = readRecord(attachedProfile.cvDocument);
-  const attachedCvId = requireString(
-    attachedCv?.id,
-    "canonical attached CV",
-  );
+  const attachedCvId = requireString(attachedCv?.id, "canonical attached CV");
   if (
     attachedProfileId !== attachedResumeId ||
     attachedCvId !== attachedResumeId
@@ -364,13 +395,9 @@ async function buildOwnedCvTailoringComposition(
       expectedReviewedPlanId
       ? attachedMaterialization
       : null;
-  const selectedProfile =
-    replayedMaterialization
-      ? resolveResumeProfileById(
-          profiles,
-          replayedMaterialization.sourceCvId,
-        )
-      : attachedProfile;
+  const selectedProfile = replayedMaterialization
+    ? resolveResumeProfileById(profiles, replayedMaterialization.sourceCvId)
+    : attachedProfile;
   if (!selectedProfile) {
     throw new Error("Materialized resume source CV not found");
   }
@@ -391,8 +418,8 @@ async function buildOwnedCvTailoringComposition(
 
   const now = Date.now();
   const built = await buildApplicationContextV1FromExistingData({
-    userId: String(job.userId),
-    job: { ...job, _id: String(job._id) },
+    userId: String(authoritativeJob.userId),
+    job: { ...authoritativeJob, _id: String(authoritativeJob._id) },
     candidateProfile: {
       ...selectedProfile,
       _id: String(selectedProfile._id),
@@ -416,9 +443,16 @@ async function buildOwnedCvTailoringComposition(
     );
   }
 
+  const basePersistence = buildSourceCvPlanPersistence(ctx.db);
   const composition = await buildSourceCvPlanFromPersistence({
-    persistence: buildSourceCvPlanPersistence(ctx.db),
-    callerUserId: String(job.userId),
+    persistence: {
+      ...basePersistence,
+      getJobById: async ({ jobId: persistenceJobId }) =>
+        persistenceJobId === jobId
+          ? authoritativeJob
+          : basePersistence.getJobById({ jobId: persistenceJobId }),
+    },
+    callerUserId: String(authoritativeJob.userId),
     applicationContextId: persisted.context.id,
     requestedJobId: jobId,
     mode,
@@ -428,7 +462,7 @@ async function buildOwnedCvTailoringComposition(
   return {
     composition,
     jobId,
-    job,
+    job: authoritativeJob,
     clerkId: identity.subject,
     ownerProfile,
     sourceProfile: selectedProfile,
@@ -460,10 +494,7 @@ function projectCvTailoringReview(
       composition.evidenceGraph,
     );
   const referenceById = new Map(
-    composition.cvItemReferences.map((reference) => [
-      reference.id,
-      reference,
-    ]),
+    composition.cvItemReferences.map((reference) => [reference.id, reference]),
   );
   return {
     mode: "auto_recommended",
@@ -572,13 +603,51 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function withRequiredCvMetadata(
+  sourceCv: Readonly<CvDocument>,
+  sourceProfile: Readonly<Record<string, unknown>>,
+  now: number,
+): Readonly<CvDocument> {
+  const metadata = readRecord(sourceCv.metadata) ?? {};
+  const createdAtFallback = Number(
+    sourceProfile.createdAt ?? sourceProfile._creationTime ?? now,
+  );
+  const updatedAtFallback = Number(
+    sourceProfile.updatedAt ??
+      sourceProfile.createdAt ??
+      sourceProfile._creationTime ??
+      now,
+  );
+  const createdAt =
+    typeof metadata.createdAt === "string" && metadata.createdAt.trim()
+      ? metadata.createdAt
+      : new Date(
+          Number.isFinite(createdAtFallback) ? createdAtFallback : now,
+        ).toISOString();
+  const updatedAt =
+    typeof metadata.updatedAt === "string" && metadata.updatedAt.trim()
+      ? metadata.updatedAt
+      : new Date(
+          Number.isFinite(updatedAtFallback) ? updatedAtFallback : now,
+        ).toISOString();
+  const version = Number(metadata.version);
+
+  return {
+    ...sourceCv,
+    metadata: {
+      ...metadata,
+      createdAt,
+      updatedAt,
+      version: Number.isFinite(version) && version > 0 ? version : 1,
+    },
+  };
+}
+
 function readReviewedSourceCvVariantProvenance(
   document: Record<string, unknown> | null,
 ): ReviewedSourceCvVariantProvenanceV1 | null {
   const metadata = readRecord(document?.metadata);
-  const provenance = readRecord(
-    metadata?.reviewedSourceCvVariant,
-  );
+  const provenance = readRecord(metadata?.reviewedSourceCvVariant);
   return provenance?.kind === "reviewed_source_cv_variant" &&
     provenance.version === 1 &&
     typeof provenance.sourceCvId === "string" &&
