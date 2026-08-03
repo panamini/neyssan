@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { resolveOwnedProposalJobId } from "./lib/proposals/proposalJobLink";
 import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
@@ -361,6 +362,11 @@ export default mutation({
 
     const trimmedTitle = args.title.trim() || "Generated proposal";
     const now = Date.now();
+    const jobId = await resolveOwnedProposalJobId(
+      ctx,
+      user._id,
+      args.metadata?.jobId,
+    );
 
     if (isProposalStyleTraceEnabled()) {
       console.info(PROPOSAL_STYLE_TRACE_MARKER, {
@@ -392,7 +398,7 @@ export default mutation({
 
     const proposal = {
       userId: user._id,
-      jobId: args.metadata?.jobId,
+      jobId,
       title: trimmedTitle,
       content: trimmedContent,
       status: args.status ?? "saved",
