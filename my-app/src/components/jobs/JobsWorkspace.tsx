@@ -1973,6 +1973,7 @@ function JobsPageContent(): JSX.Element {
       !selectedJob.resumeId ||
       !selectedJobAttachmentKey ||
       !selectedJobIsReviewedVariant ||
+      selectedJobReviewedResumeHydrationReady ||
       selectedJobAttachmentKey === briefInvalidatedAttachmentKey
     ) {
       return undefined;
@@ -2043,6 +2044,7 @@ function JobsPageContent(): JSX.Element {
     selectedJob?.resumeId,
     selectedJobAttachmentKey,
     selectedJobIsReviewedVariant,
+    selectedJobReviewedResumeHydrationReady,
   ]);
   const cvTailoringUnavailableReason =
     cvTailoringContextUnavailableReason ??
@@ -2782,6 +2784,7 @@ function JobsPageContent(): JSX.Element {
           "The tailored resume was created but could not be loaded. Reload this job before continuing.",
         );
       }
+      reviewedResumeHydrationVersionRef.current += 1;
       setReviewedResumeHydration({
         key: materializedAttachmentKey,
         status: "ready",

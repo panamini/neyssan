@@ -3926,6 +3926,65 @@ describe("JobsPage", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps successful materialized hydration ready when the duplicate effect fails later", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: false,
+    });
+    const directHydration = createDeferred<ReturnType<typeof reviewedVariantCv>>();
+    const duplicateHydration = createDeferred<null>();
+    hydrateCvDocumentMock
+      .mockReturnValueOnce(directHydration.promise)
+      .mockReturnValueOnce(duplicateHydration.promise);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create tailored resume" }),
+    );
+
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
+    });
+    await act(async () => {
+      directHydration.resolve(reviewedVariantCv());
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      ).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Continue to proposal" }),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      duplicateHydration.resolve(null);
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Generate proposal" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByText(/tailored resume could not be loaded/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps proposal navigation disabled for a summary-only derived attachment", async () => {
     selectedJobResult = {
       ...readyJobWithAttachedResume(),
