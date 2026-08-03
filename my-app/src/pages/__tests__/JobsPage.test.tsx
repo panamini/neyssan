@@ -3926,7 +3926,65 @@ describe("JobsPage", () => {
     ).toHaveLength(1);
   });
 
-  it("keeps successful materialized hydration ready when the duplicate effect fails later", async () => {
+  it("keeps successful duplicate hydration ready when the direct request fails later", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: false,
+    });
+    const directHydration = createDeferred<null>();
+    const duplicateHydration = createDeferred<
+      ReturnType<typeof reviewedVariantCv>
+    >();
+    hydrateCvDocumentMock
+      .mockReturnValueOnce(directHydration.promise)
+      .mockReturnValueOnce(duplicateHydration.promise);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create tailored resume" }),
+    );
+
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
+    });
+    await act(async () => {
+      duplicateHydration.resolve(reviewedVariantCv());
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      directHydration.resolve(null);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      ).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Continue to proposal" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText(/tailored resume could not be loaded/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps successful direct hydration ready when the duplicate request fails later", async () => {
     selectedJobResult = readyJobWithAttachedResume();
     selectedJobResultByRefreshKey[1] = {
       ...readyJobWithAttachedResume(),

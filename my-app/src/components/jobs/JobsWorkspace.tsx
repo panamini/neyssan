@@ -1494,6 +1494,10 @@ function JobsPageContent(): JSX.Element {
     React.useState<string | null>(null);
   const cvTailoringRequestVersionRef = React.useRef(0);
   const reviewedResumeHydrationVersionRef = React.useRef(0);
+  const reviewedResumeHydrationSuccessRef = React.useRef<{
+    key: string;
+    sourceCvId: string;
+  } | null>(null);
   const proposalHandoffRequestVersionRef = React.useRef(0);
   const jobBriefMutationVersionRef = React.useRef(0);
   const jobBriefMutationRecoveryRef = React.useRef<{
@@ -1716,6 +1720,7 @@ function JobsPageContent(): JSX.Element {
     setMaterializedResumeName(null);
     setMaterializedSourceCvId(null);
     reviewedResumeHydrationVersionRef.current += 1;
+    reviewedResumeHydrationSuccessRef.current = null;
     jobBriefMutationVersionRef.current += 1;
     jobBriefMutationRecoveryRef.current = null;
     setReviewedResumeHydration(null);
@@ -1989,6 +1994,14 @@ function JobsPageContent(): JSX.Element {
       if (!requestIsCurrent()) {
         return;
       }
+      const completedHydration = reviewedResumeHydrationSuccessRef.current;
+      if (
+        completedHydration?.key === selectedJobAttachmentKey &&
+        (materializedSourceCvId === null ||
+          completedHydration.sourceCvId === materializedSourceCvId)
+      ) {
+        return;
+      }
       setReviewedResumeHydration({
         key: selectedJobAttachmentKey,
         status: "error",
@@ -2024,6 +2037,10 @@ function JobsPageContent(): JSX.Element {
           markHydrationFailed();
           return;
         }
+        reviewedResumeHydrationSuccessRef.current = {
+          key: selectedJobAttachmentKey,
+          sourceCvId: hydratedBinding.sourceCvId,
+        };
         setReviewedResumeHydration({
           key: selectedJobAttachmentKey,
           status: "ready",
@@ -2369,6 +2386,7 @@ function JobsPageContent(): JSX.Element {
     setCvTailoringLauncherError(CV_TAILORING_SOURCE_CHANGED_MESSAGE);
     setMaterializedResumeName(null);
     setMaterializedSourceCvId(null);
+    reviewedResumeHydrationSuccessRef.current = null;
     setReviewedResumeHydration(null);
     setBriefInvalidatedAttachmentKey(null);
   }, []);
@@ -2454,6 +2472,7 @@ function JobsPageContent(): JSX.Element {
       );
       setMaterializedResumeName(null);
       setMaterializedSourceCvId(null);
+      reviewedResumeHydrationSuccessRef.current = null;
       setReviewedResumeHydration(null);
       setBriefInvalidatedAttachmentKey(
         invalidateAttachedVariant ? `${jobId}::${resumeId}` : null,
@@ -2776,6 +2795,15 @@ function JobsPageContent(): JSX.Element {
         hydratedBinding.jobId !== job.id ||
         hydratedBinding.sourceCvId !== materialized.sourceCvId
       ) {
+        const completedHydration =
+          reviewedResumeHydrationSuccessRef.current;
+        if (
+          completedHydration?.key === materializedAttachmentKey &&
+          completedHydration.sourceCvId === materialized.sourceCvId
+        ) {
+          setMaterializedResumeName(materialized.resumeName);
+          return;
+        }
         setReviewedResumeHydration({
           key: materializedAttachmentKey,
           status: "error",
@@ -2784,6 +2812,10 @@ function JobsPageContent(): JSX.Element {
           "The tailored resume was created but could not be loaded. Reload this job before continuing.",
         );
       }
+      reviewedResumeHydrationSuccessRef.current = {
+        key: materializedAttachmentKey,
+        sourceCvId: hydratedBinding.sourceCvId,
+      };
       reviewedResumeHydrationVersionRef.current += 1;
       setReviewedResumeHydration({
         key: materializedAttachmentKey,
