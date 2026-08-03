@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { convexClient } from "../lib/convex-client";
 import type { CvDocument } from "../types/cvDocument";
@@ -963,6 +963,7 @@ export class ConvexStorageAdapter {
 export function useConvexStorageAdapter(
   canUseRemote?: () => boolean,
 ): ConvexStorageAdapter {
+  const convex = useConvex();
   const patchMutation = useMutation(api.profiles.patch) as unknown as (args: {
     profileId: string;
     patch: any;
@@ -970,7 +971,7 @@ export function useConvexStorageAdapter(
   const loadFn = useCallback(
     async (_profileId: string): Promise<CvDocument | null> => {
       try {
-        const prof = await convexClient.query(
+        const prof = await convex.query(
           api.profilesPublic.getByProfileId,
           {
             profileId: _profileId,
@@ -985,7 +986,7 @@ export function useConvexStorageAdapter(
         return null;
       }
     },
-    [],
+    [convex],
   );
   const patchMutationRef = useRef(patchMutation);
   const loadFnRef = useRef(loadFn);

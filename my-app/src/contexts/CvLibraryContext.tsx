@@ -10,9 +10,11 @@ import React, {
 } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { v4 as uuidv4 } from "uuid";
-import { useConvexAuth, useMutation } from "convex/react";
-import { convexClient } from "../lib/convex-client";
-import { useConvexStorageAdapter } from "../adapters/StorageAdapter";
+import { useConvex, useConvexAuth, useMutation } from "convex/react";
+import {
+  mapPersistedProfileToCvDocument,
+  useConvexStorageAdapter,
+} from "../adapters/StorageAdapter";
 import { mapProfileToCvDocument } from "../adapters/profile-mapper";
 import type {
   CvDocument,
@@ -72,6 +74,10 @@ import {
   isResumeTemplateId,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
+import {
+  isReviewedSourceCvVariantId,
+  readReviewedSourceCvVariantBinding,
+} from "../lib/reviewed-source-cv-variant";
 
 type CvVisualMetadataPatch = DocumentStyleMetadata & {
   resumeTemplateId?: ResumeTemplateId;
@@ -1033,6 +1039,7 @@ function migrateLegacyIds(doc: CvDocument): CvDocument {
 export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
+  const convex = useConvex();
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -1155,7 +1162,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
     void (async () => {
       try {
-        const remoteProfiles = await convexClient.query(
+        const remoteProfiles = await convex.query(
           api.profilesPublic.listMine,
           { includeCvDocument: true },
         );
@@ -1217,6 +1224,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     isSignedIn,
     isConvexAuthenticated,
     isConvexAuthLoading,
+    convex,
   ]);
 
   useEffect(() => {
@@ -2291,6 +2299,46 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       const targetId = String(id).trim();
       if (!targetId) return null;
 
+      if (isReviewedSourceCvVariantId(targetId)) {
+        try {
+          const persistedProfile = await convex.query(
+            api.profilesPublic.getByProfileId,
+            { profileId: targetId },
+          );
+          const authoritativeDoc = persistedProfile
+            ? mapPersistedProfileToCvDocument(
+                persistedProfile as Record<string, unknown>,
+                targetId,
+              )
+            : null;
+          const authoritativeBinding = authoritativeDoc
+            ? readReviewedSourceCvVariantBinding(authoritativeDoc)
+            : null;
+          if (
+            !authoritativeDoc ||
+            String(authoritativeDoc.id) !== targetId ||
+            isLibrarySummaryOnlyCv(authoritativeDoc) ||
+            !authoritativeBinding?.reviewedPlanId
+          ) {
+            return null;
+          }
+
+          const normalized = normalizeHydratedCvDocument(authoritativeDoc);
+          cacheDocumentLocally(normalized);
+          setCvs((prev) =>
+            prev.some((candidate) => String(candidate.id) === targetId)
+              ? prev.map((candidate) =>
+                  String(candidate.id) === targetId ? normalized : candidate,
+                )
+              : [...prev, normalized],
+          );
+          return normalized;
+        } catch (error) {
+          console.warn("[CvLibraryContext] hydrateCvDocument failed", error);
+          return null;
+        }
+      }
+
       const inMemoryDoc =
         currentCvRef.current && String(currentCvRef.current.id) === targetId
           ? currentCvRef.current
@@ -2335,7 +2383,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return null;
       }
     },
-    [adapter, normalizeHydratedCvDocument, readCachedFullCvDocument],
+    [adapter, convex, normalizeHydratedCvDocument, readCachedFullCvDocument],
   );
 
   function removeDocumentLocally(id: string) {
@@ -3638,6 +3686,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         const remoteNorm = ensureRepresentativeBlocks(
           normalizeToV1Document(migratedRemote as CvDocument),
         );
+        if (
+          isReviewedSourceCvVariantId(targetCvId) &&
+          !readReviewedSourceCvVariantBinding(remoteNorm)?.reviewedPlanId
+        ) {
+          return;
+        }
         if (
           !shouldApplyBackgroundRefresh(
             targetCvId,

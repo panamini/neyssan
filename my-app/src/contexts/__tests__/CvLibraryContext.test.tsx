@@ -5,7 +5,7 @@ import { CvLibraryProvider, useCvLibrary } from '../CvLibraryContext';
 import { convexClient } from '../../lib/convex-client';
 import { generateCvTemplateV1 } from '../../lib/cv-template';
 
-const { authState, convexMutationMock } = vi.hoisted(() => ({
+const { authState, convexMutationMock, convexQueryMock } = vi.hoisted(() => ({
   authState: {
     isLoaded: false,
     isSignedIn: false,
@@ -13,6 +13,7 @@ const { authState, convexMutationMock } = vi.hoisted(() => ({
     isConvexAuthLoading: true,
   },
   convexMutationMock: vi.fn(async () => ({})),
+  convexQueryMock: vi.fn(async () => null),
 }));
 
 vi.mock('@clerk/clerk-react', () => ({
@@ -39,6 +40,7 @@ vi.mock('convex/react', async (importOriginal) => {
     useMutation: () => convexMutationMock,
     useQuery: () => undefined,
     useAction: () => undefined,
+    useConvex: () => ({ query: convexQueryMock }),
     useConvexAuth: () => ({
       isAuthenticated:
         authState.isConvexAuthenticated ||
@@ -110,6 +112,10 @@ describe('CvLibraryContext', () => {
     (globalThis as any).__mock_uuid_count = 0;
     vi.mocked(convexClient.query).mockReset();
     vi.mocked(convexClient.query).mockResolvedValue(null);
+    convexQueryMock.mockReset();
+    convexQueryMock.mockImplementation((...args: any[]) =>
+      (convexClient.query as any)(...args),
+    );
     convexMutationMock.mockReset();
     convexMutationMock.mockResolvedValue({});
   });
@@ -282,6 +288,260 @@ describe('CvLibraryContext', () => {
     expect(ctx.lastLibraryFetchFailed).toBe(false);
     expect(ctx.cvs).toHaveLength(1);
     expect(ctx.cvs[0].id).toBe('cv_remote_only');
+  });
+
+  it('uses the provider-owned authenticated client for signed-in list hydration', async () => {
+    const remoteCv = generateCvTemplateV1('Provider-owned Remote CV');
+    remoteCv.id = 'cv_provider_owned_remote';
+    vi.mocked(convexClient.query).mockResolvedValue(null);
+    convexQueryMock.mockImplementation(async (_query: unknown, args?: any) =>
+      args?.includeCvDocument === true
+        ? [{ profileId: remoteCv.id, cvDocument: remoteCv }]
+        : null,
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx?.isLibraryHydrated).toBe(true));
+    await waitFor(() =>
+      expect(ctx.cvs.some((cv: any) => cv.id === remoteCv.id)).toBe(true),
+    );
+    expect(convexQueryMock).toHaveBeenCalledWith(expect.anything(), {
+      includeCvDocument: true,
+    });
+    expect(convexClient.query).not.toHaveBeenCalled();
+  });
+
+  it('hydrates and registers a reviewed derived CV through the provider client without mutating its source', async () => {
+    const sourceCv = generateCvTemplateV1('Immutable Source CV');
+    sourceCv.id = 'cv_source_provider_hydration';
+    const derivedCv = JSON.parse(JSON.stringify(sourceCv));
+    derivedCv.id = 'source-cv-variant:v1:provider-hydration';
+    derivedCv.title = 'Reviewed Derived CV';
+    derivedCv.metadata.reviewedSourceCvVariant = {
+      kind: 'reviewed_source_cv_variant',
+      sourceCvId: sourceCv.id,
+      jobId: 'job_provider_hydration',
+      applicationContextId: 'application-context:provider-hydration',
+      applicationContextHash: 'application-context-hash:provider-hydration',
+      reviewedPlanId: 'resume-variant-plan:provider-hydration',
+      version: 1,
+    };
+    const sourceSnapshot = JSON.stringify(sourceCv);
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([sourceCv]));
+    mockLocalStorage.setItem(`cv:${sourceCv.id}`, sourceSnapshot);
+    vi.mocked(convexClient.query).mockResolvedValue(null);
+    convexQueryMock.mockImplementation(async (_query: unknown, args?: any) => {
+      if (args?.includeCvDocument === true) return [];
+      if (args?.profileId === derivedCv.id) {
+        return { profileId: derivedCv.id, cvDocument: derivedCv };
+      }
+      return null;
+    });
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+    await waitFor(() => expect(ctx?.isLibraryHydrated).toBe(true));
+    vi.mocked(convexClient.query).mockClear();
+    convexQueryMock.mockClear();
+
+    let hydrated: any = null;
+    await act(async () => {
+      hydrated = await ctx.hydrateCvDocument(derivedCv.id);
+    });
+
+    expect(hydrated).not.toBeNull();
+    expect(hydrated.id).toBe(derivedCv.id);
+    expect(hydrated.metadata.reviewedSourceCvVariant).toMatchObject({
+      sourceCvId: sourceCv.id,
+      jobId: 'job_provider_hydration',
+      reviewedPlanId: 'resume-variant-plan:provider-hydration',
+    });
+    const registered = ctx.cvs.find((cv: any) => cv.id === derivedCv.id);
+    expect(registered?.id).toBe(derivedCv.id);
+    expect(registered?.metadata.reviewedSourceCvVariant).toMatchObject({
+      sourceCvId: sourceCv.id,
+      jobId: 'job_provider_hydration',
+      reviewedPlanId: 'resume-variant-plan:provider-hydration',
+    });
+    expect(mockLocalStorage.getItem(`cv:${sourceCv.id}`)).toBe(sourceSnapshot);
+    expect(convexQueryMock).toHaveBeenCalledWith(expect.anything(), {
+      profileId: derivedCv.id,
+    });
+    expect(vi.mocked(convexClient.query)).not.toHaveBeenCalled();
+  });
+
+  it('replaces a stale same-id reviewed cache entry with the authoritative provider document', async () => {
+    const sourceCv = generateCvTemplateV1('Immutable Reload Source CV');
+    sourceCv.id = 'cv_source_authoritative_reload';
+    const remoteDerived = JSON.parse(JSON.stringify(sourceCv));
+    remoteDerived.id = 'source-cv-variant:v1:authoritative-reload';
+    remoteDerived.title = 'Authoritative Reviewed CV';
+    remoteDerived.metadata.reviewedSourceCvVariant = {
+      kind: 'reviewed_source_cv_variant',
+      sourceCvId: sourceCv.id,
+      jobId: 'job_authoritative_reload',
+      applicationContextId: 'application-context:authoritative-reload',
+      applicationContextHash: 'application-context-hash:authoritative-reload',
+      reviewedPlanId: 'resume-variant-plan:authoritative-reload',
+      version: 1,
+    };
+    const staleDerived = JSON.parse(JSON.stringify(remoteDerived));
+    staleDerived.title = 'Stale Reviewed CV';
+    staleDerived.metadata.reviewedSourceCvVariant = {
+      ...staleDerived.metadata.reviewedSourceCvVariant,
+      sourceCvId: 'cv_stale_wrong_source',
+      reviewedPlanId: 'resume-variant-plan:stale',
+    };
+    const sourceSnapshot = JSON.stringify(sourceCv);
+    mockLocalStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify([sourceCv, staleDerived]),
+    );
+    mockLocalStorage.setItem(`cv:${sourceCv.id}`, sourceSnapshot);
+    mockLocalStorage.setItem(
+      `cv:${remoteDerived.id}`,
+      JSON.stringify(staleDerived),
+    );
+    vi.mocked(convexClient.query).mockResolvedValue(null);
+    convexQueryMock.mockImplementation(async (_query: unknown, args?: any) => {
+      if (args?.includeCvDocument === true) return [];
+      if (args?.profileId === remoteDerived.id) {
+        return {
+          profileId: remoteDerived.id,
+          clerkId: 'clerk_provider_owner',
+          email: 'provider-owner@example.test',
+          version: 1,
+          createdAt: Date.UTC(2026, 7, 3),
+          updatedAt: Date.UTC(2026, 7, 3),
+          cvDocument: remoteDerived,
+        };
+      }
+      return null;
+    });
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+    await waitFor(() => expect(ctx?.isLibraryHydrated).toBe(true));
+    convexQueryMock.mockClear();
+
+    let hydrated: any = null;
+    await act(async () => {
+      hydrated = await ctx.hydrateCvDocument(remoteDerived.id);
+    });
+
+    expect(convexQueryMock).toHaveBeenCalledWith(expect.anything(), {
+      profileId: remoteDerived.id,
+    });
+    expect(hydrated?.title).toBe('Authoritative Reviewed CV');
+    expect(hydrated?.metadata.reviewedSourceCvVariant).toMatchObject({
+      sourceCvId: sourceCv.id,
+      jobId: 'job_authoritative_reload',
+      reviewedPlanId: 'resume-variant-plan:authoritative-reload',
+    });
+    expect(
+      ctx.cvs.find((cv: any) => cv.id === remoteDerived.id)?.metadata
+        .reviewedSourceCvVariant,
+    ).toMatchObject({
+      sourceCvId: sourceCv.id,
+      jobId: 'job_authoritative_reload',
+      reviewedPlanId: 'resume-variant-plan:authoritative-reload',
+    });
+    expect(mockLocalStorage.getItem(`cv:${sourceCv.id}`)).toBe(sourceSnapshot);
+  });
+
+  it('does not trust a stale reviewed cache entry when the provider document has invalid provenance', async () => {
+    const staleDerived = generateCvTemplateV1('Stale Reviewed CV');
+    staleDerived.id = 'source-cv-variant:v1:invalid-remote-provenance';
+    staleDerived.metadata.reviewedSourceCvVariant = {
+      kind: 'reviewed_source_cv_variant',
+      sourceCvId: 'cv_stale_source',
+      jobId: 'job_invalid_remote_provenance',
+      applicationContextId: 'application-context:stale',
+      applicationContextHash: 'application-context-hash:stale',
+      reviewedPlanId: 'resume-variant-plan:stale',
+      version: 1,
+    };
+    const invalidRemote = JSON.parse(JSON.stringify(staleDerived));
+    invalidRemote.title = 'Invalid Provider Reviewed CV';
+    delete invalidRemote.metadata.reviewedSourceCvVariant.reviewedPlanId;
+    const staleSnapshot = JSON.stringify(staleDerived);
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([staleDerived]));
+    mockLocalStorage.setItem(`cv:${staleDerived.id}`, staleSnapshot);
+    convexQueryMock.mockImplementation(async (_query: unknown, args?: any) => {
+      if (args?.includeCvDocument === true) return [];
+      if (args?.profileId === staleDerived.id) {
+        return { profileId: staleDerived.id, cvDocument: invalidRemote };
+      }
+      return null;
+    });
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+    await waitFor(() => expect(ctx?.isLibraryHydrated).toBe(true));
+    convexQueryMock.mockClear();
+
+    let hydrated: any = 'unresolved';
+    await act(async () => {
+      hydrated = await ctx.hydrateCvDocument(staleDerived.id);
+    });
+
+    expect(convexQueryMock).toHaveBeenCalledWith(expect.anything(), {
+      profileId: staleDerived.id,
+    });
+    expect(hydrated).toBeNull();
+    expect(mockLocalStorage.getItem(`cv:${staleDerived.id}`)).toBe(
+      staleSnapshot,
+    );
+  });
+
+  it.each([
+    ['null', null],
+    ['error', new Error('provider query unavailable')],
+  ])('fails closed when provider hydration returns %s', async (_label, outcome) => {
+    const derivedId = `source-cv-variant:v1:provider-${_label}`;
+    vi.mocked(convexClient.query).mockResolvedValue(null);
+    convexQueryMock.mockImplementation(async (_query: unknown, args?: any) => {
+      if (args?.includeCvDocument === true) return [];
+      if (args?.profileId === derivedId && outcome instanceof Error) {
+        throw outcome;
+      }
+      return null;
+    });
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+    await waitFor(() => expect(ctx?.isLibraryHydrated).toBe(true));
+
+    let hydrated: any = 'unresolved';
+    await act(async () => {
+      hydrated = await ctx.hydrateCvDocument(derivedId);
+    });
+
+    expect(hydrated).toBeNull();
+    expect(ctx.cvs.some((cv: any) => cv.id === derivedId)).toBe(false);
+    expect(mockLocalStorage.getItem(`cv:${derivedId}`)).toBeNull();
   });
 
   it('treats signed-in remote fetch failures as hydrated but failed reconciliation', async () => {
