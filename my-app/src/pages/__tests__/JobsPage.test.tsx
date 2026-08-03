@@ -238,8 +238,10 @@ const selectedJob = {
 let listResult: typeof jobsList | undefined = jobsList;
 let archivedListResult: typeof archivedJobsList | undefined = [];
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
-let selectedJobResultByRefreshKey: Record<number, typeof selectedJob | null> =
-  {};
+let selectedJobResultByRefreshKey: Record<
+  number,
+  typeof selectedJob | null | undefined
+> = {};
 let jobDetailQueryResultById: Record<string, typeof selectedJob | null> = {};
 let debugPayload: Record<string, unknown> | null = null;
 let listError: Error | null = null;
@@ -3707,6 +3709,7 @@ describe("JobsPage", () => {
 
   it("submits decisions only for pending selectable items and materializes with the returned reviewed plan id", async () => {
     selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = undefined;
     const sourceCvBefore = JSON.stringify(cvLibraryResult.cvs[0]);
     prepareCvTailoringReviewMock.mockResolvedValue(pendingCvTailoringReview);
     submitCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
@@ -3754,6 +3757,9 @@ describe("JobsPage", () => {
     });
     expect(JSON.stringify(cvLibraryResult.cvs[0])).toBe(sourceCvBefore);
     expect(screen.getByText("Tailored resume ready")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Generate proposal" }),
+    ).toBeEnabled();
     await waitFor(() => {
       expect(trackEventMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -3788,6 +3794,12 @@ describe("JobsPage", () => {
 
   it("does not offer proposal continuation until the materialized resume is hydrated", async () => {
     selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
+    };
     prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
     materializeCvTailoringReviewMock.mockResolvedValue({
       jobId: "job_alpha",
@@ -3797,6 +3809,7 @@ describe("JobsPage", () => {
       reused: false,
     });
     hydrateCvDocumentMock
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(reviewedVariantCv());
 
@@ -3837,7 +3850,7 @@ describe("JobsPage", () => {
     );
 
     await waitFor(() => {
-      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(3);
       expect(prepareCvTailoringReviewMock).toHaveBeenCalledTimes(1);
       expect(materializeCvTailoringReviewMock).toHaveBeenCalledTimes(1);
       expect(
@@ -3848,6 +3861,12 @@ describe("JobsPage", () => {
 
   it("recovers materialized proposal authority during hydration without requiring a reload", async () => {
     selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
+    };
     prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
     materializeCvTailoringReviewMock.mockResolvedValue({
       jobId: "job_alpha",
@@ -3857,9 +3876,10 @@ describe("JobsPage", () => {
       reused: false,
     });
     const hydratedVariant = reviewedVariantCv();
+    const recoveredHydration = createDeferred<typeof hydratedVariant>();
     hydrateCvDocumentMock
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(hydratedVariant);
+      .mockReturnValueOnce(recoveredHydration.promise);
 
     renderJobsDetail();
     fireEvent.click(
@@ -3893,6 +3913,10 @@ describe("JobsPage", () => {
       currentCv: null,
     };
     rerenderJobsDetail?.();
+    await act(async () => {
+      recoveredHydration.resolve(hydratedVariant);
+      await Promise.resolve();
+    });
 
     await waitFor(() => {
       expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
@@ -3906,6 +3930,123 @@ describe("JobsPage", () => {
     expect(
       screen.getAllByText(selectedJob.summary, { exact: true }),
     ).toHaveLength(1);
+  });
+
+  it("keeps successful duplicate hydration ready when the direct request fails later", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: false,
+    });
+    const directHydration = createDeferred<null>();
+    const duplicateHydration = createDeferred<
+      ReturnType<typeof reviewedVariantCv>
+    >();
+    hydrateCvDocumentMock
+      .mockReturnValueOnce(directHydration.promise)
+      .mockReturnValueOnce(duplicateHydration.promise);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create tailored resume" }),
+    );
+
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
+    });
+    await act(async () => {
+      duplicateHydration.resolve(reviewedVariantCv());
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      directHydration.resolve(null);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      ).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Continue to proposal" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText(/tailored resume could not be loaded/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps successful direct hydration ready when the duplicate request fails later", async () => {
+    selectedJobResult = readyJobWithAttachedResume();
+    selectedJobResultByRefreshKey[1] = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
+    };
+    prepareCvTailoringReviewMock.mockResolvedValue(reviewedCvTailoringReview);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: false,
+    });
+    const directHydration = createDeferred<ReturnType<typeof reviewedVariantCv>>();
+    const duplicateHydration = createDeferred<null>();
+    hydrateCvDocumentMock
+      .mockReturnValueOnce(directHydration.promise)
+      .mockReturnValueOnce(duplicateHydration.promise);
+
+    renderJobsDetail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Tailor resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create tailored resume" }),
+    );
+
+    await waitFor(() => {
+      expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(2);
+    });
+    await act(async () => {
+      directHydration.resolve(reviewedVariantCv());
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      ).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Continue to proposal" }),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      duplicateHydration.resolve(null);
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Generate proposal" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByText(/tailored resume could not be loaded/i),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps proposal navigation disabled for a summary-only derived attachment", async () => {
@@ -3958,6 +4099,7 @@ describe("JobsPage", () => {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
       resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
     };
     const summaryVariant = reviewedVariantCv({ summaryOnly: true });
     const hydratedVariant = reviewedVariantCv();
@@ -3998,7 +4140,7 @@ describe("JobsPage", () => {
     });
   });
 
-  it("keeps reviewed-resume proposal authority stable when remote library hydration replaces the reload summary", async () => {
+  it("requires authoritative hydration in addition to reviewed proposal authority after reload", async () => {
     const reviewedJob = {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
@@ -4024,79 +4166,7 @@ describe("JobsPage", () => {
       },
       sections: [],
     };
-    const remoteFallbackWithoutReviewedBinding = {
-      ...fullReviewedVariant,
-      metadata: {
-        createdAt: "2026-07-30T00:00:00.000Z",
-        updatedAt: "2026-07-30T00:00:00.000Z",
-        version: 1,
-      },
-    };
-
     selectedJobResult = reviewedJob;
-    cvLibraryResult = {
-      cvs: [
-        { id: "cv_alpha", title: "Primary resume", sections: [] },
-        fullReviewedVariant,
-      ],
-      currentCv: null,
-    };
-
-    const buildLifecycleElement = () => (
-      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
-        <JobsLifecycleRouteControls />
-        <Routes>
-          <Route
-            path="/jobs/:jobId"
-            element={
-              <>
-                <JobsPage />
-                <LocationProbe />
-              </>
-            }
-          />
-          <Route
-            path="/jobs"
-            element={
-              <>
-                <JobsPage />
-                <LocationProbe />
-              </>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    const beforeReload = render(buildLifecycleElement());
-    expect(
-      await screen.findByRole("button", { name: "Generate proposal" }),
-    ).toBeEnabled();
-    beforeReload.unmount();
-
-    const initialHydration = createDeferred<typeof fullReviewedVariant>();
-    hydrateCvDocumentMock
-      .mockReset()
-      .mockReturnValueOnce(initialHydration.promise)
-      .mockResolvedValue(remoteFallbackWithoutReviewedBinding);
-    debugInspectMatchInputMock.mockImplementation(
-      async (reference: string, args?: { jobId?: string; profileId?: string }) => {
-        if (
-          reference === "profilesPublic.getByProfileId" &&
-          args?.profileId === fullReviewedVariant.id
-        ) {
-          return {
-            profileId: fullReviewedVariant.id,
-            cvDocument: fullReviewedVariant,
-          };
-        }
-        if (reference === "jobsPublic.getById" && args?.jobId) {
-          return args.jobId === "job_alpha" ? selectedJobResult : null;
-        }
-        return debugPayload;
-      },
-    );
-    selectedJobResult = undefined;
     cvLibraryResult = {
       cvs: [
         { id: "cv_alpha", title: "Primary resume", sections: [] },
@@ -4104,68 +4174,127 @@ describe("JobsPage", () => {
       ],
       currentCv: null,
     };
+    const hydration = createDeferred<typeof fullReviewedVariant>();
+    hydrateCvDocumentMock.mockReturnValue(hydration.promise);
+    materializeCvTailoringReviewMock.mockResolvedValue({
+      jobId: "job_alpha",
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      sourceCvId: "cv_alpha",
+      reused: true,
+    });
 
-    const afterReload = render(buildLifecycleElement());
-    const rerenderLifecycle = () => afterReload.rerender(buildLifecycleElement());
-    expect(
-      screen.queryByRole("button", { name: "Generate proposal" }),
-    ).not.toBeInTheDocument();
-
-    selectedJobResult = reviewedJob;
-    rerenderLifecycle();
+    renderJobsDetail();
     const generateProposalButton = await screen.findByRole("button", {
       name: "Generate proposal",
     });
-    expect(generateProposalButton).toBeEnabled();
     await waitFor(() => {
       expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(1);
     });
-    expect(generateProposalButton).toBeEnabled();
+    expect(generateProposalButton).toBeDisabled();
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
 
     cvLibraryResult = {
       cvs: [
         { id: "cv_alpha", title: "Primary resume", sections: [] },
-        remoteFallbackWithoutReviewedBinding,
+        fullReviewedVariant,
       ],
       currentCv: null,
     };
-    rerenderLifecycle();
+    await act(async () => {
+      hydration.resolve(fullReviewedVariant);
+      await Promise.resolve();
+    });
+    rerenderJobsDetail?.();
 
     await waitFor(() => {
-      expect(debugInspectMatchInputMock).toHaveBeenCalledWith(
-        "profilesPublic.getByProfileId",
-        { profileId: fullReviewedVariant.id },
-      );
       expect(generateProposalButton).toBeEnabled();
     });
-    expect(hydrateCvDocumentMock).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
+    fireEvent.click(generateProposalButton);
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
+      );
     });
-    expect(generateProposalButton).toBeEnabled();
-    expect(
-      screen.getByRole("button", {
-        name: "Attached resume: Primary resume · Operations Associate",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByText(selectedJob.summary, { exact: true }),
-    ).toHaveLength(1);
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Test route away" }));
+  it("replaces stale reviewed provenance before full-source reload recovery", async () => {
+    selectedJobResult = {
+      ...readyJobWithAttachedResume(),
+      resumeId: "source-cv-variant:v1:reviewed",
+      resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready" as const,
+    };
+    const staleVariant = reviewedVariantCv();
+    staleVariant.metadata.reviewedSourceCvVariant = {
+      ...staleVariant.metadata.reviewedSourceCvVariant,
+      sourceCvId: "cv_stale_wrong_source",
+      reviewedPlanId: "resume-variant-plan:stale",
+    };
+    const authoritativeVariant = reviewedVariantCv();
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        staleVariant,
+      ],
+      currentCv: null,
+    };
+    hydrateCvDocumentMock.mockImplementation(async (id: string) => {
+      if (id === authoritativeVariant.id) return authoritativeVariant;
+      if (id === "cv_alpha") {
+        return { id: "cv_alpha", title: "Primary resume", sections: [] };
+      }
+      return null;
+    });
+    prepareCvTailoringReviewMock.mockResolvedValue({
+      mode: "full_source_cv",
+      sourceCv: {
+        id: "cv_alpha",
+        contextHash: "source-cv-context-alpha",
+      },
+      plan: null,
+    });
+
+    renderJobsDetail();
     await waitFor(() => {
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-        "/jobs?view=list",
+      expect(hydrateCvDocumentMock).toHaveBeenCalledWith(
+        authoritativeVariant.id,
       );
     });
-    fireEvent.click(screen.getByRole("button", { name: "Test route back" }));
+
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        authoritativeVariant,
+      ],
+      currentCv: null,
+    };
+    rerenderJobsDetail?.();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Use my complete resume without tailoring",
+      }),
+    );
+
     await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: "cv_alpha",
+        resumeName: "Primary resume",
+      });
+      expect(prepareCvTailoringReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        mode: "full_source_cv",
+      });
+      expect(materializeCvTailoringReviewMock).not.toHaveBeenCalled();
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-        "/jobs/job_alpha",
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
       );
-      expect(
-        screen.getByRole("button", { name: "Generate proposal" }),
-      ).toBeEnabled();
     });
   });
 
@@ -4174,6 +4303,7 @@ describe("JobsPage", () => {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
       resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
     };
     const hydratedVariant = reviewedVariantCv();
     const hydration = createDeferred<typeof hydratedVariant>();
@@ -5244,6 +5374,7 @@ describe("JobsPage", () => {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
       resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
     };
     cvLibraryResult = {
       cvs: [
@@ -5441,6 +5572,7 @@ describe("JobsPage", () => {
       ...readyJobWithAttachedResume(),
       resumeId: "source-cv-variant:v1:reviewed",
       resumeName: "Primary resume · Operations Associate",
+      resumeProposalAuthority: "reviewed_ready",
       reviewItems: selectedJob.reviewItems,
     };
     cvLibraryResult = {

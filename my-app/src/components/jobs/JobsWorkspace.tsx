@@ -1494,6 +1494,10 @@ function JobsPageContent(): JSX.Element {
     React.useState<string | null>(null);
   const cvTailoringRequestVersionRef = React.useRef(0);
   const reviewedResumeHydrationVersionRef = React.useRef(0);
+  const reviewedResumeHydrationSuccessRef = React.useRef<{
+    key: string;
+    sourceCvId: string;
+  } | null>(null);
   const proposalHandoffRequestVersionRef = React.useRef(0);
   const jobBriefMutationVersionRef = React.useRef(0);
   const jobBriefMutationRecoveryRef = React.useRef<{
@@ -1716,6 +1720,7 @@ function JobsPageContent(): JSX.Element {
     setMaterializedResumeName(null);
     setMaterializedSourceCvId(null);
     reviewedResumeHydrationVersionRef.current += 1;
+    reviewedResumeHydrationSuccessRef.current = null;
     jobBriefMutationVersionRef.current += 1;
     jobBriefMutationRecoveryRef.current = null;
     setReviewedResumeHydration(null);
@@ -1943,36 +1948,19 @@ function JobsPageContent(): JSX.Element {
       ? "source"
       : selectedJobAttachmentKey === briefInvalidatedAttachmentKey
         ? "derived_invalidated"
-        : selectedJob?.resumeProposalAuthority === "reviewed_ready"
-          ? "derived_ready"
-          : selectedJob?.resumeProposalAuthority === "reviewed_invalid"
-            ? "derived_unavailable"
-            : !selectedJobAttachedCv
-              ? reviewedResumeHydration?.key === selectedJobAttachmentKey
-                ? reviewedResumeHydration.status === "ready"
-                  ? "derived_ready"
-                  : reviewedResumeHydration.status === "loading"
-                    ? "derived_loading"
-                    : "derived_unavailable"
-                : "derived_unavailable"
-              : !selectedJobReviewedVariantBinding
-                ? selectedJobReviewedResumeHydrationReady
-                  ? "derived_ready"
-                  : reviewedResumeHydration?.key ===
-                        selectedJobAttachmentKey &&
-                      reviewedResumeHydration.status === "error"
-                    ? "derived_unavailable"
-                    : "derived_loading"
-                : selectedJobReviewedVariantBinding.jobId !== selectedJob?.id
-                  ? "derived_wrong_job"
-                  : isHydratedCvLibraryDocument(selectedJobAttachedCv) ||
-                      selectedJobReviewedResumeHydrationReady
-                    ? "derived_ready"
-                    : reviewedResumeHydration?.key ===
-                          selectedJobAttachmentKey &&
-                        reviewedResumeHydration.status === "error"
-                      ? "derived_unavailable"
-                      : "derived_loading";
+        : selectedJob?.resumeProposalAuthority === "reviewed_invalid"
+          ? "derived_unavailable"
+          : selectedJobReviewedVariantBinding &&
+              selectedJobReviewedVariantBinding.jobId !== selectedJob?.id
+            ? "derived_wrong_job"
+            : selectedJob?.resumeProposalAuthority !== "reviewed_ready"
+              ? "derived_loading"
+              : selectedJobReviewedResumeHydrationReady
+                ? "derived_ready"
+                : reviewedResumeHydration?.key === selectedJobAttachmentKey &&
+                    reviewedResumeHydration.status === "error"
+                  ? "derived_unavailable"
+                  : "derived_loading";
   const selectedJobReviewedResumeUnavailable =
     selectedJobReviewedResumeReadiness !== "source" &&
     selectedJobReviewedResumeReadiness !== "derived_ready";
@@ -1990,12 +1978,7 @@ function JobsPageContent(): JSX.Element {
       !selectedJob.resumeId ||
       !selectedJobAttachmentKey ||
       !selectedJobIsReviewedVariant ||
-      (materializedSourceCvId !== null && !selectedJobAttachedCv) ||
-      (selectedJobAttachedCv &&
-        isHydratedCvLibraryDocument(selectedJobAttachedCv) &&
-        selectedJobReviewedVariantBinding?.jobId === selectedJob.id) ||
-      (selectedJobReviewedVariantBinding &&
-        selectedJobReviewedVariantBinding.jobId !== selectedJob.id) ||
+      selectedJobReviewedResumeHydrationReady ||
       selectedJobAttachmentKey === briefInvalidatedAttachmentKey
     ) {
       return undefined;
@@ -2009,6 +1992,14 @@ function JobsPageContent(): JSX.Element {
       selectedJobResumeIdRef.current === selectedJob.resumeId;
     const markHydrationFailed = () => {
       if (!requestIsCurrent()) {
+        return;
+      }
+      const completedHydration = reviewedResumeHydrationSuccessRef.current;
+      if (
+        completedHydration?.key === selectedJobAttachmentKey &&
+        (materializedSourceCvId === null ||
+          completedHydration.sourceCvId === materializedSourceCvId)
+      ) {
         return;
       }
       setReviewedResumeHydration({
@@ -2025,14 +2016,7 @@ function JobsPageContent(): JSX.Element {
       current === CV_TAILORING_DERIVED_LOAD_FAILED_MESSAGE ? null : current,
     );
 
-    const hydrateSelectedReviewedResume =
-      selectedJobAttachedCv &&
-      isHydratedCvLibraryDocument(selectedJobAttachedCv) &&
-      !selectedJobReviewedVariantBinding
-        ? loadAuthoritativeCvDocumentById(selectedJob.resumeId)
-        : hydrateCvDocument(selectedJob.resumeId);
-
-    void hydrateSelectedReviewedResume
+    void hydrateCvDocument(selectedJob.resumeId)
       .then((hydratedCv) => {
         if (!requestIsCurrent()) {
           return;
@@ -2045,14 +2029,18 @@ function JobsPageContent(): JSX.Element {
           String(hydratedCv.id) !== selectedJob.resumeId ||
           !isHydratedCvLibraryDocument(hydratedCv) ||
           !hydratedBinding ||
+          !hydratedBinding.reviewedPlanId ||
           hydratedBinding.jobId !== selectedJob.id ||
-          (selectedJobReviewedVariantBinding !== null &&
-            hydratedBinding.sourceCvId !==
-              selectedJobReviewedVariantBinding.sourceCvId)
+          (materializedSourceCvId !== null &&
+            hydratedBinding.sourceCvId !== materializedSourceCvId)
         ) {
           markHydrationFailed();
           return;
         }
+        reviewedResumeHydrationSuccessRef.current = {
+          key: selectedJobAttachmentKey,
+          sourceCvId: hydratedBinding.sourceCvId,
+        };
         setReviewedResumeHydration({
           key: selectedJobAttachmentKey,
           status: "ready",
@@ -2068,14 +2056,12 @@ function JobsPageContent(): JSX.Element {
   }, [
     briefInvalidatedAttachmentKey,
     hydrateCvDocument,
-    loadAuthoritativeCvDocumentById,
     materializedSourceCvId,
     selectedJob?.id,
     selectedJob?.resumeId,
-    selectedJobAttachedCv,
     selectedJobAttachmentKey,
     selectedJobIsReviewedVariant,
-    selectedJobReviewedVariantBinding,
+    selectedJobReviewedResumeHydrationReady,
   ]);
   const cvTailoringUnavailableReason =
     cvTailoringContextUnavailableReason ??
@@ -2400,6 +2386,7 @@ function JobsPageContent(): JSX.Element {
     setCvTailoringLauncherError(CV_TAILORING_SOURCE_CHANGED_MESSAGE);
     setMaterializedResumeName(null);
     setMaterializedSourceCvId(null);
+    reviewedResumeHydrationSuccessRef.current = null;
     setReviewedResumeHydration(null);
     setBriefInvalidatedAttachmentKey(null);
   }, []);
@@ -2485,6 +2472,7 @@ function JobsPageContent(): JSX.Element {
       );
       setMaterializedResumeName(null);
       setMaterializedSourceCvId(null);
+      reviewedResumeHydrationSuccessRef.current = null;
       setReviewedResumeHydration(null);
       setBriefInvalidatedAttachmentKey(
         invalidateAttachedVariant ? `${jobId}::${resumeId}` : null,
@@ -2778,6 +2766,7 @@ function JobsPageContent(): JSX.Element {
               resumeId: materialized.resumeId,
               resumeName: materialized.resumeName,
               resumeSource: "job",
+              resumeProposalAuthority: "reviewed_ready",
             }
           : current,
       );
@@ -2803,9 +2792,19 @@ function JobsPageContent(): JSX.Element {
         String(hydratedResume.id) !== materialized.resumeId ||
         !isHydratedCvLibraryDocument(hydratedResume) ||
         !hydratedBinding ||
+        !hydratedBinding.reviewedPlanId ||
         hydratedBinding.jobId !== job.id ||
         hydratedBinding.sourceCvId !== materialized.sourceCvId
       ) {
+        const completedHydration =
+          reviewedResumeHydrationSuccessRef.current;
+        if (
+          completedHydration?.key === materializedAttachmentKey &&
+          completedHydration.sourceCvId === materialized.sourceCvId
+        ) {
+          setMaterializedResumeName(materialized.resumeName);
+          return;
+        }
         setReviewedResumeHydration({
           key: materializedAttachmentKey,
           status: "error",
@@ -2814,6 +2813,11 @@ function JobsPageContent(): JSX.Element {
           "The tailored resume was created but could not be loaded. Reload this job before continuing.",
         );
       }
+      reviewedResumeHydrationSuccessRef.current = {
+        key: materializedAttachmentKey,
+        sourceCvId: hydratedBinding.sourceCvId,
+      };
+      reviewedResumeHydrationVersionRef.current += 1;
       setReviewedResumeHydration({
         key: materializedAttachmentKey,
         status: "ready",
@@ -2871,38 +2875,41 @@ function JobsPageContent(): JSX.Element {
     try {
       if (job.resumeId.startsWith(REVIEWED_SOURCE_CV_VARIANT_ID_PREFIX)) {
         proposalHandoffRequestVersionRef.current += 1;
-        const attachedCv =
-          cvs.find((cv) => String(cv.id) === job.resumeId) ?? null;
-        let attachedBinding = attachedCv
-          ? readReviewedSourceCvVariantBinding(attachedCv)
-          : null;
-        if (!materializedSourceCvId && !attachedBinding) {
-          const hydratedAttachedCv = await hydrateCvDocument(job.resumeId);
-          if (!requestIsCurrent()) {
-            if (requestOwnsUi()) {
-              invalidateCvTailoringForSourceChange();
-            }
-            return;
+        const hydratedAttachedCv = await hydrateCvDocument(job.resumeId);
+        if (!requestIsCurrent()) {
+          if (requestOwnsUi()) {
+            invalidateCvTailoringForSourceChange();
           }
-          if (
-            !hydratedAttachedCv ||
-            String(hydratedAttachedCv.id) !== job.resumeId ||
-            !isHydratedCvLibraryDocument(hydratedAttachedCv)
-          ) {
-            throw new Error(
-              "The original resume is unavailable. Attach it again before continuing.",
-            );
-          }
-          attachedBinding =
-            readReviewedSourceCvVariantBinding(hydratedAttachedCv);
+          return;
         }
-        if (attachedBinding && attachedBinding.jobId !== job.id) {
+        const attachedBinding = hydratedAttachedCv
+          ? readReviewedSourceCvVariantBinding(hydratedAttachedCv)
+          : null;
+        if (
+          !hydratedAttachedCv ||
+          String(hydratedAttachedCv.id) !== job.resumeId ||
+          !isHydratedCvLibraryDocument(hydratedAttachedCv) ||
+          !attachedBinding?.reviewedPlanId
+        ) {
+          throw new Error(
+            "The original resume is unavailable. Attach it again before continuing.",
+          );
+        }
+        if (attachedBinding.jobId !== job.id) {
           throw new Error(
             "This tailored resume belongs to another job. Restore the complete resume before continuing.",
           );
         }
+        if (
+          materializedSourceCvId !== null &&
+          attachedBinding.sourceCvId !== materializedSourceCvId
+        ) {
+          throw new Error(
+            "The original resume is unavailable. Attach it again before continuing.",
+          );
+        }
         const sourceCvId =
-          materializedSourceCvId ?? attachedBinding?.sourceCvId ?? null;
+          materializedSourceCvId ?? attachedBinding.sourceCvId;
         let sourceCv =
           sourceCvId === null
             ? null
