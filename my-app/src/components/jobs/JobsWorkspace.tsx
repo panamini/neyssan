@@ -3465,9 +3465,9 @@ function JobsPageContent(): JSX.Element {
           jobId: selectedJobId,
           reviewItemId: item.id,
         });
-      } catch {
+      } catch (error) {
         restoreFailedJobBriefMutation(briefMutation);
-        return;
+        throw error;
       }
       settleJobBriefMutation(briefMutation, true);
       void trackJobsEvent({
@@ -3533,9 +3533,9 @@ function JobsPageContent(): JSX.Element {
           fieldKey: item.fieldKey,
           value: nextValue,
         });
-      } catch {
+      } catch (error) {
         restoreFailedJobBriefMutation(briefMutation);
-        return;
+        throw error;
       }
       settleJobBriefMutation(briefMutation, true);
       void trackJobsEvent({
@@ -3854,12 +3854,12 @@ function JobsPageContent(): JSX.Element {
       onSaveField={(fieldKey, nextValue) => {
         void handleSaveField(fieldKey, nextValue);
       }}
-      onApproveReviewItem={(item) => {
-        void handleApproveReviewItem(item as JobsPageReviewItem);
-      }}
-      onSaveReviewItem={(item, nextValue) => {
-        void handleSaveReviewItem(item as JobsPageReviewItem, nextValue);
-      }}
+      onApproveReviewItem={(item) =>
+        handleApproveReviewItem(item as JobsPageReviewItem)
+      }
+      onSaveReviewItem={(item, nextValue) =>
+        handleSaveReviewItem(item as JobsPageReviewItem, nextValue)
+      }
       tailoringPanel={
         cvTailoringPanelOpen && cvTailoringReview && selectedJob ? (
           <CvTailoringReviewPanel

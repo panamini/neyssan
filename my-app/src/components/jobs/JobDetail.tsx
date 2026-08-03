@@ -43,8 +43,11 @@ type JobDetailProps = {
   onDismissJob: (jobId: string) => void;
   onRefreshSelectedJobMatch: () => void;
   onSaveField: (fieldKey: string, nextValue: string | string[]) => void;
-  onApproveReviewItem: (item: any) => void;
-  onSaveReviewItem: (item: any, nextValue: string | string[]) => void;
+  onApproveReviewItem: (item: any) => Promise<void> | void;
+  onSaveReviewItem: (
+    item: any,
+    nextValue: string | string[],
+  ) => Promise<void> | void;
 };
 
 const JOB_ACTION_GROUP_STYLE: React.CSSProperties = {

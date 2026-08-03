@@ -50,6 +50,7 @@ import {
   resolveEffectiveJobRawLanguageDetected,
   resolveVisibleJobBriefReviewState,
   selectVisibleJobExtractionForJob,
+  VISIBLE_JOB_EXTRACTION_SHADOW_ROWS_LIMIT,
   type VisibleJobExtractionSelection,
 } from "./lib/jobs/visibleJobExtraction";
 import {
@@ -79,7 +80,6 @@ import {
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
 const JOB_DETAIL_LINKED_PROPOSALS_LIMIT = 12;
-const JOB_DETAIL_SHADOW_ROWS_LIMIT = 8;
 const JOB_LIST_LINKED_PROPOSALS_LIMIT = 20;
 const JOB_LIST_SHADOW_ROWS_LIMIT = 1;
 const JOB_LIST_DEFAULT_LIMIT = 80;
@@ -2284,7 +2284,7 @@ export const getById = query({
       .query("job_extraction_shadow")
       .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
       .order("desc")
-      .take(JOB_DETAIL_SHADOW_ROWS_LIMIT);
+      .take(VISIBLE_JOB_EXTRACTION_SHADOW_ROWS_LIMIT);
     const effectiveRawLanguageDetected =
       resolveEffectiveJobRawLanguageDetected(job);
     const structuredDebug = buildStructuredMatchReadDebug({

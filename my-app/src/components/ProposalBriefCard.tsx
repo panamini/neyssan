@@ -62,6 +62,22 @@ const EMPTY_STRINGS: string[] = [];
 const EMPTY_REVIEW_ITEMS: ProposalBriefReviewItem[] = [];
 const EMPTY_LINKED_PROPOSALS: ProposalBriefLinkedProposal[] = [];
 
+function commitAfterReviewAction(
+  action: () => Promise<void> | void,
+  onSuccess: () => void,
+): void {
+  try {
+    const result = action();
+    if (result && typeof result.then === "function") {
+      void result.then(onSuccess).catch(() => {});
+      return;
+    }
+    onSuccess();
+  } catch {
+    // The parent owns error messaging; keep the local item retryable.
+  }
+}
+
 function formatReviewValue(value: unknown): string {
   if (Array.isArray(value)) {
     return value
@@ -729,15 +745,19 @@ export function ProposalBriefCard({
                                       .map((entry) => entry.trim())
                                       .filter(Boolean)
                                   : draftValue.trim();
-                                setResolvedItems((current) => ({
-                                  ...current,
-                                  [item.id]: {
-                                    reviewStatus: "approved",
-                                    approvedValue: nextValue,
+                                commitAfterReviewAction(
+                                  () => onSaveReviewItem?.(item, nextValue),
+                                  () => {
+                                    setResolvedItems((current) => ({
+                                      ...current,
+                                      [item.id]: {
+                                        reviewStatus: "approved",
+                                        approvedValue: nextValue,
+                                      },
+                                    }));
+                                    setEditingItemId(null);
                                   },
-                                }));
-                                setEditingItemId(null);
-                                void onSaveReviewItem?.(item, nextValue);
+                                );
                               }}
                             >
                               Save
@@ -775,14 +795,18 @@ export function ProposalBriefCard({
                             className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                             aria-label={`Confirm ${item.label}`}
                             onClick={() => {
-                              setResolvedItems((current) => ({
-                                ...current,
-                                [item.id]: {
-                                  reviewStatus: "approved",
-                                  approvedValue: item.suggestedValue,
+                              commitAfterReviewAction(
+                                () => onApproveReviewItem(item),
+                                () => {
+                                  setResolvedItems((current) => ({
+                                    ...current,
+                                    [item.id]: {
+                                      reviewStatus: "approved",
+                                      approvedValue: item.suggestedValue,
+                                    },
+                                  }));
                                 },
-                              }));
-                              void onApproveReviewItem(item);
+                              );
                             }}
                           >
                             Confirm

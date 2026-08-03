@@ -29,6 +29,8 @@ export type VisibleJobExtractionShadowRow = {
   _creationTime?: number | null;
 };
 
+export const VISIBLE_JOB_EXTRACTION_SHADOW_ROWS_LIMIT = 8;
+
 export function resolveEffectiveJobRawLanguageDetected(job: {
   rawLanguageDetected?: string | null;
   rawDescription?: string | null;

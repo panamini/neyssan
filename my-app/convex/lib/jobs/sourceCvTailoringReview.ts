@@ -34,6 +34,7 @@ import {
   resolveEffectiveJobRawLanguageDetected,
   resolveVisibleJobBriefReviewState,
   selectVisibleJobExtractionForJob,
+  VISIBLE_JOB_EXTRACTION_SHADOW_ROWS_LIMIT,
 } from "./visibleJobExtraction";
 import { buildScoringProfileFieldsFromCvDocument } from "../../profiles";
 import {
@@ -61,8 +62,17 @@ export function resolveReviewedResumeProposalAuthority(args: {
     return "source";
   }
 
-  const decoded = decodeCvDocumentFromConvex(args.profile?.cvDocument);
-  const parsed = safeParseCvDocument(decoded);
+  const decoded = readRecord(
+    decodeCvDocumentFromConvex(args.profile?.cvDocument),
+  );
+  if (!decoded) {
+    return "reviewed_invalid";
+  }
+  const normalized = withRequiredCvMetadata(
+    decoded as unknown as CvDocument,
+    args.profile ?? {},
+  );
+  const parsed = safeParseCvDocument(normalized);
   if (!parsed.ok || parsed.value.id !== args.resumeId) {
     return "reviewed_invalid";
   }
@@ -350,7 +360,8 @@ async function buildOwnedCvTailoringComposition(
     ? await ctx.db
         .query("job_extraction_shadow")
         .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
-        .collect()
+        .order("desc")
+        .take(VISIBLE_JOB_EXTRACTION_SHADOW_ROWS_LIMIT)
     : [];
   const visibleExtraction = selectVisibleJobExtractionForJob({
     job,
@@ -607,10 +618,36 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function resolveRequiredMetadataDate(
+  value: unknown,
+  fallbackTimestamp: number,
+): string {
+  if (ISODateStringSchema.safeParse(value).success) {
+    return value as string;
+  }
+  return Number.isFinite(fallbackTimestamp)
+    ? new Date(fallbackTimestamp).toISOString()
+    : (value as string);
+}
+
+function resolveRequiredMetadataVersion(
+  value: unknown,
+  profileVersion: number,
+  allowDefault: boolean,
+): number {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (Number.isInteger(profileVersion) && profileVersion > 0) {
+    return profileVersion;
+  }
+  return allowDefault ? 1 : (value as number);
+}
+
 function withRequiredCvMetadata(
   sourceCv: Readonly<CvDocument>,
   sourceProfile: Readonly<Record<string, unknown>>,
-  now: number,
+  now?: number,
 ): Readonly<CvDocument> {
   const metadata = readRecord(sourceCv.metadata) ?? {};
   const createdAtFallback = Number(
@@ -622,22 +659,19 @@ function withRequiredCvMetadata(
       sourceProfile._creationTime ??
       now,
   );
-  const createdAt = ISODateStringSchema.safeParse(metadata.createdAt).success
-    ? (metadata.createdAt as string)
-    : new Date(
-        Number.isFinite(createdAtFallback) ? createdAtFallback : now,
-      ).toISOString();
-  const updatedAt = ISODateStringSchema.safeParse(metadata.updatedAt).success
-    ? (metadata.updatedAt as string)
-    : new Date(
-        Number.isFinite(updatedAtFallback) ? updatedAtFallback : now,
-      ).toISOString();
-  const version =
-    typeof metadata.version === "number" &&
-    Number.isInteger(metadata.version) &&
-    metadata.version > 0
-      ? metadata.version
-      : 1;
+  const createdAt = resolveRequiredMetadataDate(
+    metadata.createdAt,
+    createdAtFallback,
+  );
+  const updatedAt = resolveRequiredMetadataDate(
+    metadata.updatedAt,
+    updatedAtFallback,
+  );
+  const version = resolveRequiredMetadataVersion(
+    metadata.version,
+    Number(sourceProfile.version),
+    Number.isFinite(now),
+  );
 
   return {
     ...sourceCv,

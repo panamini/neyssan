@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 import {
   ProposalBriefCard,
@@ -378,6 +384,81 @@ describe("resolveProposalBriefCardTitle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
     expect(confirm).toHaveBeenCalledWith(
       expect.objectContaining({ id: "keywords" }),
+    );
+  });
+
+  it("keeps a rejected Confirm item pending so the user can retry", async () => {
+    const confirm = vi.fn().mockRejectedValue(new Error("Approval failed"));
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests and manage the queue."
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["hospitality"],
+              sourceText: "hospitality",
+            },
+          ]}
+          onApproveReviewItem={confirm}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Keywords" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Keywords" }),
+      ).toBeInTheDocument();
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a rejected review edit open so the user can retry", async () => {
+    const save = vi.fn().mockRejectedValue(new Error("Save failed"));
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Front Desk Host"
+          jobDescription="Welcome guests and manage the queue."
+          visibleKeywords={["hospitality"]}
+          trustState="needs_review"
+          reviewItems={[
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["hospitality"],
+              sourceText: "hospitality",
+            },
+          ]}
+          onSaveReviewItem={save}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Keywords" }));
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "hospitality\nguest service" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Keywords" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Save Keywords" }),
+      ).toBeInTheDocument();
+    });
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "keywords" }),
+      ["hospitality", "guest service"],
     );
   });
 

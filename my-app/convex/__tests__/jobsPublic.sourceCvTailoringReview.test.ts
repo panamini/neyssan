@@ -57,6 +57,37 @@ it("derives reviewed proposal authority from the complete persisted document and
   ).toBe("reviewed_invalid");
 });
 
+it("reconstructs transport-stripped metadata before checking reviewed proposal authority", () => {
+  const resumeId = "source-cv-variant:v1:farman-ali";
+  const document = sourceCv(resumeId);
+  document.metadata = {
+    reviewedSourceCvVariant: {
+      kind: "reviewed_source_cv_variant",
+      sourceCvId: PROFILE_ID,
+      jobId: JOB_ID,
+      applicationContextId: `application-context:${JOB_ID}`,
+      applicationContextHash: `application-context-hash:${JOB_ID}`,
+      reviewedPlanId: "resume-variant-plan:reviewed",
+      version: 1,
+    },
+  } as typeof document.metadata;
+
+  expect(
+    resolveReviewedResumeProposalAuthority({
+      resumeId,
+      jobId: JOB_ID,
+      profile: {
+        _creationTime: T,
+        profileId: resumeId,
+        cvDocument: document,
+        createdAt: T,
+        updatedAt: T,
+        version: 1,
+      },
+    }),
+  ).toBe("reviewed_ready");
+});
+
 type StoredRow = Record<string, unknown> & {
   _id: string;
   _creationTime: number;
@@ -132,6 +163,40 @@ function sourceCv(
           ]
         : []),
     ],
+  };
+}
+
+function validVisibleShadowRow(
+  id: string,
+  summary: string,
+  createdAt = T,
+): StoredRow {
+  return {
+    _id: id,
+    _creationTime: createdAt,
+    job_id: JOB_ID,
+    llm_normalized_output: {
+      summary_short: summary,
+      role_title_normalized: "Bakery sales associate",
+      requirements: [
+        { value: "Customer service", type: "skill", required: true },
+      ],
+      keywords_canonical: ["bakery", "customer service"],
+      licenses_or_certifications: [],
+      schedule_constraints: [],
+      environment: {
+        customer_facing: true,
+        retail: true,
+        physical_standing: null,
+        onsite: true,
+      },
+      confidence: "high",
+    },
+    validation_status: "valid",
+    fallback_used: false,
+    model: "ministral-3b-2512",
+    prompt_version: "p9_v2",
+    created_at: createdAt,
   };
 }
 
@@ -279,19 +344,33 @@ function makeContext(
               ([field, value]) => readPath(row, field) === value,
             ),
           );
-          return {
+          let projectedRows = rows;
+          const result = {
+            order(direction: "asc" | "desc") {
+              projectedRows = [...projectedRows].sort((left, right) =>
+                direction === "desc"
+                  ? right._creationTime - left._creationTime
+                  : left._creationTime - right._creationTime,
+              );
+              return result;
+            },
+            take: async (limit: number) => {
+              readCount += 1;
+              return projectedRows.slice(0, limit);
+            },
             collect: async () => {
               readCount += 1;
-              return rows;
+              return projectedRows;
             },
             unique: async () => {
               readCount += 1;
-              if (rows.length > 1) {
+              if (projectedRows.length > 1) {
                 throw new Error(`Expected unique ${table} row`);
               }
-              return rows[0] ?? null;
+              return projectedRows[0] ?? null;
             },
           };
+          return result;
         },
       };
     },
@@ -694,33 +773,10 @@ describe("authenticated source CV tailoring review boundary", () => {
       reviewState: "ready",
       reviewItems: [],
       shadowRows: [
-        {
-          _id: "shadow-current",
-          _creationTime: T,
-          job_id: JOB_ID,
-          llm_normalized_output: {
-            summary_short: "Customer-facing bakery sales role.",
-            role_title_normalized: "Bakery sales associate",
-            requirements: [
-              { value: "Customer service", type: "skill", required: true },
-            ],
-            keywords_canonical: ["bakery", "customer service"],
-            licenses_or_certifications: [],
-            schedule_constraints: [],
-            environment: {
-              customer_facing: true,
-              retail: true,
-              physical_standing: null,
-              onsite: true,
-            },
-            confidence: "high",
-          },
-          validation_status: "valid",
-          fallback_used: false,
-          model: "ministral-3b-2512",
-          prompt_version: "p9_v2",
-          created_at: T,
-        },
+        validVisibleShadowRow(
+          "shadow-current",
+          "Customer-facing bakery sales role.",
+        ),
       ],
     });
 
@@ -739,33 +795,40 @@ describe("authenticated source CV tailoring review boundary", () => {
       rawDescription:
         "Experiencia en gestión de operación y seguridad. Disponibilidad para trabajar turnos y fines de semana.",
       shadowRows: [
-        {
-          _id: "shadow-english-translation",
-          _creationTime: T,
-          job_id: JOB_ID,
-          llm_normalized_output: {
-            summary_short: "This role requires customer service.",
-            role_title_normalized: "Bakery sales associate",
-            requirements: [
-              { value: "Customer service", type: "skill", required: true },
-            ],
-            keywords_canonical: ["bakery", "customer service"],
-            licenses_or_certifications: [],
-            schedule_constraints: [],
-            environment: {
-              customer_facing: true,
-              retail: true,
-              physical_standing: null,
-              onsite: true,
-            },
-            confidence: "high",
-          },
-          validation_status: "valid",
-          fallback_used: false,
-          model: "ministral-3b-2512",
-          prompt_version: "p9_v2",
-          created_at: T,
-        },
+        validVisibleShadowRow(
+          "shadow-english-translation",
+          "This role requires customer service.",
+        ),
+      ],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).resolves.toMatchObject({ mode: "auto_recommended" });
+  });
+
+  it("uses the same latest-eight shadow window as the visible Job Brief", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const invalidRows = Array.from({ length: 8 }, (_, index) => ({
+      _id: `shadow-invalid-${index}`,
+      _creationTime: T + 10_000 - index,
+      job_id: JOB_ID,
+      llm_normalized_output: {},
+      validation_status: "schema_invalid",
+      fallback_used: false,
+      model: "ministral-3b-2512",
+      prompt_version: "p9_v2",
+      created_at: T + 10_000 - index,
+    }));
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [],
+      shadowRows: [
+        ...invalidRows,
+        validVisibleShadowRow(
+          "shadow-valid-but-outside-visible-window",
+          "Hidden older LLM summary.",
+        ),
       ],
     });
 
