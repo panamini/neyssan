@@ -109,6 +109,17 @@ function formatReviewValueList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function formatReviewLineList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  return String(value ?? "")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function resolveTrustLabel(args: {
   parseStatus?: string | null;
   trustState?: string | null;
@@ -612,7 +623,7 @@ export function ProposalBriefCard({
                           setEditingItemId(null);
                           void onSaveField?.(
                             "mustHaves",
-                            formatReviewValueList(requirementsDraft),
+                            formatReviewLineList(requirementsDraft),
                           );
                         }}
                       >

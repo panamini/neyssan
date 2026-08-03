@@ -786,6 +786,65 @@ describe("authenticated source CV tailoring review boundary", () => {
     expect(fixture.writes).toEqual([]);
   });
 
+  it("blocks tailoring while a consumed Responsibilities item remains pending", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const summary = "Customer-facing bakery sales role.";
+    const fixture = makeContext({
+      reviewState: "ready",
+      reviewItems: [
+        {
+          id: "llm_visible_summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "approved",
+          suggestedValue: summary,
+          approvedValue: summary,
+          sourceText: summary,
+          confidence: 0.9,
+          updatedAt: T,
+        },
+        {
+          id: "llm_visible_must_haves",
+          fieldKey: "mustHaves",
+          label: "Requirements",
+          reviewStatus: "approved",
+          suggestedValue: ["Customer service"],
+          approvedValue: ["Customer service"],
+          sourceText: "Customer service",
+          confidence: 0.9,
+          updatedAt: T,
+        },
+        {
+          id: "llm_visible_keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "approved",
+          suggestedValue: ["bakery", "customer service"],
+          approvedValue: ["bakery", "customer service"],
+          sourceText: "bakery\ncustomer service",
+          confidence: 0.9,
+          updatedAt: T,
+        },
+        {
+          id: "responsibilities",
+          fieldKey: "responsibilities",
+          label: "Responsibilities",
+          reviewStatus: "pending",
+          suggestedValue: ["Customer service"],
+          sourceText: "Customer service",
+          confidence: 0.4,
+          updatedAt: T,
+        },
+      ],
+      shadowRows: [validVisibleShadowRow("shadow-current", summary)],
+    });
+
+    await expect(
+      prepareCvTailoringReview._handler(fixture.ctx, { jobId: JOB_ID }),
+    ).rejects.toThrow(/Job Brief must be parsed and ready/i);
+    expect(fixture.writes).toEqual([]);
+  });
+
   it("uses the effective posting language when authorizing the visible brief", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
     const fixture = makeContext({

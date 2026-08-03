@@ -547,6 +547,9 @@ export function projectReviewItemsWithVisibleExtraction(args: {
   const allowedReviewItems = args.reviewItems.filter(
     (item) => item.fieldKey !== "responsibilities",
   );
+  const responsibilityReviewItems = args.reviewItems.filter(
+    (item) => item.fieldKey === "responsibilities",
+  );
 
   const buildReviewItem = (input: {
     id: string;
@@ -611,6 +614,7 @@ export function projectReviewItemsWithVisibleExtraction(args: {
           }),
         ]
       : []),
+    ...responsibilityReviewItems,
   ];
 }
 

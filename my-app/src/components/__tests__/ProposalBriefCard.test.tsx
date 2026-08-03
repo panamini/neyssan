@@ -562,6 +562,27 @@ describe("resolveProposalBriefCardTitle", () => {
     ).toBeInTheDocument();
   });
 
+  it("preserves commas inside a requirement when saving it unchanged", () => {
+    const requirement = "Lead design, development, and testing";
+    const saveField = vi.fn();
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Design Lead"
+          jobDescription="Lead the product design practice."
+          visibleRequirements={[requirement]}
+          reviewItems={[]}
+          onSaveField={saveField}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Requirements" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Requirements" }));
+
+    expect(saveField).toHaveBeenCalledWith("mustHaves", [requirement]);
+  });
+
   it("keeps Keywords editable after the user clears the section", () => {
     const saveField = vi.fn();
     const { rerender } = render(

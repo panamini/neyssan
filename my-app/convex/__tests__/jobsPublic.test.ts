@@ -1352,10 +1352,12 @@ describe("jobsPublic.getById", () => {
           reviewStatus: "pending",
           updatedAt: expect.any(Number),
         }),
+        expect.objectContaining({
+          fieldKey: "responsibilities",
+          suggestedValue: ["Legacy responsibility"],
+          reviewStatus: "pending",
+        }),
       ]),
-    );
-    expect(result?.reviewItems.map((item) => item.fieldKey)).not.toContain(
-      "responsibilities",
     );
     expect(result?.matchRead).toMatchObject({
       score: 25,
