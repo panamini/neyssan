@@ -51,13 +51,7 @@ describe("CommandPalette", () => {
     signOutMock.mockReset();
   });
 
-  it("purges account-local data before command-palette sign-out", () => {
-    let cvDocumentsAtSignOut: string | null | undefined;
-    signOutMock.mockImplementationOnce((onSignedOut: () => void) => {
-      cvDocumentsAtSignOut = window.localStorage.getItem("cvDocuments");
-      onSignedOut();
-      return Promise.resolve();
-    });
+  it("routes through the sign-out teardown boundary before Clerk sign-out", () => {
     window.localStorage.setItem("cvDocuments", "private account CV");
 
     render(
@@ -71,11 +65,12 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     fireEvent.click(screen.getByRole("option", { name: /Sign out/i }));
 
-    expect(cvDocumentsAtSignOut).toBeNull();
-    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
-    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("cvDocuments")).toBe(
+      "private account CV",
+    );
+    expect(signOutMock).not.toHaveBeenCalled();
     expect(screen.getByTestId("palette-location")).toHaveTextContent(
-      "/sign-in::null",
+      "/sign-out::null",
     );
   });
 

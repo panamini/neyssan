@@ -2,9 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useClerk } from "@clerk/clerk-react";
 import { APP_COMMANDS, COMMAND_GROUPS, type AppCommand } from "../lib/commands";
-import { clearAccountLocalDataForSignedOut } from "../lib/account-local-data";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { translateUi } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
@@ -51,7 +49,6 @@ export function CommandPalette({
 }: CommandPaletteProps): JSX.Element | null {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useClerk();
   const { resolvedLanguage } = useUiLanguagePreference();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = React.useState("");
@@ -158,8 +155,7 @@ export function CommandPalette({
       }
 
       if (command.action.type === "sign-out") {
-        clearAccountLocalDataForSignedOut();
-        void signOut(() => navigate("/sign-in"));
+        void navigate("/sign-out");
       }
     },
     [
@@ -170,7 +166,6 @@ export function CommandPalette({
       navigate,
       onReplayOnboarding,
       onToggleTheme,
-      signOut,
     ],
   );
 

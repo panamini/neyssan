@@ -3064,6 +3064,126 @@ describe('CvLibraryContext', () => {
     expect(profilePatchCallsWhileAuthPending).toHaveLength(0);
   });
 
+  it('cancels a pending debounced save when the provider unmounts for sign-out', async () => {
+    const alpha = {
+      id: 'cv_signout_pending',
+      title: 'Pending sign-out CV',
+      metadata: {
+        createdAt: '2026-08-04T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_signout_pending', JSON.stringify(alpha));
+    window.history.pushState({}, '', '/cv?id=cv_signout_pending');
+
+    let ctx: any;
+    const view = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_signout_pending'));
+    convexMutationMock.mockClear();
+    vi.useFakeTimers();
+
+    act(() => {
+      ctx.updateCurrentCv({
+        sections: [
+          {
+            id: 'summary-signout',
+            type: 'summary',
+            title: 'Summary',
+            blocks: [],
+            structuredContent: [{ id: 'summary-item', summary: 'dirty edit' }],
+          },
+        ],
+      });
+    });
+
+    view.unmount();
+    mockLocalStorage.clear();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_100);
+    });
+
+    expect(convexMutationMock).not.toHaveBeenCalled();
+    expect(mockLocalStorage.getItem('cvDocuments')).toBeNull();
+    expect(mockLocalStorage.getItem('cv:cv_signout_pending')).toBeNull();
+  });
+
+  it('does not repopulate local CV data when an in-flight save resolves after unmount', async () => {
+    const alpha = {
+      id: 'cv_signout_inflight',
+      title: 'In-flight sign-out CV',
+      metadata: {
+        createdAt: '2026-08-04T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_signout_inflight', JSON.stringify(alpha));
+    window.history.pushState({}, '', '/cv?id=cv_signout_inflight');
+
+    let ctx: any;
+    const view = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_signout_inflight'));
+    let resolveSave!: (value: unknown) => void;
+    convexMutationMock.mockReset();
+    convexMutationMock.mockImplementation((args: any) => {
+      if (args?.profileId === 'cv_signout_inflight') {
+        return new Promise((resolve) => {
+          resolveSave = resolve;
+        });
+      }
+      return Promise.resolve({ written: true });
+    });
+    vi.useFakeTimers();
+
+    act(() => {
+      ctx.updateCurrentCv({
+        sections: [
+          {
+            id: 'summary-inflight',
+            type: 'summary',
+            title: 'Summary',
+            blocks: [],
+            structuredContent: [{ id: 'summary-item', summary: 'dirty edit' }],
+          },
+        ],
+      });
+    });
+    act(() => {
+      vi.advanceTimersByTime(1_100);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(
+      convexMutationMock.mock.calls.some(
+        ([args]) => args?.profileId === 'cv_signout_inflight',
+      ),
+    ).toBe(true);
+
+    view.unmount();
+    mockLocalStorage.clear();
+    await act(async () => {
+      resolveSave({ written: true });
+      await Promise.resolve();
+    });
+
+    expect(mockLocalStorage.getItem('cvDocuments')).toBeNull();
+    expect(mockLocalStorage.getItem('cv:cv_signout_inflight')).toBeNull();
+  });
+
   it('keeps local dirty state and exposes remote failure when Convex rejects an oversized save', async () => {
     convexMutationMock.mockRejectedValue(
       new Error('Value is too large (1.04 MiB > maximum size 1 MiB)'),

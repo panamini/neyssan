@@ -131,14 +131,19 @@ describe("account-local-data", () => {
     },
   );
 
-  it("purges unowned legacy data and purges again before another account mounts", () => {
+  it("claims unowned legacy data for the current account before enforcing account changes", () => {
     seedPrivateBrowserData();
 
     expect(prepareAccountLocalDataScope("user-a")).toEqual({
-      ownerChanged: true,
-      purged: true,
+      ownerChanged: false,
+      purged: false,
     });
-    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+    expect(window.localStorage.getItem("cvDocuments")).toBe(
+      "private cv library",
+    );
+    expect(
+      window.sessionStorage.getItem("dasti:proposal-output-draft:session:v1"),
+    ).toBe("private proposal output");
     expect(
       window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
     ).toBe("user-a");
@@ -153,7 +158,28 @@ describe("account-local-data", () => {
     expect(
       window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
     ).toBe("user-b");
-    expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(2);
+    expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("purges an unmarked storage area when the other marker proves it belongs to a foreign account", () => {
+    window.localStorage.setItem("cvDocuments", "unmarked private cv library");
+    window.sessionStorage.setItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+      "user-a",
+    );
+    window.sessionStorage.setItem(
+      "dasti:proposal-output-draft:session:v1",
+      "user-a private proposal",
+    );
+
+    expect(prepareAccountLocalDataScope("user-b")).toEqual({
+      ownerChanged: true,
+      purged: true,
+    });
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+    expect(
+      window.sessionStorage.getItem("dasti:proposal-output-draft:session:v1"),
+    ).toBeNull();
   });
 
   it("purges stale session data in every tab without deleting the new owner's local data", () => {
@@ -191,8 +217,8 @@ describe("account-local-data", () => {
 
   it("keeps same-account data stable after both owner markers are prepared", () => {
     expect(prepareAccountLocalDataScope("user-a")).toEqual({
-      ownerChanged: true,
-      purged: true,
+      ownerChanged: false,
+      purged: false,
     });
     window.localStorage.setItem("cvDocuments", "user-a private cv library");
     window.sessionStorage.setItem(

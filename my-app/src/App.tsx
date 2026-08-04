@@ -1,6 +1,7 @@
 import "./styles/globals.css";
 
 import React from "react";
+import { useAuth } from "@clerk/clerk-react";
 import {
   BrowserRouter,
   Routes,
@@ -61,6 +62,7 @@ import {
   type OnboardingReplayTargetStep,
 } from "./lib/onboarding-replay-event";
 import { useThemeMode } from "./lib/theme-mode";
+import { clearAccountLocalDataForSignedOut } from "./lib/account-local-data";
 
 /**
  * AppShell — structure exacte du squelette dasti-v16 :
@@ -257,6 +259,24 @@ export default function App(): JSX.Element {
   );
 }
 
+function PrintRouteAccountCleanup({
+  children,
+}: {
+  children: React.ReactNode;
+}): JSX.Element {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+
+  React.useEffect(() => {
+    if (isLoaded && (!isSignedIn || !userId)) {
+      clearAccountLocalDataForSignedOut();
+    }
+  }, [isLoaded, isSignedIn, userId]);
+
+  // Print payloads are validated and injected by the export worker. Rendering
+  // must not depend on Clerk becoming reachable in that technical page.
+  return <>{children}</>;
+}
+
 function AppRouter(): JSX.Element {
   const location = useLocation();
 
@@ -272,14 +292,30 @@ function AppRouter(): JSX.Element {
     );
   }
 
+  // The document-export worker opens these pure renderer routes in a fresh,
+  // intentionally unauthenticated page. Render independently of auth loading;
+  // signed-out cleanup follows once Clerk resolves. The pages consume only
+  // their validated injected payload.
+  if (location.pathname === "/print/resume") {
+    return (
+      <PrintRouteAccountCleanup>
+        <ResumePrintPage />
+      </PrintRouteAccountCleanup>
+    );
+  }
+
+  if (location.pathname === "/print/proposal") {
+    return (
+      <PrintRouteAccountCleanup>
+        <ProposalPrintPage />
+      </PrintRouteAccountCleanup>
+    );
+  }
+
   let privateRoute: JSX.Element;
 
   if (location.pathname === "/sign-out") {
     privateRoute = <SignOutPage />;
-  } else if (location.pathname === "/print/resume") {
-    privateRoute = <ResumePrintPage />;
-  } else if (location.pathname === "/print/proposal") {
-    privateRoute = <ProposalPrintPage />;
   } else if (location.pathname === "/debug/resume-font-parity") {
     privateRoute = <ResumeFontParityHarnessPage />;
   } else if (location.pathname === "/debug/pdf-raster") {

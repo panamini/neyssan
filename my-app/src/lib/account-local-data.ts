@@ -116,16 +116,22 @@ export function prepareAccountLocalDataScope(
     return { ownerChanged: true, purged: true };
   }
 
-  const localOwnerChanged = previousOwner !== normalizedUserId;
-  const sessionOwnerChanged = previousSessionOwner !== normalizedUserId;
+  const localOwnerChanged =
+    previousOwner !== null && previousOwner !== normalizedUserId;
+  const sessionOwnerChanged =
+    previousSessionOwner !== null && previousSessionOwner !== normalizedUserId;
+  const localOwnerMissingBesideForeignSession =
+    previousOwner === null && sessionOwnerChanged;
+  const sessionOwnerMissingBesideForeignLocal =
+    previousSessionOwner === null && localOwnerChanged;
   const ownerChanged = localOwnerChanged || sessionOwnerChanged;
   if (ownerChanged) {
     clearProposalPersonalizationCaches();
   }
-  if (localOwnerChanged) {
+  if (localOwnerChanged || localOwnerMissingBesideForeignSession) {
     purgeStorage("localStorage");
   }
-  if (sessionOwnerChanged) {
+  if (sessionOwnerChanged || sessionOwnerMissingBesideForeignLocal) {
     purgeStorage("sessionStorage");
   }
 

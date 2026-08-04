@@ -352,14 +352,39 @@ describe("App Quick Start pane", () => {
     expect(window.localStorage.getItem("theme")).toBe("dark");
   });
 
-  it("does not expose private print routes to a signed-out visitor", async () => {
+  it("keeps the payload-only resume print renderer available to the headless worker", async () => {
+    authState.isSignedIn = false;
+    authState.userId = null;
+    window.localStorage.setItem("cvDocuments", "stale private CV");
+    window.history.replaceState({}, "", "/print/resume");
+
+    render(<App />);
+
+    expect(await screen.findByText("Resume print")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Sign in" })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+  });
+
+  it("keeps the payload-only proposal print renderer available to the headless worker", async () => {
+    authState.isSignedIn = false;
+    authState.userId = null;
+    window.history.replaceState({}, "", "/print/proposal");
+
+    render(<App />);
+
+    expect(await screen.findByText("Proposal print")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Sign in" })).not.toBeInTheDocument();
+  });
+
+  it("does not block the payload-only print renderer while Clerk auth is loading", async () => {
+    authState.isLoaded = false;
     authState.isSignedIn = false;
     authState.userId = null;
     window.history.replaceState({}, "", "/print/resume");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.queryByText("Resume print")).not.toBeInTheDocument();
+    expect(await screen.findByText("Resume print")).toBeInTheDocument();
+    expect(screen.queryByText("Loading your workspace…")).not.toBeInTheDocument();
   });
 });
