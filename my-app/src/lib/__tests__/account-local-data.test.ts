@@ -101,6 +101,36 @@ describe("account-local-data", () => {
     expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["localStorage", "sessionStorage"] as const)(
+    "fails closed without throwing when the browser denies %s access",
+    (deniedStorageName) => {
+      seedPrivateBrowserData();
+      const accessibleStorage =
+        deniedStorageName === "localStorage"
+          ? window.sessionStorage
+          : window.localStorage;
+      const getter = vi
+        .spyOn(window, deniedStorageName, "get")
+        .mockImplementation(() => {
+          throw new DOMException("Storage access denied", "SecurityError");
+        });
+
+      try {
+        expect(() => clearAccountLocalDataForSignedOut()).not.toThrow();
+        expect(accessibleStorage.getItem("cvDocuments")).toBeNull();
+        expect(
+          accessibleStorage.getItem(
+            "dasti:proposal-output-draft:session:v1",
+          ),
+        ).toBeNull();
+      } finally {
+        getter.mockRestore();
+      }
+
+      expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("purges unowned legacy data and purges again before another account mounts", () => {
     seedPrivateBrowserData();
 

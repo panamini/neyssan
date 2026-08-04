@@ -4,9 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { CommandPalette } from "../CommandPalette";
 
+const { signOutMock } = vi.hoisted(() => ({
+  signOutMock: vi.fn(),
+}));
+
 vi.mock("@clerk/clerk-react", () => ({
   useClerk: () => ({
-    signOut: vi.fn(),
+    signOut: signOutMock,
   }),
 }));
 
@@ -43,6 +47,36 @@ function PaletteHarness({
 describe("CommandPalette", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signOutMock.mockReset();
+  });
+
+  it("purges account-local data before command-palette sign-out", () => {
+    let cvDocumentsAtSignOut: string | null | undefined;
+    signOutMock.mockImplementationOnce((onSignedOut: () => void) => {
+      cvDocumentsAtSignOut = window.localStorage.getItem("cvDocuments");
+      onSignedOut();
+      return Promise.resolve();
+    });
+    window.localStorage.setItem("cvDocuments", "private account CV");
+
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Routes>
+          <Route path="*" element={<PaletteHarness />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByRole("option", { name: /Sign out/i }));
+
+    expect(cvDocumentsAtSignOut).toBeNull();
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("palette-location")).toHaveTextContent(
+      "/sign-in::null",
+    );
   });
 
   it("renders command palette shell chrome in English by default", () => {

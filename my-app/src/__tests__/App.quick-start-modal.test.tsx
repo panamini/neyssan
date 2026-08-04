@@ -294,6 +294,11 @@ describe("App Quick Start pane", () => {
   });
 
   it("purges account-local data after the supported sign-out route completes", async () => {
+    let cvDocumentsAtSignOut: string | null | undefined;
+    signOutMock.mockImplementationOnce(() => {
+      cvDocumentsAtSignOut = window.localStorage.getItem("cvDocuments");
+      return Promise.resolve();
+    });
     window.localStorage.setItem(
       "twoweeks:account-local-data-owner:v1",
       "user-app-quick-start",
@@ -306,20 +311,12 @@ describe("App Quick Start pane", () => {
     window.localStorage.setItem("theme", "dark");
     window.history.replaceState({}, "", "/sign-out");
 
-    const view = render(<App />);
+    render(<App />);
 
     await waitFor(() => {
       expect(signOutMock).toHaveBeenCalledWith({ redirectUrl: "/sign-in" });
     });
-    expect(window.localStorage.getItem("cvDocuments")).toBe(
-      "private account CV",
-    );
-
-    authState.isSignedIn = false;
-    authState.userId = null;
-    view.rerender(<App />);
-
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(cvDocumentsAtSignOut).toBeNull();
     expect(window.localStorage.getItem("cvDocuments")).toBeNull();
     expect(
       window.localStorage.getItem("dasti:proposal-compose-draft:v1"),

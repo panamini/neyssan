@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { useAuth, useClerk } from "@clerk/clerk-react";
 import { Navigate } from "react-router-dom";
+import { clearAccountLocalDataForSignedOut } from "../lib/account-local-data";
 
 export function SignOutPage(): JSX.Element {
   const { isLoaded, isSignedIn } = useAuth();
@@ -11,6 +12,7 @@ export function SignOutPage(): JSX.Element {
       return;
     }
 
+    clearAccountLocalDataForSignedOut();
     void clerk.signOut({ redirectUrl: "/sign-in" });
   }, [clerk, isLoaded, isSignedIn]);
 

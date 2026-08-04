@@ -68,9 +68,11 @@ function removeAccountLocalDataFromStorage(storage: Storage): void {
   }
 }
 
-function purgeStorage(storage: Storage): void {
+type BrowserStorageName = "localStorage" | "sessionStorage";
+
+function purgeStorage(storageName: BrowserStorageName): void {
   try {
-    removeAccountLocalDataFromStorage(storage);
+    removeAccountLocalDataFromStorage(window[storageName]);
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }
@@ -83,8 +85,8 @@ function purgeAccountLocalData(): void {
     return;
   }
 
-  purgeStorage(window.localStorage);
-  purgeStorage(window.sessionStorage);
+  purgeStorage("localStorage");
+  purgeStorage("sessionStorage");
 }
 
 export function clearAccountLocalDataForSignedOut(): void {
@@ -121,10 +123,10 @@ export function prepareAccountLocalDataScope(
     clearProposalPersonalizationCaches();
   }
   if (localOwnerChanged) {
-    purgeStorage(window.localStorage);
+    purgeStorage("localStorage");
   }
   if (sessionOwnerChanged) {
-    purgeStorage(window.sessionStorage);
+    purgeStorage("sessionStorage");
   }
 
   try {
