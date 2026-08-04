@@ -112,6 +112,7 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { readAccountLocalDataOwner } from "../lib/account-local-data";
 import { translateUi } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
@@ -3620,9 +3621,11 @@ export function ProposalForge(): JSX.Element {
   const appliedSavedToolbarVoicePresetRef = React.useRef(false);
   const pendingComposeDraftSyncRef =
     React.useRef<StoredProposalComposeDraft | null>(null);
+  const pendingComposeDraftOwnerRef = React.useRef<string | null>(null);
   const composeDraftSyncTimeoutRef = React.useRef<number | null>(null);
   const cancelPendingComposeDraftSync = React.useCallback(() => {
     pendingComposeDraftSyncRef.current = null;
+    pendingComposeDraftOwnerRef.current = null;
     if (composeDraftSyncTimeoutRef.current !== null) {
       window.clearTimeout(composeDraftSyncTimeoutRef.current);
       composeDraftSyncTimeoutRef.current = null;
@@ -7893,8 +7896,9 @@ export function ProposalForge(): JSX.Element {
 
   const flushPendingComposeDraftSync = React.useCallback(() => {
     const pendingDraft = pendingComposeDraftSyncRef.current;
+    const pendingOwner = pendingComposeDraftOwnerRef.current;
     cancelPendingComposeDraftSync();
-    if (!pendingDraft) {
+    if (!pendingDraft || readAccountLocalDataOwner() !== pendingOwner) {
       return;
     }
     commitComposeDraftPreview(pendingDraft);
@@ -7904,6 +7908,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       const nextDraft = buildStoredProposalComposeDraftSnapshot(values);
       pendingComposeDraftSyncRef.current = nextDraft;
+      pendingComposeDraftOwnerRef.current = readAccountLocalDataOwner();
       if (composeDraftSyncTimeoutRef.current !== null) {
         window.clearTimeout(composeDraftSyncTimeoutRef.current);
       }
@@ -7930,8 +7935,9 @@ export function ProposalForge(): JSX.Element {
   React.useEffect(() => {
     return () => {
       const pendingDraft = pendingComposeDraftSyncRef.current;
+      const pendingOwner = pendingComposeDraftOwnerRef.current;
       cancelPendingComposeDraftSync();
-      if (pendingDraft) {
+      if (pendingDraft && readAccountLocalDataOwner() === pendingOwner) {
         writeStoredProposalComposeDraft(pendingDraft);
       }
     };

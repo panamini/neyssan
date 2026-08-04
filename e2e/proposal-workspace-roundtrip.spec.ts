@@ -277,30 +277,36 @@ test.describe("Proposal workspace roundtrip", () => {
     );
   });
 
-  test("shows the saved proposal gate and keeps live draft navigation available", async ({
-    page,
-  }) => {
-    await page.goto(
-      `${APP_URL}/proposal?view=saved&id=${savedProposalFixture._id}`,
-    );
+  test.describe("Proposal workspace signed-out gate", () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
 
-    await expect(page.getByText("Sign in to view saved proposals.")).toBeVisible();
-    await expect(
-      page.getByRole("link", {
-        name: /Untitled cover letter/i,
-      }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", {
-        name: /Operations Associate Proposal/i,
-      }),
-    ).toBeVisible();
+    test("shows the saved proposal gate and keeps live draft navigation available", async ({
+      page,
+    }) => {
+      await page.goto(
+        `${APP_URL}/proposal?view=saved&id=${savedProposalFixture._id}`,
+      );
 
-    await page
-      .getByRole("link", {
-        name: /Operations Associate Proposal/i,
-      })
-      .click();
-    await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
+      await expect(
+        page.getByText("Sign in to view saved proposals."),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", {
+          name: /Untitled cover letter/i,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", {
+          name: /Operations Associate Proposal/i,
+        }),
+      ).toBeVisible();
+
+      await page
+        .getByRole("link", {
+          name: /Operations Associate Proposal/i,
+        })
+        .click();
+      await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
+    });
   });
 });

@@ -93,6 +93,20 @@ export function clearAccountLocalDataForSignedOut(): void {
   purgeAccountLocalData();
 }
 
+export function readAccountLocalDataOwner(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+    );
+  } catch {
+    return null;
+  }
+}
+
 export function prepareAccountLocalDataScope(
   userId: string,
 ): AccountLocalDataScopeResult {

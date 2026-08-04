@@ -66,6 +66,7 @@ function resolveLocalChromiumExecutable(): string | undefined {
 
 const localChromiumExecutable = resolveLocalChromiumExecutable();
 const appUrl = process.env.PLAYWRIGHT_APP_URL ?? 'http://127.0.0.1:5173';
+const CLERK_AUTH_STATE_PATH = 'playwright/.clerk/user.json';
 process.env.PLAYWRIGHT_APP_URL = appUrl;
 
 /**
@@ -99,6 +100,10 @@ export default defineConfig({
   /* Configure projects for major browsers */
   projects: [
     {
+      name: 'clerk setup',
+      testMatch: /clerk-auth\.setup\.ts/,
+    },
+    {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
@@ -110,6 +115,21 @@ export default defineConfig({
             }
           : {}),
       },
+    },
+    {
+      name: 'authenticated-chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: CLERK_AUTH_STATE_PATH,
+        ...(localChromiumExecutable
+          ? {
+              launchOptions: {
+                executablePath: localChromiumExecutable,
+              },
+            }
+          : {}),
+      },
+      dependencies: ['clerk setup'],
     },
 
     {

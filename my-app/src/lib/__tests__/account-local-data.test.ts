@@ -13,6 +13,7 @@ import {
   ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
   clearAccountLocalDataForSignedOut,
   prepareAccountLocalDataScope,
+  readAccountLocalDataOwner,
 } from "../account-local-data";
 
 const PRIVATE_LOCAL_VALUES = {
@@ -48,6 +49,22 @@ describe("account-local-data", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     clearProposalPersonalizationCachesMock.mockClear();
+  });
+
+  it("reads the current account-local data owner without exposing storage failures", () => {
+    expect(readAccountLocalDataOwner()).toBeNull();
+
+    window.localStorage.setItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY, "user-a");
+    expect(readAccountLocalDataOwner()).toBe("user-a");
+
+    const getter = vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new DOMException("Storage access denied", "SecurityError");
+    });
+    try {
+      expect(readAccountLocalDataOwner()).toBeNull();
+    } finally {
+      getter.mockRestore();
+    }
   });
 
   it("purges account data on sign-out while preserving display preferences", () => {
