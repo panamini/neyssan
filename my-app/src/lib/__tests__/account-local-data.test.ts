@@ -148,19 +148,17 @@ describe("account-local-data", () => {
     },
   );
 
-  it("claims unowned legacy data for the current account before enforcing account changes", () => {
+  it("purges unowned legacy data before installing the first account marker", () => {
     seedPrivateBrowserData();
 
     expect(prepareAccountLocalDataScope("user-a")).toEqual({
-      ownerChanged: false,
-      purged: false,
+      ownerChanged: true,
+      purged: true,
     });
-    expect(window.localStorage.getItem("cvDocuments")).toBe(
-      "private cv library",
-    );
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
     expect(
       window.sessionStorage.getItem("dasti:proposal-output-draft:session:v1"),
-    ).toBe("private proposal output");
+    ).toBeNull();
     expect(
       window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
     ).toBe("user-a");
@@ -176,6 +174,30 @@ describe("account-local-data", () => {
       window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
     ).toBe("user-b");
     expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not install the first account marker when unowned data cannot be purged", () => {
+    seedPrivateBrowserData();
+    const removeItem = vi
+      .spyOn(window.localStorage, "removeItem")
+      .mockImplementation(() => {
+        throw new DOMException("Storage write denied", "SecurityError");
+      });
+
+    try {
+      expect(prepareAccountLocalDataScope("user-a")).toEqual({
+        ownerChanged: true,
+        purged: true,
+      });
+      expect(
+        window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
+      ).toBeNull();
+      expect(window.localStorage.getItem("cvDocuments")).toBe(
+        "private cv library",
+      );
+    } finally {
+      removeItem.mockRestore();
+    }
   });
 
   it("purges an unmarked storage area when the other marker proves it belongs to a foreign account", () => {

@@ -68,13 +68,26 @@ function removeAccountLocalDataFromStorage(storage: Storage): void {
   }
 }
 
+function hasAccountLocalDataInStorage(storage: Storage): boolean {
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key && isAccountLocalDataKey(key)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 type BrowserStorageName = "localStorage" | "sessionStorage";
 
-function purgeStorage(storageName: BrowserStorageName): void {
+function purgeStorage(storageName: BrowserStorageName): boolean {
   try {
     removeAccountLocalDataFromStorage(window[storageName]);
+    return true;
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
+    return false;
   }
 }
 
@@ -130,6 +143,18 @@ export function prepareAccountLocalDataScope(
     return { ownerChanged: true, purged: true };
   }
 
+  let unownedAccountLocalData = false;
+  try {
+    unownedAccountLocalData =
+      previousOwner === null &&
+      previousSessionOwner === null &&
+      (hasAccountLocalDataInStorage(window.localStorage) ||
+        hasAccountLocalDataInStorage(window.sessionStorage));
+  } catch {
+    // If storage cannot be inspected, fail closed rather than claiming it.
+    purgeAccountLocalData();
+    return { ownerChanged: true, purged: true };
+  }
   const localOwnerChanged =
     previousOwner !== null && previousOwner !== normalizedUserId;
   const sessionOwnerChanged =
@@ -138,9 +163,17 @@ export function prepareAccountLocalDataScope(
     previousOwner === null && sessionOwnerChanged;
   const sessionOwnerMissingBesideForeignLocal =
     previousSessionOwner === null && localOwnerChanged;
-  const ownerChanged = localOwnerChanged || sessionOwnerChanged;
+  const ownerChanged =
+    localOwnerChanged || sessionOwnerChanged || unownedAccountLocalData;
   if (ownerChanged) {
     clearProposalPersonalizationCaches();
+  }
+  if (unownedAccountLocalData) {
+    const localStoragePurged = purgeStorage("localStorage");
+    const sessionStoragePurged = purgeStorage("sessionStorage");
+    if (!localStoragePurged || !sessionStoragePurged) {
+      return { ownerChanged: true, purged: true };
+    }
   }
   if (localOwnerChanged || localOwnerMissingBesideForeignSession) {
     purgeStorage("localStorage");

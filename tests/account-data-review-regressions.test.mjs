@@ -37,3 +37,15 @@ test("authenticated print routes prepare the account-local scope", () => {
     /function PrintRouteAccountCleanup[\s\S]*prepareAccountLocalDataScope\(userId\)/,
   );
 });
+
+test("unmarked private storage is not claimed by the first authenticated user", () => {
+  const source = readRepositoryFile(
+    "my-app/src/lib/account-local-data.ts",
+  );
+
+  assert.match(source, /hasAccountLocalData/);
+  assert.match(
+    source,
+    /previousOwner === null &&\s+previousSessionOwner === null[\s\S]*unownedAccountLocalData[\s\S]*purgeStorage\("localStorage"\)[\s\S]*purgeStorage\("sessionStorage"\)/,
+  );
+});
