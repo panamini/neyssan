@@ -10,6 +10,7 @@ vi.mock("../proposal-personalization", () => ({
 
 import {
   ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+  ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
   clearAccountLocalDataForSignedOut,
   prepareAccountLocalDataScope,
 } from "../account-local-data";
@@ -52,10 +53,17 @@ describe("account-local-data", () => {
   it("purges account data on sign-out while preserving display preferences", () => {
     seedPrivateBrowserData();
     window.localStorage.setItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY, "user-a");
+    window.sessionStorage.setItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+      "user-a",
+    );
     window.localStorage.setItem("theme", "dark");
     window.localStorage.setItem("twoweeks:ui-language", "fr");
     window.localStorage.setItem("twoweeks:document-language", "en");
     window.localStorage.setItem("twoweeks:motion-preference", "reduced");
+    window.localStorage.setItem("dasti:cv-forge-workspace-mode:v1", "preview");
+    window.localStorage.setItem("dasti:style-forge-render-mode:v1", "proposal");
+    window.localStorage.setItem("dasti:proposal-preview-zoom-index:v1", "4");
     window.localStorage.setItem("unrelated", "preserve me");
 
     clearAccountLocalDataForSignedOut();
@@ -69,12 +77,26 @@ describe("account-local-data", () => {
     expect(
       window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
     ).toBeNull();
+    expect(
+      window.sessionStorage.getItem(
+        ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+      ),
+    ).toBeNull();
     expect(window.localStorage.getItem("theme")).toBe("dark");
     expect(window.localStorage.getItem("twoweeks:ui-language")).toBe("fr");
     expect(window.localStorage.getItem("twoweeks:document-language")).toBe("en");
     expect(window.localStorage.getItem("twoweeks:motion-preference")).toBe(
       "reduced",
     );
+    expect(
+      window.localStorage.getItem("dasti:cv-forge-workspace-mode:v1"),
+    ).toBe("preview");
+    expect(
+      window.localStorage.getItem("dasti:style-forge-render-mode:v1"),
+    ).toBe("proposal");
+    expect(
+      window.localStorage.getItem("dasti:proposal-preview-zoom-index:v1"),
+    ).toBe("4");
     expect(window.localStorage.getItem("unrelated")).toBe("preserve me");
     expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(1);
   });
@@ -102,5 +124,63 @@ describe("account-local-data", () => {
       window.localStorage.getItem(ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY),
     ).toBe("user-b");
     expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("purges stale session data in every tab without deleting the new owner's local data", () => {
+    window.localStorage.setItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+      "user-b",
+    );
+    window.localStorage.setItem("cvDocuments", "user-b private cv library");
+    window.sessionStorage.setItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+      "user-a",
+    );
+    window.sessionStorage.setItem(
+      "dasti:proposal-output-draft:session:v1",
+      "user-a private proposal",
+    );
+
+    expect(prepareAccountLocalDataScope("user-b")).toEqual({
+      ownerChanged: true,
+      purged: true,
+    });
+    expect(window.localStorage.getItem("cvDocuments")).toBe(
+      "user-b private cv library",
+    );
+    expect(
+      window.sessionStorage.getItem("dasti:proposal-output-draft:session:v1"),
+    ).toBeNull();
+    expect(
+      window.sessionStorage.getItem(
+        ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+      ),
+    ).toBe("user-b");
+    expect(clearProposalPersonalizationCachesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps same-account data stable after both owner markers are prepared", () => {
+    expect(prepareAccountLocalDataScope("user-a")).toEqual({
+      ownerChanged: true,
+      purged: true,
+    });
+    window.localStorage.setItem("cvDocuments", "user-a private cv library");
+    window.sessionStorage.setItem(
+      "dasti:proposal-output-draft:session:v1",
+      "user-a private proposal",
+    );
+    clearProposalPersonalizationCachesMock.mockClear();
+
+    expect(prepareAccountLocalDataScope("user-a")).toEqual({
+      ownerChanged: false,
+      purged: false,
+    });
+    expect(window.localStorage.getItem("cvDocuments")).toBe(
+      "user-a private cv library",
+    );
+    expect(
+      window.sessionStorage.getItem("dasti:proposal-output-draft:session:v1"),
+    ).toBe("user-a private proposal");
+    expect(clearProposalPersonalizationCachesMock).not.toHaveBeenCalled();
   });
 });

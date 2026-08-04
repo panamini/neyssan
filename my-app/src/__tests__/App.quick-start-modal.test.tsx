@@ -327,6 +327,34 @@ describe("App Quick Start pane", () => {
     expect(window.localStorage.getItem("theme")).toBe("dark");
   });
 
+  it("purges account-local data when the OAuth continuation route loses auth", async () => {
+    window.localStorage.setItem("cvDocuments", "private account CV");
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      "private proposal",
+    );
+    window.localStorage.setItem("theme", "dark");
+    authState.isSignedIn = false;
+    authState.userId = null;
+    window.history.replaceState(
+      {},
+      "",
+      "/oauth/continue?mcp_oauth_intent=secret_handle-123",
+    );
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Completing sign in" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Sidebar")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+    expect(
+      window.localStorage.getItem("dasti:proposal-compose-draft:v1"),
+    ).toBeNull();
+    expect(window.localStorage.getItem("theme")).toBe("dark");
+  });
+
   it("does not expose private print routes to a signed-out visitor", async () => {
     authState.isSignedIn = false;
     authState.userId = null;

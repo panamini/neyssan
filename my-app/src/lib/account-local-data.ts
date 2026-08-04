@@ -2,9 +2,14 @@ import { clearProposalPersonalizationCaches } from "./proposal-personalization";
 
 export const ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY =
   "twoweeks:account-local-data-owner:v1";
+export const ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY =
+  "twoweeks:account-local-data-session-owner:v1";
 
 const SAFE_LOCAL_PREFERENCE_KEYS = new Set([
   "theme",
+  "dasti:cv-forge-workspace-mode:v1",
+  "dasti:proposal-preview-zoom-index:v1",
+  "dasti:style-forge-render-mode:v1",
   "twoweeks:document-language",
   "twoweeks:document-page-size-preference",
   "twoweeks:motion-preference",
@@ -63,6 +68,14 @@ function removeAccountLocalDataFromStorage(storage: Storage): void {
   }
 }
 
+function purgeStorage(storage: Storage): void {
+  try {
+    removeAccountLocalDataFromStorage(storage);
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
 function purgeAccountLocalData(): void {
   clearProposalPersonalizationCaches();
 
@@ -70,17 +83,8 @@ function purgeAccountLocalData(): void {
     return;
   }
 
-  try {
-    removeAccountLocalDataFromStorage(window.localStorage);
-  } catch {
-    // Storage can be unavailable in privacy-restricted browser contexts.
-  }
-
-  try {
-    removeAccountLocalDataFromStorage(window.sessionStorage);
-  } catch {
-    // Storage can be unavailable in privacy-restricted browser contexts.
-  }
+  purgeStorage(window.localStorage);
+  purgeStorage(window.sessionStorage);
 }
 
 export function clearAccountLocalDataForSignedOut(): void {
@@ -97,23 +101,39 @@ export function prepareAccountLocalDataScope(
   }
 
   let previousOwner: string | null = null;
+  let previousSessionOwner: string | null = null;
   try {
     previousOwner = window.localStorage.getItem(
       ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+    );
+    previousSessionOwner = window.sessionStorage.getItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
     );
   } catch {
     purgeAccountLocalData();
     return { ownerChanged: true, purged: true };
   }
 
-  const ownerChanged = previousOwner !== normalizedUserId;
+  const localOwnerChanged = previousOwner !== normalizedUserId;
+  const sessionOwnerChanged = previousSessionOwner !== normalizedUserId;
+  const ownerChanged = localOwnerChanged || sessionOwnerChanged;
   if (ownerChanged) {
-    purgeAccountLocalData();
+    clearProposalPersonalizationCaches();
+  }
+  if (localOwnerChanged) {
+    purgeStorage(window.localStorage);
+  }
+  if (sessionOwnerChanged) {
+    purgeStorage(window.sessionStorage);
   }
 
   try {
     window.localStorage.setItem(
       ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+      normalizedUserId,
+    );
+    window.sessionStorage.setItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
       normalizedUserId,
     );
   } catch {

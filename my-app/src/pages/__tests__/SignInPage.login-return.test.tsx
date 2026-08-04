@@ -150,6 +150,69 @@ describe("sign-in return convention", () => {
     expect(testState.signInProps?.fallbackRedirectUrl).toBe(expectedPath);
   });
 
+  it("passes a validated private deep link from router state to Clerk SignIn", () => {
+    const returnTo = "/jobs/job-123?tab=brief";
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: "/sign-in", state: { returnTo } }]}
+      >
+        <SignInPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("clerk-sign-in")).toHaveAttribute(
+      "data-force-redirect-url",
+      returnTo,
+    );
+    expect(screen.getByTestId("clerk-sign-in")).toHaveAttribute(
+      "data-fallback-redirect-url",
+      returnTo,
+    );
+  });
+
+  it.each([
+    ["external URL", "https://evil.example/jobs/job-123"],
+    ["protocol-relative URL", "//evil.example/jobs/job-123"],
+    ["sign-in loop", "/sign-in"],
+    ["sign-out loop", "/sign-out"],
+    ["OAuth continuation", "/oauth/continue?mcp_oauth_intent=abc"],
+  ])("rejects an unsafe private return in router state: %s", (_label, returnTo) => {
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: "/sign-in", state: { returnTo } }]}
+      >
+        <SignInPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("clerk-sign-in")).toHaveAttribute(
+      "data-force-redirect-url",
+      DEFAULT_SIGN_IN_RETURN_PATH,
+    );
+  });
+
+  it("does not use private router state to recover from invalid direct OAuth parameters", () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/sign-in",
+            search: "?mcp_oauth_intent=https%3A%2F%2Fevil.example",
+            state: { returnTo: "/jobs/job-123" },
+          },
+        ]}
+      >
+        <SignInPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("clerk-sign-in")).toHaveAttribute(
+      "data-force-redirect-url",
+      DEFAULT_SIGN_IN_RETURN_PATH,
+    );
+  });
+
   it("uses browser document navigation for already-authenticated MCP OAuth returns", async () => {
     testState.authenticated = true;
     const intentHandle = "fedcba9876543210".repeat(4);

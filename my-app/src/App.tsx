@@ -265,7 +265,11 @@ function AppRouter(): JSX.Element {
   }
 
   if (location.pathname === "/oauth/continue") {
-    return <McpOAuthContinuationPage />;
+    return (
+      <AccountDataBoundary signedOutBehavior="render">
+        <McpOAuthContinuationPage />
+      </AccountDataBoundary>
+    );
   }
 
   let privateRoute: JSX.Element;

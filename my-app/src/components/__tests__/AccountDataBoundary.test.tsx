@@ -83,6 +83,21 @@ describe("AccountDataBoundary", () => {
     expect(screen.getByText("Sign in safely")).toBeInTheDocument();
   });
 
+  it("purges data but keeps a public continuation route visible when signed out", () => {
+    authState.isLoaded = true;
+
+    render(
+      <MemoryRouter initialEntries={["/oauth/continue"]}>
+        <AccountDataBoundary signedOutBehavior="render">
+          <div>OAuth continuation</div>
+        </AccountDataBoundary>
+      </MemoryRouter>,
+    );
+
+    expect(clearAccountLocalDataForSignedOutMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("OAuth continuation")).toBeInTheDocument();
+  });
+
   it("prepares the exact account scope before rendering private children", () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;

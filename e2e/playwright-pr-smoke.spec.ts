@@ -95,50 +95,49 @@ test.describe("PR Playwright smoke", () => {
   }) => {
     const dashboardResponse = await page.goto(`${APP_URL}/dashboard`);
     expect(dashboardResponse?.status()).toBe(200);
-    await expect(page.getByText("Recent work").first()).toBeVisible();
-    await expect(
-      page.getByText("Resume the work already in progress.").first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByText("Recent work")).toHaveCount(0);
 
     const jobsResponse = await page.goto(`${APP_URL}/jobs`);
     expect(jobsResponse?.status()).toBe(200);
-    await expect(page.getByText("Sign in to see jobs.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   });
 
-  test("loads the seeded CV preview and opens the profile editor panel", async ({
+  test("blocks a seeded CV workspace without an authenticated account", async ({
     page,
   }) => {
     const response = await page.goto(`${APP_URL}/cv?id=${smokeCv.id}`);
     expect(response?.status()).toBe(200);
 
-    await expect(page.getByText("Smoke Candidate").first()).toBeVisible();
-    await expect(
-      page.locator('[data-renderer-variant="swissminima"]').first(),
-    ).toBeVisible();
-
-    await page.locator('[data-preview-section="contact"]').first().click();
-    await expect(
-      page.getByRole("dialog").getByRole("heading", { name: "Profile" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByText("Smoke Candidate")).toHaveCount(0);
+    expect(
+      await page.evaluate(() => window.localStorage.getItem("cvDocuments")),
+    ).toBeNull();
+    expect(
+      await page.evaluate(() =>
+        window.localStorage.getItem("dasti:cv-forge-workspace-mode:v1"),
+      ),
+    ).toBe("preview");
   });
 
-  test("loads the seeded proposal workspace and toggles edit/preview mode", async ({
+  test("blocks a seeded proposal workspace without an authenticated account", async ({
     page,
   }) => {
     const response = await page.goto(`${APP_URL}/proposal`);
     expect(response?.status()).toBe(200);
 
-    await expect(proposalStage(page)).toBeVisible();
-    await expect(proposalStage(page)).toContainText("Smoke proposal body.");
-    await expect(
-      page.getByRole("button", { name: "Edit Proposal title" }),
-    ).toBeVisible();
-
-    const toolbar = page.getByTestId("proposal-toolbar");
-    await toolbar.getByRole("button", { name: "Edit proposal" }).click();
-    await expect(page.locator(".dasti-proposal-editor-page")).toBeVisible();
-
-    await toolbar.getByRole("button", { name: "Preview proposal" }).click();
-    await expect(proposalStage(page)).toContainText("Smoke proposal body.");
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(proposalStage(page)).toHaveCount(0);
+    expect(
+      await page.evaluate(() =>
+        window.localStorage.getItem("dasti:proposal-compose-draft:v1"),
+      ),
+    ).toBeNull();
+    expect(
+      await page.evaluate(() =>
+        window.localStorage.getItem("dasti:proposal-output-draft:v1"),
+      ),
+    ).toBeNull();
   });
 });
