@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildAppProposalPersonalizationPayload,
   buildActiveCvSnapshotFromCvDocument,
+  clearProposalPersonalizationCaches,
   clearProposalAttachedCvId,
   extractPersonalizationContextFromCvDocument,
   getActiveLocalPersonalizationSource,
@@ -298,6 +299,24 @@ describe("buildAppProposalPersonalizationPayload", () => {
 
     expect(CV_ALPHA.title).toBe("Alex Martin Resume");
     expect(snapshot.title).toBe("Operations Associate — Alex Martin");
+  });
+
+  it("drops in-memory personalization snapshots when account data is purged", () => {
+    const mutableCv = structuredClone(CV_ALPHA) as any;
+    const firstSnapshot = buildActiveCvSnapshotFromCvDocument(mutableCv);
+
+    mutableCv.sections[0].structuredContent[0].name = "Previous account";
+    expect(buildActiveCvSnapshotFromCvDocument(mutableCv)).toBe(firstSnapshot);
+
+    clearProposalPersonalizationCaches();
+
+    expect(buildActiveCvSnapshotFromCvDocument(mutableCv)).not.toBe(
+      firstSnapshot,
+    );
+    expect(
+      buildActiveCvSnapshotFromCvDocument(mutableCv).personalizationContext
+        ?.name,
+    ).toBe("Previous account");
   });
 
   it("migrates the legacy active CV once and keeps proposal detach independent", () => {

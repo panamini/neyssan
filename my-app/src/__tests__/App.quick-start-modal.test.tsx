@@ -10,17 +10,26 @@ const {
   importCvMock,
   createNewCvMock,
   importFileMock,
+  signOutMock,
   cvLibraryState,
+  authState,
 } = vi.hoisted(() => ({
   importCvMock: vi.fn(),
   createNewCvMock: vi.fn(),
   importFileMock: vi.fn(),
+  signOutMock: vi.fn(),
   cvLibraryState: {
     currentCvId: null as string | null,
+  },
+  authState: {
+    isLoaded: true,
+    isSignedIn: true,
+    userId: "user-app-quick-start" as string | null,
   },
 }));
 
 vi.mock("convex/react", () => ({
+  Authenticated: () => null,
   Unauthenticated: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useConvexAuth: () => ({
     isLoading: false,
@@ -30,11 +39,12 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@clerk/clerk-react", () => ({
+  SignIn: () => <div>Clerk sign in</div>,
   SignInButton: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   UserButton: () => <button type="button">User menu</button>,
-  useAuth: () => ({ isSignedIn: false }),
+  useAuth: () => authState,
   useUser: () => ({ user: null }),
-  useClerk: () => ({ signOut: vi.fn() }),
+  useClerk: () => ({ signOut: signOutMock }),
 }));
 
 vi.mock("../components/ConvexStatusBanner", () => ({
@@ -118,6 +128,7 @@ vi.mock("../lib/onboarding-state", () => ({
 }));
 
 vi.mock("../lib/proposal-personalization", () => ({
+  clearProposalPersonalizationCaches: vi.fn(),
   clearActiveLocalCvId: vi.fn(),
   setProposalAttachedCvId: vi.fn(),
 }));
@@ -145,15 +156,22 @@ vi.mock("../lib/storage-diagnostics", () => ({
 vi.mock("../../convex/_generated/api", () => ({
   api: {
     proposalsPublic: { default: "proposalsPublic.default" },
+    proposalSettings: { getPresets: "proposalSettings.getPresets" },
   },
 }));
 
 describe("App Quick Start pane", () => {
   beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     importCvMock.mockReset();
     createNewCvMock.mockReset();
     importFileMock.mockReset();
+    signOutMock.mockReset();
     cvLibraryState.currentCvId = null;
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.userId = "user-app-quick-start";
     window.history.replaceState(
       {
         usr: createQuickStartLocationState(null),
@@ -251,5 +269,72 @@ describe("App Quick Start pane", () => {
       within(document.querySelector(".app-pages") as HTMLElement).queryByText("Proposal forge"),
     ).not.toBeInTheDocument();
     expect(window.location.pathname).toBe("/proposal");
+  });
+
+  it("purges account-local data and hides the private shell after sign-out", async () => {
+    window.localStorage.setItem("cvDocuments", "private account CV");
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      "private proposal",
+    );
+    window.localStorage.setItem("theme", "dark");
+    authState.isSignedIn = false;
+    authState.userId = null;
+    window.history.replaceState({}, "", "/dashboard");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByText("Sidebar")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+    expect(
+      window.localStorage.getItem("dasti:proposal-compose-draft:v1"),
+    ).toBeNull();
+    expect(window.localStorage.getItem("theme")).toBe("dark");
+  });
+
+  it("purges account-local data after the supported sign-out route completes", async () => {
+    window.localStorage.setItem(
+      "twoweeks:account-local-data-owner:v1",
+      "user-app-quick-start",
+    );
+    window.localStorage.setItem("cvDocuments", "private account CV");
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      "private proposal",
+    );
+    window.localStorage.setItem("theme", "dark");
+    window.history.replaceState({}, "", "/sign-out");
+
+    const view = render(<App />);
+
+    await waitFor(() => {
+      expect(signOutMock).toHaveBeenCalledWith({ redirectUrl: "/sign-in" });
+    });
+    expect(window.localStorage.getItem("cvDocuments")).toBe(
+      "private account CV",
+    );
+
+    authState.isSignedIn = false;
+    authState.userId = null;
+    view.rerender(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("cvDocuments")).toBeNull();
+    expect(
+      window.localStorage.getItem("dasti:proposal-compose-draft:v1"),
+    ).toBeNull();
+    expect(window.localStorage.getItem("theme")).toBe("dark");
+  });
+
+  it("does not expose private print routes to a signed-out visitor", async () => {
+    authState.isSignedIn = false;
+    authState.userId = null;
+    window.history.replaceState({}, "", "/print/resume");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByText("Resume print")).not.toBeInTheDocument();
   });
 });

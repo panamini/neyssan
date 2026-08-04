@@ -20,6 +20,13 @@ const LOCAL_LIBRARY_KEYS = [
 const parsedDocumentCache = new Map<string, CvDocument | null>();
 const libraryDocumentsCache = new Map<string, CvDocument[]>();
 const activeCvSnapshotCache = new Map<string, ActiveCvSnapshot>();
+
+export function clearProposalPersonalizationCaches(): void {
+  parsedDocumentCache.clear();
+  libraryDocumentsCache.clear();
+  activeCvSnapshotCache.clear();
+}
+
 export const PROPOSAL_ATTACHED_CV_STORAGE_KEY =
   "dasti:proposal-attached-cv-id:v1";
 export const PROPOSAL_ATTACHED_CV_UPDATED_EVENT =

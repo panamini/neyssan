@@ -34,6 +34,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
 import { AppTopbar, TopbarTitleSync } from "./components/AppTopbar";
+import { AccountDataBoundary } from "./components/AccountDataBoundary";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import {
   ForgeTemplatePanelProvider,
@@ -263,29 +264,33 @@ function AppRouter(): JSX.Element {
     return <SignInPage />;
   }
 
+  if (location.pathname === "/oauth/continue") {
+    return <McpOAuthContinuationPage />;
+  }
+
+  let privateRoute: JSX.Element;
+
   if (location.pathname === "/sign-out") {
-    return <SignOutPage />;
+    privateRoute = <SignOutPage />;
+  } else if (location.pathname === "/print/resume") {
+    privateRoute = <ResumePrintPage />;
+  } else if (location.pathname === "/print/proposal") {
+    privateRoute = <ProposalPrintPage />;
+  } else if (location.pathname === "/debug/resume-font-parity") {
+    privateRoute = <ResumeFontParityHarnessPage />;
+  } else if (location.pathname === "/debug/pdf-raster") {
+    privateRoute = <PdfRasterHarnessPage />;
+  } else if (
+    location.pathname === "/debug/mcp-safe-summary-proof-operator"
+  ) {
+    privateRoute = <McpSafeSummaryProofOperatorPage />;
+  } else {
+    privateRoute = <AppShell />;
   }
 
-  if (location.pathname === "/print/resume") {
-    return <ResumePrintPage />;
-  }
-
-  if (location.pathname === "/print/proposal") {
-    return <ProposalPrintPage />;
-  }
-
-   if (location.pathname === "/debug/resume-font-parity") {
-    return <ResumeFontParityHarnessPage />;
-  }
-
-  if (location.pathname === "/debug/pdf-raster") {
-    return <PdfRasterHarnessPage />;
-  }
-
-  if (location.pathname === "/debug/mcp-safe-summary-proof-operator") {
-    return <McpSafeSummaryProofOperatorPage />;
-  }
-
-  return <AppShell />;
+  return (
+    <AccountDataBoundary>
+      {privateRoute}
+    </AccountDataBoundary>
+  );
 }
