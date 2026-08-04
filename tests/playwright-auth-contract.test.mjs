@@ -19,6 +19,10 @@ test("routes only the full Playwright suite through authenticated Clerk state", 
   assert.match(workflow, /--project="\$PROJECT"/);
   assert.match(config, /name:\s*['"]clerk setup['"]/);
   assert.match(config, /name:\s*['"]authenticated-chromium['"]/);
+  assert.match(
+    config,
+    /name:\s*['"]clerk setup['"][\s\S]*?use:\s*desktopChromeUse/,
+  );
   assert.match(config, /dependencies:\s*\[['"]clerk setup['"]\]/);
   assert.match(config, /storageState:\s*CLERK_AUTH_STATE_PATH/);
 });
