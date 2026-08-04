@@ -108,10 +108,11 @@ import {
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
   startFreshProposalWorkspace,
-  writeStoredProposalComposeDraft,
+  writeStoredProposalComposeDraft as writeStoredProposalComposeDraftUnsafe,
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { readAccountLocalDataOwner } from "../lib/account-local-data";
 import { translateUi } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
@@ -2710,6 +2711,18 @@ export function ProposalForge(): JSX.Element {
     },
     [location],
   );
+  const writeStoredProposalComposeDraft = React.useCallback(
+    (nextDraft: StoredProposalComposeDraft | null) => {
+      if (
+        !mountedRef.current ||
+        readAccountLocalDataOwner() !== proposalAccountOwnerRef.current
+      ) {
+        return;
+      }
+      writeStoredProposalComposeDraftUnsafe(nextDraft);
+    },
+    [],
+  );
   const [storedOutputDraft, setStoredOutputDraft] =
     React.useState<StoredProposalOutputDraft | null>(() =>
       readStoredProposalOutputDraft(),
@@ -2772,6 +2785,12 @@ export function ProposalForge(): JSX.Element {
     } | null>(null);
   const writeStoredOutputDraft = React.useCallback(
     (nextDraft: StoredProposalOutputDraft | null) => {
+      if (
+        !mountedRef.current ||
+        readAccountLocalDataOwner() !== proposalAccountOwnerRef.current
+      ) {
+        return;
+      }
       const storageSnapshots = readProposalStyleTraceStorageSnapshots();
       const draftWinnerSource =
         resolveOutputDraftWinnerSource({
@@ -3598,6 +3617,13 @@ export function ProposalForge(): JSX.Element {
     null,
   );
   const mountedRef = React.useRef(true);
+  const proposalAccountOwnerRef = React.useRef(readAccountLocalDataOwner());
+  const isProposalAccountScopeCurrent = React.useCallback(
+    () =>
+      mountedRef.current &&
+      readAccountLocalDataOwner() === proposalAccountOwnerRef.current,
+    [],
+  );
   const inlineImportRequestIdRef = React.useRef(0);
   const pendingInlineImportedCvIdRef = React.useRef<string | null>(null);
   const pendingInlineImportRequestIdRef = React.useRef<number | null>(null);
@@ -3620,9 +3646,11 @@ export function ProposalForge(): JSX.Element {
   const appliedSavedToolbarVoicePresetRef = React.useRef(false);
   const pendingComposeDraftSyncRef =
     React.useRef<StoredProposalComposeDraft | null>(null);
+  const pendingComposeDraftOwnerRef = React.useRef<string | null>(null);
   const composeDraftSyncTimeoutRef = React.useRef<number | null>(null);
   const cancelPendingComposeDraftSync = React.useCallback(() => {
     pendingComposeDraftSyncRef.current = null;
+    pendingComposeDraftOwnerRef.current = null;
     if (composeDraftSyncTimeoutRef.current !== null) {
       window.clearTimeout(composeDraftSyncTimeoutRef.current);
       composeDraftSyncTimeoutRef.current = null;
@@ -3955,6 +3983,7 @@ export function ProposalForge(): JSX.Element {
     React.useRef<Promise<Id<"proposals"> | null> | null>(null);
   type ComposeSaveSnapshot = {
     id: Id<"proposals"> | null;
+    accountOwner: string | null;
     title: string;
     content: string;
     metadata: ProposalDocumentMetadata | undefined;
@@ -5572,6 +5601,7 @@ export function ProposalForge(): JSX.Element {
       };
       return {
         id: generatedProposalId,
+        accountOwner: proposalAccountOwnerRef.current,
         title: normalizedTitle,
         content: trimmedContent,
         metadata,
@@ -5611,6 +5641,13 @@ export function ProposalForge(): JSX.Element {
       initialSnapshot: NonNullable<typeof composeAutosaveSnapshot>,
       options?: { silent?: boolean },
     ) => {
+      if (
+        !isProposalAccountScopeCurrent() ||
+        initialSnapshot.accountOwner !== proposalAccountOwnerRef.current
+      ) {
+        pendingQueuedComposeSnapshotRef.current = null;
+        return null;
+      }
       if (!canPersistProposalState) {
         if (!options?.silent) {
           showConvexAuthRequiredToast("Save");
@@ -5632,6 +5669,13 @@ export function ProposalForge(): JSX.Element {
           generatedProposalIdRef.current;
 
         while (nextSnapshot) {
+          if (
+            !isProposalAccountScopeCurrent() ||
+            nextSnapshot.accountOwner !== proposalAccountOwnerRef.current
+          ) {
+            pendingQueuedComposeSnapshotRef.current = null;
+            break;
+          }
           pendingQueuedComposeSnapshotRef.current = null;
           isSavingComposeProposalRef.current = true;
           setComposeSaveStatus("saving");
@@ -5817,6 +5861,7 @@ export function ProposalForge(): JSX.Element {
       composeTraceWinner.winnerReason,
       composeTraceWinner.winnerSource,
       createProposal,
+      isProposalAccountScopeCurrent,
       selectedProposalId,
       showConvexAuthRequiredToast,
       traceProposalStyle,
@@ -5825,6 +5870,12 @@ export function ProposalForge(): JSX.Element {
   );
   const scheduleProposalSave = React.useCallback(
     (snapshot: NonNullable<typeof composeAutosaveSnapshot>) => {
+      if (
+        !isProposalAccountScopeCurrent() ||
+        snapshot.accountOwner !== proposalAccountOwnerRef.current
+      ) {
+        return;
+      }
       if (composeAutosaveTimeoutRef.current) {
         window.clearTimeout(composeAutosaveTimeoutRef.current);
       }
@@ -5834,7 +5885,11 @@ export function ProposalForge(): JSX.Element {
       composeAutosaveTimeoutRef.current = window.setTimeout(() => {
         composeAutosaveTimeoutRef.current = null;
         const nextSnapshot = pendingQueuedComposeSnapshotRef.current;
-        if (!nextSnapshot) {
+        if (
+          !nextSnapshot ||
+          !isProposalAccountScopeCurrent() ||
+          nextSnapshot.accountOwner !== proposalAccountOwnerRef.current
+        ) {
           return;
         }
         void performProposalSave(nextSnapshot, { silent: true }).catch(
@@ -5842,7 +5897,7 @@ export function ProposalForge(): JSX.Element {
         );
       }, PROPOSAL_SAVE_DEBOUNCE_MS);
     },
-    [performProposalSave],
+    [isProposalAccountScopeCurrent, performProposalSave],
   );
   const flushScheduledProposalSave = React.useCallback(
     async (
@@ -7893,8 +7948,9 @@ export function ProposalForge(): JSX.Element {
 
   const flushPendingComposeDraftSync = React.useCallback(() => {
     const pendingDraft = pendingComposeDraftSyncRef.current;
+    const pendingOwner = pendingComposeDraftOwnerRef.current;
     cancelPendingComposeDraftSync();
-    if (!pendingDraft) {
+    if (!pendingDraft || readAccountLocalDataOwner() !== pendingOwner) {
       return;
     }
     commitComposeDraftPreview(pendingDraft);
@@ -7904,6 +7960,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       const nextDraft = buildStoredProposalComposeDraftSnapshot(values);
       pendingComposeDraftSyncRef.current = nextDraft;
+      pendingComposeDraftOwnerRef.current = readAccountLocalDataOwner();
       if (composeDraftSyncTimeoutRef.current !== null) {
         window.clearTimeout(composeDraftSyncTimeoutRef.current);
       }
@@ -7930,8 +7987,9 @@ export function ProposalForge(): JSX.Element {
   React.useEffect(() => {
     return () => {
       const pendingDraft = pendingComposeDraftSyncRef.current;
+      const pendingOwner = pendingComposeDraftOwnerRef.current;
       cancelPendingComposeDraftSync();
-      if (pendingDraft) {
+      if (pendingDraft && readAccountLocalDataOwner() === pendingOwner) {
         writeStoredProposalComposeDraft(pendingDraft);
       }
     };
@@ -9346,6 +9404,9 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalStart = React.useCallback(
     (values: FormValues) => {
+      if (!isProposalAccountScopeCurrent()) {
+        return;
+      }
       cancelPendingComposeDraftSync();
       skipNextStoredOutputDraftSyncRef.current = true;
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
@@ -9438,6 +9499,7 @@ export function ProposalForge(): JSX.Element {
       proposalDocumentTitle,
       resolveHeadingFieldFromAuto,
       resolveProposalVoicePreset,
+      isProposalAccountScopeCurrent,
     ],
   );
 
@@ -9449,6 +9511,9 @@ export function ProposalForge(): JSX.Element {
       nextProposalId?: Id<"proposals">,
       languageMetadata?: DocumentLanguageGenerationMetadata,
     ) => {
+      if (!isProposalAccountScopeCurrent()) {
+        return false;
+      }
       cancelPendingComposeDraftSync();
       const personalizationSource = generationPersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
@@ -9728,6 +9793,7 @@ export function ProposalForge(): JSX.Element {
       resolveProposalVoicePreset,
       updateProposal,
       defaultPreviewApplicantHeader.location,
+      isProposalAccountScopeCurrent,
       writeStoredOutputDraft,
     ],
   );

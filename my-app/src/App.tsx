@@ -1,6 +1,7 @@
 import "./styles/globals.css";
 
 import React from "react";
+import { useAuth } from "@clerk/clerk-react";
 import {
   BrowserRouter,
   Routes,
@@ -34,6 +35,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
 import { AppTopbar, TopbarTitleSync } from "./components/AppTopbar";
+import { AccountDataBoundary } from "./components/AccountDataBoundary";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import {
   ForgeTemplatePanelProvider,
@@ -60,6 +62,10 @@ import {
   type OnboardingReplayTargetStep,
 } from "./lib/onboarding-replay-event";
 import { useThemeMode } from "./lib/theme-mode";
+import {
+  clearAccountLocalDataForSignedOut,
+  prepareAccountLocalDataScope,
+} from "./lib/account-local-data";
 
 /**
  * AppShell — structure exacte du squelette dasti-v16 :
@@ -256,6 +262,31 @@ export default function App(): JSX.Element {
   );
 }
 
+function PrintRouteAccountCleanup({
+  children,
+}: {
+  children: React.ReactNode;
+}): JSX.Element {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+
+  React.useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
+    if (!isSignedIn || !userId) {
+      clearAccountLocalDataForSignedOut();
+      return;
+    }
+
+    prepareAccountLocalDataScope(userId);
+  }, [isLoaded, isSignedIn, userId]);
+
+  // Print payloads are validated and injected by the export worker. Rendering
+  // must not depend on Clerk becoming reachable in that technical page.
+  return <>{children}</>;
+}
+
 function AppRouter(): JSX.Element {
   const location = useLocation();
 
@@ -263,29 +294,53 @@ function AppRouter(): JSX.Element {
     return <SignInPage />;
   }
 
-  if (location.pathname === "/sign-out") {
-    return <SignOutPage />;
+  if (location.pathname === "/oauth/continue") {
+    return (
+      <AccountDataBoundary signedOutBehavior="render">
+        <McpOAuthContinuationPage />
+      </AccountDataBoundary>
+    );
   }
 
+  // The document-export worker opens these pure renderer routes in a fresh,
+  // intentionally unauthenticated page. Render independently of auth loading;
+  // signed-out cleanup follows once Clerk resolves. The pages consume only
+  // their validated injected payload.
   if (location.pathname === "/print/resume") {
-    return <ResumePrintPage />;
+    return (
+      <PrintRouteAccountCleanup>
+        <ResumePrintPage />
+      </PrintRouteAccountCleanup>
+    );
   }
 
   if (location.pathname === "/print/proposal") {
-    return <ProposalPrintPage />;
+    return (
+      <PrintRouteAccountCleanup>
+        <ProposalPrintPage />
+      </PrintRouteAccountCleanup>
+    );
   }
 
-   if (location.pathname === "/debug/resume-font-parity") {
-    return <ResumeFontParityHarnessPage />;
+  let privateRoute: JSX.Element;
+
+  if (location.pathname === "/sign-out") {
+    privateRoute = <SignOutPage />;
+  } else if (location.pathname === "/debug/resume-font-parity") {
+    privateRoute = <ResumeFontParityHarnessPage />;
+  } else if (location.pathname === "/debug/pdf-raster") {
+    privateRoute = <PdfRasterHarnessPage />;
+  } else if (
+    location.pathname === "/debug/mcp-safe-summary-proof-operator"
+  ) {
+    privateRoute = <McpSafeSummaryProofOperatorPage />;
+  } else {
+    privateRoute = <AppShell />;
   }
 
-  if (location.pathname === "/debug/pdf-raster") {
-    return <PdfRasterHarnessPage />;
-  }
-
-  if (location.pathname === "/debug/mcp-safe-summary-proof-operator") {
-    return <McpSafeSummaryProofOperatorPage />;
-  }
-
-  return <AppShell />;
+  return (
+    <AccountDataBoundary>
+      {privateRoute}
+    </AccountDataBoundary>
+  );
 }

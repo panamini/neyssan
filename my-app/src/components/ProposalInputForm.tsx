@@ -92,7 +92,7 @@ interface ProposalInputFormProps {
     fallbackInfo?: ProposalGenerationFallbackInfo,
     proposalId?: Id<"proposals">,
     languageMetadata?: DocumentLanguageGenerationMetadata,
-  ) => void;
+  ) => boolean | void;
   onStart?: (values: FormValues) => void;
   onStop?: () => void;
   onError?: (
@@ -498,6 +498,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const activeGenerateRunIdRef = React.useRef(0);
   const activeGenerationClientRunIdRef = React.useRef<string | null>(null);
   const stopRequestedRunIdRef = React.useRef<number | null>(null);
+  const mountedRef = React.useRef(true);
   const pendingNoCvSubmissionRef = React.useRef<FormValues | null>(null);
   const generationRequestRef = React.useRef<(values: FormValues) => void>(
     () => {},
@@ -665,10 +666,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }, [refreshActiveCvState]);
 
   React.useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      const clientRunId = activeGenerationClientRunIdRef.current;
+      if (clientRunId) {
+        void requestProposalGenerationCancel({ clientRunId }).catch(() => {});
+      }
+      activeGenerateRunIdRef.current = 0;
+      activeGenerationClientRunIdRef.current = null;
+      stopRequestedRunIdRef.current = null;
       clearGenerateButtonTimers();
     };
-  }, [clearGenerateButtonTimers]);
+  }, [clearGenerateButtonTimers, requestProposalGenerationCancel]);
 
   React.useEffect(() => {
     if (!canPersistProposalWorkspaceState) {
@@ -1128,7 +1138,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         const { clientRunId: _clientRunId, ...legacyPayload } = payload;
         result = await runGenerateProposal(legacyPayload);
       }
-      if (stopRequestedRunIdRef.current === runId) {
+      if (!mountedRef.current || stopRequestedRunIdRef.current === runId) {
         return;
       }
       if (result) {
@@ -1136,7 +1146,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           result.proposalContent,
           currentActiveCvSource.personalizationContext?.name,
         );
-        onSubmit(
+        const accepted = onSubmit(
           normalizedValues,
           signedProposalContent,
           {
@@ -1148,6 +1158,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           result.proposalId,
           languageMetadata,
         );
+        if (accepted === false) {
+          return;
+        }
         shouldNotifySubmitAnimationCompleteRef.current = true;
 
         // The generation action already stores the proposal. Mark that row as a
@@ -1172,7 +1185,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       }
     } catch (error: unknown) {
       console.error("Error generating proposal:", error);
-      if (stopRequestedRunIdRef.current === runId) {
+      if (!mountedRef.current || stopRequestedRunIdRef.current === runId) {
         return;
       }
       const nextErrorMessage = getProposalGenerationUiErrorMessage({
@@ -1185,6 +1198,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       onError?.(nextErrorMessage, normalizedValues, rawReason);
       shouldNotifySubmitAnimationCompleteRef.current = false;
     } finally {
+      if (!mountedRef.current) {
+        return;
+      }
       const stoppedRunId = stopRequestedRunIdRef.current;
       if (stoppedRunId !== runId) {
         if (shouldNotifySubmitAnimationCompleteRef.current) {

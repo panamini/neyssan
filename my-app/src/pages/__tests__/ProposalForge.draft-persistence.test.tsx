@@ -17,6 +17,7 @@ import {
 import type { ProposalDocument } from "../../lib/proposal-document";
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
 import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
+import { ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY } from "../../lib/account-local-data";
 
 const transformEditorSelectionMock = vi.hoisted(() => vi.fn());
 const genericActionMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
@@ -144,6 +145,26 @@ vi.mock("../../components/ProposalInputForm", () => ({
           }}
         >
           Generate and go to resume
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onValuesChange?.({
+              jobTitle: "Account-scoped role",
+              jobDescription:
+                "Prepare account-scoped application documents from the current job brief.",
+              proposalType: "cover_letter",
+              voicePreset: "signature",
+              formalityLevel: undefined,
+              creativity: undefined,
+              toneTuning: null,
+              characterLimitMode: "none",
+              characterLimitValue: null,
+              modelType: "chatgpt",
+            })
+          }
+        >
+          Stage pending compose draft
         </button>
       </div>
     );
@@ -285,6 +306,80 @@ describe("ProposalForge draft persistence", () => {
       jobTitle: "",
       jobDescription: pastedJobOffer,
     });
+  });
+
+  it("does not restore a pending compose draft after the account owner changes", () => {
+    window.localStorage.setItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+      "user-a",
+    );
+    const view = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+    vi.useFakeTimers();
+
+    try {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Stage pending compose draft",
+          hidden: true,
+        }),
+      );
+      window.localStorage.removeItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
+      window.localStorage.setItem(
+        ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+        "user-b",
+      );
+
+      vi.runAllTimers();
+      expect(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY),
+      ).toBeNull();
+
+      view.unmount();
+
+      expect(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("flushes a pending compose draft when the account owner is unchanged", () => {
+    window.localStorage.setItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+      "user-a",
+    );
+    const view = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+    vi.useFakeTimers();
+
+    try {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Stage pending compose draft",
+          hidden: true,
+        }),
+      );
+      window.localStorage.removeItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
+
+      view.unmount();
+
+      expect(
+        JSON.parse(
+          window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ??
+            "{}",
+        ),
+      ).toMatchObject({ jobTitle: "Account-scoped role" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("clears active pasted job context and disables generation", async () => {

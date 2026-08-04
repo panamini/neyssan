@@ -10,7 +10,10 @@ const INTENT_HANDLE_PATTERN = /^[A-Za-z0-9_-]+$/u;
 const BROWSER_NONCE_PATTERN = /^[0-9a-f]{64}$/u;
 const LOCAL_ORIGIN = "https://twoweeks.local";
 
-type SignInReturnSource = "default" | "mcp_oauth_continuation";
+type SignInReturnSource =
+  | "default"
+  | "mcp_oauth_continuation"
+  | "private_route";
 
 export type SignInReturnResolution = Readonly<{
   path: string;
@@ -23,8 +26,14 @@ export function shouldUseDocumentNavigationForSignInReturn(
   return resolution.source === "mcp_oauth_continuation";
 }
 
-export function resolveSignInReturnPath(search: string): SignInReturnResolution {
+export function resolveSignInReturnPath(
+  search: string,
+  locationState?: unknown,
+): SignInReturnResolution {
   const params = new URLSearchParams(search);
+  const hasDirectMcpReturnParameters =
+    params.has(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER) ||
+    params.has(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER);
   const directReturn = resolveDirectMcpOAuthContinuationPath(params);
   if (directReturn !== undefined) {
     return {
@@ -32,8 +41,22 @@ export function resolveSignInReturnPath(search: string): SignInReturnResolution 
       source: "mcp_oauth_continuation",
     };
   }
+  if (hasDirectMcpReturnParameters) {
+    return defaultSignInReturn();
+  }
 
   const returnValues = params.getAll(MCP_OAUTH_SIGN_IN_RETURN_PARAMETER);
+
+  if (returnValues.length === 0) {
+    const privateReturn = resolvePrivateRouteReturn(locationState);
+    if (privateReturn !== undefined) {
+      return {
+        path: privateReturn,
+        source: "private_route",
+      };
+    }
+    return defaultSignInReturn();
+  }
 
   if (returnValues.length !== 1) {
     return defaultSignInReturn();
@@ -48,6 +71,52 @@ export function resolveSignInReturnPath(search: string): SignInReturnResolution 
     path: canonicalizeMcpOAuthContinuationPath(candidate),
     source: "mcp_oauth_continuation",
   };
+}
+
+function resolvePrivateRouteReturn(locationState: unknown): string | undefined {
+  if (
+    !locationState ||
+    typeof locationState !== "object" ||
+    !("returnTo" in locationState)
+  ) {
+    return undefined;
+  }
+
+  const candidate = (locationState as { returnTo?: unknown }).returnTo;
+  if (
+    typeof candidate !== "string" ||
+    candidate.length === 0 ||
+    candidate.length > MAX_RETURN_PATH_LENGTH ||
+    candidate.includes("\0") ||
+    candidate.includes("\\") ||
+    candidate.includes("#") ||
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//")
+  ) {
+    return undefined;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(candidate, LOCAL_ORIGIN);
+  } catch {
+    return undefined;
+  }
+
+  const canonicalCandidate = `${url.pathname}${url.search}`;
+  const isSignInPath =
+    url.pathname === "/sign-in" || url.pathname.startsWith("/sign-in/");
+  if (
+    url.origin !== LOCAL_ORIGIN ||
+    canonicalCandidate !== candidate ||
+    isSignInPath ||
+    url.pathname === "/sign-out" ||
+    url.pathname === MCP_OAUTH_CONTINUATION_PATH
+  ) {
+    return undefined;
+  }
+
+  return canonicalCandidate;
 }
 
 function resolveDirectMcpOAuthContinuationPath(params: URLSearchParams): string | undefined {

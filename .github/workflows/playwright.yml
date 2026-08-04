@@ -86,27 +86,46 @@ jobs:
         set -euo pipefail
         SMOKE_SUITE="e2e/playwright-pr-smoke.spec.ts"
         FULL_SUITE="e2e/cvforge-preview-linking.spec.ts e2e/ds-v2.spec.ts e2e/proposal-command-layer.spec.ts e2e/proposal-mobile-layout.spec.ts e2e/proposal-workspace-roundtrip.spec.ts e2e/topbar-document-geometry.spec.ts"
+        SMOKE_PROJECT="chromium"
+        FULL_PROJECT="authenticated-chromium"
 
         if [ "$PLAYWRIGHT_EVENT_NAME" = "workflow_dispatch" ] && [ "${PLAYWRIGHT_SUITE_INPUT:-}" = "smoke" ]; then
           SUITE="$SMOKE_SUITE"
+          PROJECT="$SMOKE_PROJECT"
           GLOBAL_TIMEOUT=300000
         elif [ "$PLAYWRIGHT_EVENT_NAME" = "workflow_dispatch" ] || [ "$PLAYWRIGHT_EVENT_NAME" = "schedule" ]; then
+          if [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo "::error::Set the repository secret CLERK_SECRET_KEY to a development-instance key for authenticated Playwright."
+            exit 1
+          fi
+          if [ -z "${E2E_CLERK_USER_EMAIL:-}" ]; then
+            echo "::error::Set the repository secret E2E_CLERK_USER_EMAIL to a dedicated +clerk_test account."
+            exit 1
+          fi
           SUITE="$FULL_SUITE"
+          PROJECT="$FULL_PROJECT"
           GLOBAL_TIMEOUT=840000
         else
           SUITE="$SMOKE_SUITE"
+          PROJECT="$SMOKE_PROJECT"
           GLOBAL_TIMEOUT=300000
         fi
 
-        echo "Running Playwright suite: $SUITE"
-        timeout --kill-after=60s 15m npx playwright test --project=chromium $SUITE --global-timeout="$GLOBAL_TIMEOUT"
+        echo "Running Playwright project $PROJECT with suite: $SUITE"
+        timeout --kill-after=60s 15m npx playwright test --project="$PROJECT" $SUITE --global-timeout="$GLOBAL_TIMEOUT"
       env:
         PLAYWRIGHT_EVENT_NAME: ${{ github.event_name }}
         PLAYWRIGHT_SUITE_INPUT: ${{ inputs.suite }}
         PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
+        CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+        CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+        E2E_CLERK_USER_EMAIL: ${{ secrets.E2E_CLERK_USER_EMAIL }}
         VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+    - name: Remove Playwright Clerk session state
+      if: ${{ always() }}
+      run: rm -f playwright/.clerk/user.json
     - uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:

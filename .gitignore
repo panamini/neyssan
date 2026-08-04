@@ -158,6 +158,7 @@ my-app/src/__tests__/**/__snapshots__/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+/playwright/.clerk/
 .tmp-vitest/
 .tmp-playwright/
 .playwright-browsers/

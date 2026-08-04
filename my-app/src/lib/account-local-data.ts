@@ -1,0 +1,200 @@
+import { clearProposalPersonalizationCaches } from "./proposal-personalization";
+
+export const ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY =
+  "twoweeks:account-local-data-owner:v1";
+export const ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY =
+  "twoweeks:account-local-data-session-owner:v1";
+
+const SAFE_LOCAL_PREFERENCE_KEYS = new Set([
+  "theme",
+  "dasti:cv-forge-workspace-mode:v1",
+  "dasti:proposal-preview-zoom-index:v1",
+  "dasti:style-forge-render-mode:v1",
+  "twoweeks:document-language",
+  "twoweeks:document-page-size-preference",
+  "twoweeks:motion-preference",
+  "twoweeks:proposal-llm-model",
+  "twoweeks:quick-start-completed",
+  "twoweeks:tone-preference",
+  "twoweeks:ui-accent",
+  "twoweeks:ui-custom-accent",
+  "twoweeks:ui-language",
+]);
+
+const ACCOUNT_LOCAL_EXACT_KEYS = new Set([
+  "cvActiveId",
+  "cvDocuments",
+  "cvLibrary",
+  "pdf_ingest_last_parsed",
+]);
+
+const ACCOUNT_LOCAL_KEY_PREFIXES = [
+  "cv:",
+  "cv-doc:",
+  "cv-backup-",
+  "dasti:",
+  "mcp-oauth-continuation-document-request:",
+  "twoweeks:",
+] as const;
+
+type AccountLocalDataScopeResult = {
+  ownerChanged: boolean;
+  purged: boolean;
+};
+
+function isAccountLocalDataKey(key: string): boolean {
+  if (SAFE_LOCAL_PREFERENCE_KEYS.has(key)) {
+    return false;
+  }
+
+  return (
+    ACCOUNT_LOCAL_EXACT_KEYS.has(key) ||
+    ACCOUNT_LOCAL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
+}
+
+function removeAccountLocalDataFromStorage(storage: Storage): void {
+  const keysToRemove: string[] = [];
+
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key && isAccountLocalDataKey(key)) {
+      keysToRemove.push(key);
+    }
+  }
+
+  for (const key of keysToRemove) {
+    storage.removeItem(key);
+  }
+}
+
+function hasAccountLocalDataInStorage(storage: Storage): boolean {
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key && isAccountLocalDataKey(key)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+type BrowserStorageName = "localStorage" | "sessionStorage";
+
+function purgeStorage(storageName: BrowserStorageName): boolean {
+  try {
+    removeAccountLocalDataFromStorage(window[storageName]);
+    return true;
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+    return false;
+  }
+}
+
+function purgeAccountLocalData(): void {
+  clearProposalPersonalizationCaches();
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  purgeStorage("localStorage");
+  purgeStorage("sessionStorage");
+}
+
+export function clearAccountLocalDataForSignedOut(): void {
+  purgeAccountLocalData();
+}
+
+export function readAccountLocalDataOwner(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function prepareAccountLocalDataScope(
+  userId: string,
+): AccountLocalDataScopeResult {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId || typeof window === "undefined") {
+    purgeAccountLocalData();
+    return { ownerChanged: true, purged: true };
+  }
+
+  let previousOwner: string | null = null;
+  let previousSessionOwner: string | null = null;
+  try {
+    previousOwner = window.localStorage.getItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+    );
+    previousSessionOwner = window.sessionStorage.getItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+    );
+  } catch {
+    purgeAccountLocalData();
+    return { ownerChanged: true, purged: true };
+  }
+
+  let unownedAccountLocalData = false;
+  try {
+    unownedAccountLocalData =
+      previousOwner === null &&
+      previousSessionOwner === null &&
+      (hasAccountLocalDataInStorage(window.localStorage) ||
+        hasAccountLocalDataInStorage(window.sessionStorage));
+  } catch {
+    // If storage cannot be inspected, fail closed rather than claiming it.
+    purgeAccountLocalData();
+    return { ownerChanged: true, purged: true };
+  }
+  const localOwnerChanged =
+    previousOwner !== null && previousOwner !== normalizedUserId;
+  const sessionOwnerChanged =
+    previousSessionOwner !== null && previousSessionOwner !== normalizedUserId;
+  const localOwnerMissingBesideForeignSession =
+    previousOwner === null && sessionOwnerChanged;
+  const sessionOwnerMissingBesideForeignLocal =
+    previousSessionOwner === null && localOwnerChanged;
+  const ownerChanged =
+    localOwnerChanged || sessionOwnerChanged || unownedAccountLocalData;
+  if (ownerChanged) {
+    clearProposalPersonalizationCaches();
+  }
+  if (unownedAccountLocalData) {
+    const localStoragePurged = purgeStorage("localStorage");
+    const sessionStoragePurged = purgeStorage("sessionStorage");
+    if (!localStoragePurged || !sessionStoragePurged) {
+      return { ownerChanged: true, purged: true };
+    }
+  }
+  if (localOwnerChanged || localOwnerMissingBesideForeignSession) {
+    purgeStorage("localStorage");
+  }
+  if (sessionOwnerChanged || sessionOwnerMissingBesideForeignLocal) {
+    purgeStorage("sessionStorage");
+  }
+
+  try {
+    window.localStorage.setItem(
+      ACCOUNT_LOCAL_DATA_OWNER_STORAGE_KEY,
+      normalizedUserId,
+    );
+    window.sessionStorage.setItem(
+      ACCOUNT_LOCAL_DATA_SESSION_OWNER_STORAGE_KEY,
+      normalizedUserId,
+    );
+  } catch {
+    purgeAccountLocalData();
+    return { ownerChanged: true, purged: true };
+  }
+
+  return { ownerChanged, purged: ownerChanged };
+}

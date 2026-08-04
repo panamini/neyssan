@@ -4,9 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { CommandPalette } from "../CommandPalette";
 
+const { signOutMock } = vi.hoisted(() => ({
+  signOutMock: vi.fn(),
+}));
+
 vi.mock("@clerk/clerk-react", () => ({
   useClerk: () => ({
-    signOut: vi.fn(),
+    signOut: signOutMock,
   }),
 }));
 
@@ -43,6 +47,31 @@ function PaletteHarness({
 describe("CommandPalette", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    signOutMock.mockReset();
+  });
+
+  it("routes through the sign-out teardown boundary before Clerk sign-out", () => {
+    window.localStorage.setItem("cvDocuments", "private account CV");
+
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Routes>
+          <Route path="*" element={<PaletteHarness />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByRole("option", { name: /Sign out/i }));
+
+    expect(window.localStorage.getItem("cvDocuments")).toBe(
+      "private account CV",
+    );
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("palette-location")).toHaveTextContent(
+      "/sign-out::null",
+    );
   });
 
   it("renders command palette shell chrome in English by default", () => {

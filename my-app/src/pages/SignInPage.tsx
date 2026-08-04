@@ -152,7 +152,10 @@ export function SignInPage({
   documentNavigate = defaultDocumentNavigate,
 }: SignInPageProps = {}): JSX.Element {
   const location = useLocation();
-  const signInReturn = resolveSignInReturnPath(location.search);
+  const signInReturn = resolveSignInReturnPath(
+    location.search,
+    location.state,
+  );
 
   return (
     <>

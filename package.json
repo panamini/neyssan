@@ -10,6 +10,7 @@
     "test": "cd my-app && npm test",
     "pw:install": "npx playwright install chromium firefox webkit",
     "pw:test": "npx playwright test --project=chromium",
+    "test:playwright-auth-contract": "node --test tests/playwright-auth-contract.test.mjs",
     "pw:test:headed": "npx playwright test --project=chromium --headed",
     "pw:test:bundled": "PLAYWRIGHT_FORCE_BUNDLED_CHROMIUM=1 npx playwright test --project=chromium",
     "pw:test:canary": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary' npx playwright test --project=chromium",
@@ -17,6 +18,7 @@
     "parser:rebuild": "TAIL_LOGS=0 FORCE_REBUILD=true ./scripts/start-dev.sh --service-only --rebuild"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.16",
     "@playwright/test": "^1.58.2",
     "@testdino/playwright": "^1.0.11",
     "@types/node": "^25.5.0",

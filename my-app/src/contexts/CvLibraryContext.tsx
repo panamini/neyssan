@@ -1548,8 +1548,24 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   // Debounce machinery for saves
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSavePromiseRef = useRef<Promise<void> | null>(null);
+  const pendingScheduledSaveResolveRef = useRef<(() => void) | null>(null);
+  const isDisposedRef = useRef(false);
   // Guard to indicate an in-flight save (prevents re-entrant scheduling while adapter.save is running)
   const isSavingRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isDisposedRef.current = false;
+    return () => {
+      isDisposedRef.current = true;
+      canUseRemoteCvRef.current = false;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+        pendingScheduledSaveResolveRef.current?.();
+        pendingScheduledSaveResolveRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * Helper: produce a content-only snapshot of a document which excludes the volatile
@@ -2216,6 +2232,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   }
 
   function cacheDocumentLocally(doc: CvDocument) {
+    if (isDisposedRef.current) {
+      return;
+    }
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const now = new Date().toISOString();
@@ -2627,6 +2646,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       preserveVisibleUpdatedAtValue?: string;
     },
   ): Promise<void> {
+    if (isDisposedRef.current) {
+      return;
+    }
     cvEditorDebugInfo("[cv-save-debug] performSave", {
       docId: documentToSave.id,
       routeProfileId: readRequestedCvIdFromWindowLocation(),
@@ -2671,6 +2693,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       if (!canUseRemoteCvRef.current) {
+        if (isDisposedRef.current) {
+          return;
+        }
         pendingRemoteSaveRef.current = docCopy;
         try {
           setCvs((prev) =>
@@ -2720,6 +2745,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       setRemoteSaveStatus({ status: "saving", documentId: String(docCopy.id) });
       try {
         await adapter.save(docCopy as any);
+        if (isDisposedRef.current) {
+          // ConvexStorageAdapter also mirrors the saved document locally.
+          // Remove only this stale provider's document key if it completes
+          // after sign-out teardown; never purge the next account's scope.
+          removeDocumentLocally(String(docCopy.id));
+          return;
+        }
         try {
           const activeDoc = currentCvRef.current;
           if (activeDoc && String(activeDoc.id) === String(docCopy.id)) {
@@ -2798,6 +2830,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
       cacheDocumentLocally(docCopy);
     } catch (err) {
+      if (isDisposedRef.current) {
+        removeDocumentLocally(String(documentToSave.id));
+        return;
+      }
       console.error("[CvLibraryContext] save failed", err);
       const classified = classifyRemoteSaveError(err);
       setRemoteSaveStatus({
@@ -2820,6 +2856,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
+      pendingScheduledSaveResolveRef.current?.();
+      pendingScheduledSaveResolveRef.current = null;
     }
 
     const inFlight = isSavingRef.current ? pendingSavePromiseRef.current : null;
@@ -2955,14 +2993,20 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
+      pendingScheduledSaveResolveRef.current?.();
+      pendingScheduledSaveResolveRef.current = null;
     }
 
     const p = new Promise<void>((resolve) => {
+      pendingScheduledSaveResolveRef.current = resolve;
       saveTimeoutRef.current = setTimeout(async () => {
         // mark no outstanding timeout
         saveTimeoutRef.current = null;
+        pendingScheduledSaveResolveRef.current = null;
         try {
-          await performSave(documentToSave);
+          if (!isDisposedRef.current) {
+            await performSave(documentToSave);
+          }
         } finally {
           resolve();
         }
