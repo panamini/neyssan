@@ -62,7 +62,10 @@ import {
   type OnboardingReplayTargetStep,
 } from "./lib/onboarding-replay-event";
 import { useThemeMode } from "./lib/theme-mode";
-import { clearAccountLocalDataForSignedOut } from "./lib/account-local-data";
+import {
+  clearAccountLocalDataForSignedOut,
+  prepareAccountLocalDataScope,
+} from "./lib/account-local-data";
 
 /**
  * AppShell — structure exacte du squelette dasti-v16 :
@@ -267,9 +270,16 @@ function PrintRouteAccountCleanup({
   const { isLoaded, isSignedIn, userId } = useAuth();
 
   React.useEffect(() => {
-    if (isLoaded && (!isSignedIn || !userId)) {
-      clearAccountLocalDataForSignedOut();
+    if (!isLoaded) {
+      return;
     }
+
+    if (!isSignedIn || !userId) {
+      clearAccountLocalDataForSignedOut();
+      return;
+    }
+
+    prepareAccountLocalDataScope(userId);
   }, [isLoaded, isSignedIn, userId]);
 
   // Print payloads are validated and injected by the export worker. Rendering
