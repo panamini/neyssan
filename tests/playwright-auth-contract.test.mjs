@@ -27,6 +27,30 @@ test("routes only the full Playwright suite through authenticated Clerk state", 
   assert.match(config, /storageState:\s*CLERK_AUTH_STATE_PATH/);
 });
 
+test("does not retain authenticated Playwright traces in CI artifacts", () => {
+  const config = readRepositoryFile("playwright.config.ts");
+  const setupTraceOff = /name:\s*['"]clerk setup['"][\s\S]*?trace:\s*['"]off['"]/;
+  const authenticatedTraceOff =
+    /name:\s*['"]authenticated-chromium['"][\s\S]*?trace:\s*['"]off['"]/;
+
+  assert.match(config, setupTraceOff);
+  assert.match(config, authenticatedTraceOff);
+});
+
+test("passes authenticated state to both parity harness surfaces", () => {
+  for (const relativePath of [
+    "my-app/scripts/run-resume-font-parity-harness.ts",
+    "my-app/scripts/run-proposal-styled-parity-harness.ts",
+  ]) {
+    const script = readRepositoryFile(relativePath);
+    assert.match(script, /PLAYWRIGHT_AUTH_STATE_PATH/);
+    assert.ok(
+      (script.match(/storageState:/g) ?? []).length >= 2,
+      `${relativePath} should authenticate both the live and raster contexts`,
+    );
+  }
+});
+
 test("fails closed unless full-suite Clerk credentials are synthetic development values", () => {
   const workflow = readRepositoryFile(".github/workflows/playwright.yml");
   const setupPath = join(repositoryRoot, "e2e/clerk-auth.setup.ts");

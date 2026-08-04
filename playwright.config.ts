@@ -112,7 +112,10 @@ export default defineConfig({
     {
       name: 'clerk setup',
       testMatch: /clerk-auth\.setup\.ts/,
-      use: desktopChromeUse,
+      use: {
+        ...desktopChromeUse,
+        trace: 'off',
+      },
     },
     {
       name: 'chromium',
@@ -123,6 +126,7 @@ export default defineConfig({
       use: {
         ...desktopChromeUse,
         storageState: CLERK_AUTH_STATE_PATH,
+        trace: 'off',
       },
       dependencies: ['clerk setup'],
     },

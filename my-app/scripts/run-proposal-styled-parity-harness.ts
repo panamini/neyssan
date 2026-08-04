@@ -107,6 +107,27 @@ function repoRootFromScript(): string {
   return path.resolve(import.meta.dirname, "../..");
 }
 
+function defaultAuthStatePath(): string {
+  const configuredPath = process.env.PLAYWRIGHT_AUTH_STATE_PATH?.trim();
+  return path.resolve(
+    repoRootFromScript(),
+    configuredPath || path.join("playwright", ".clerk", "user.json"),
+  );
+}
+
+async function resolveAuthStatePath(): Promise<string> {
+  const authStatePath = defaultAuthStatePath();
+  try {
+    await fs.access(authStatePath);
+  } catch {
+    throw new Error(
+      `Authenticated proposal parity harness requires Clerk storage state at ${authStatePath}. Run the Clerk Playwright setup first or set PLAYWRIGHT_AUTH_STATE_PATH.`,
+    );
+  }
+
+  return authStatePath;
+}
+
 function defaultArtifactDir(): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   return path.join(
@@ -373,6 +394,7 @@ async function captureLiveStyledProposalExport(args: {
   proposalUrl: string;
   artifactDir: string;
   seedOutputDraft: Record<string, unknown> | null;
+  authStatePath: string;
 }): Promise<{
   exportCapture: CapturedDocumentExport;
   previewSnapshot: ProposalFontDebugSnapshot;
@@ -384,6 +406,7 @@ async function captureLiveStyledProposalExport(args: {
   const context = await args.browser.newContext({
     viewport: VIEWPORT,
     acceptDownloads: false,
+    storageState: args.authStatePath,
   });
   const artifactDirRelative = normalizeArtifactDirRelative(args.artifactDir);
   const previewImagePath = path.join(args.artifactDir, "preview.png");
@@ -559,8 +582,12 @@ async function capturePdfRasterSurface(
   browser: Browser,
   pdfBuffer: Buffer,
   artifactDir: string,
+  authStatePath: string,
 ) {
-  const context = await browser.newContext({ viewport: VIEWPORT });
+  const context = await browser.newContext({
+    viewport: VIEWPORT,
+    storageState: authStatePath,
+  });
   const imagePath = path.join(artifactDir, "pdf-raster-page-1.png");
   const snapshotPath = path.join(artifactDir, "pdf-raster-page-1.json");
 
@@ -757,6 +784,7 @@ async function main(): Promise<void> {
   const auditTarget = resolveAuditTarget(cliArgs);
   await fs.mkdir(cliArgs.artifactDir, { recursive: true });
   await ensureHarnessTargetsReachable();
+  const authStatePath = await resolveAuthStatePath();
 
   const browser = await chromium.launch({ headless: true });
 
@@ -773,6 +801,7 @@ async function main(): Promise<void> {
       proposalUrl: auditTarget.proposalUrl,
       artifactDir: cliArgs.artifactDir,
       seedOutputDraft: auditTarget.seedOutputDraft,
+      authStatePath,
     });
 
     const workerBootstrapPath = path.join(cliArgs.artifactDir, "worker-bootstrap.json");
@@ -794,6 +823,7 @@ async function main(): Promise<void> {
       browser,
       pdfBuffer,
       cliArgs.artifactDir,
+      authStatePath,
     );
 
     const previewVsPrintDiff = await compareImages(
