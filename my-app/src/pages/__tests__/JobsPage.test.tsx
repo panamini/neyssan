@@ -6074,5 +6074,25 @@ describe("JobsPage", () => {
     expect(
       screen.queryByText(/manualApplicationHandoff|getForJob|Job not found/i),
     ).not.toBeInTheDocument();
+    expect(markOpenedMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a direct inaccessible Job route out of the empty-account onboarding state", async () => {
+    listResult = [];
+    archivedListResult = [];
+    selectedJobResult = null;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_missing"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Job unavailable")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Commencez avec une offre."),
+    ).not.toBeInTheDocument();
   });
 });

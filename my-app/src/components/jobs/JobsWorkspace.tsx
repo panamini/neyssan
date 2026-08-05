@@ -1672,7 +1672,11 @@ function JobsPageContent(): JSX.Element {
     | undefined;
   const manualApplicationHandoff = useQuery(
     manualApplicationHandoffQueryReference,
-    selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
+    selectedJobRecord?.id &&
+      selectedJobId &&
+      isLoaded &&
+      isSignedIn &&
+      isConvexAuthenticated
       ? { jobId: selectedJobId }
       : "skip",
   ) as ManualApplicationHandoffPanelState | undefined;
@@ -1914,7 +1918,13 @@ function JobsPageContent(): JSX.Element {
   ]);
 
   React.useEffect(() => {
-    if (!selectedJobId || !isLoaded || !isSignedIn || !isConvexAuthenticated) {
+    if (
+      !selectedJobId ||
+      !selectedJobRecord?.id ||
+      !isLoaded ||
+      !isSignedIn ||
+      !isConvexAuthenticated
+    ) {
       return;
     }
 
@@ -1935,6 +1945,7 @@ function JobsPageContent(): JSX.Element {
     isSignedIn,
     markJobOpened,
     selectedJobId,
+    selectedJobRecord?.id,
   ]);
 
   const selectedJobSummary = React.useMemo(
@@ -3997,7 +4008,10 @@ function JobsPageContent(): JSX.Element {
           </div>
         ) : null}
 
-        {!authStatusMessage && !isJobsListLoading && !hasJobs ? (
+        {!authStatusMessage &&
+        !isJobsListLoading &&
+        !hasJobs &&
+        !selectedJobId ? (
           <FirstRunPanel
             onImportFirstJob={handleImportFirstJob}
             onTrySampleJob={handleTrySampleJob}
@@ -4006,7 +4020,9 @@ function JobsPageContent(): JSX.Element {
           />
         ) : null}
 
-        {!authStatusMessage && !isJobsListLoading && hasJobs ? (
+        {!authStatusMessage &&
+        !isJobsListLoading &&
+        (hasJobs || Boolean(selectedJobId)) ? (
           <div
             className={[
               "dasti-jobs-layout",
