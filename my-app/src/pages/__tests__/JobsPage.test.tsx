@@ -245,6 +245,7 @@ let selectedJobResultByRefreshKey: Record<
 let jobDetailQueryResultById: Record<string, typeof selectedJob | null> = {};
 let debugPayload: Record<string, unknown> | null = null;
 let listError: Error | null = null;
+let selectedJobError: Error | null = null;
 let cvLibraryResult = {
   cvs: [{ id: "cv_alpha", title: "Primary resume", sections: [] }],
   currentCv: null,
@@ -271,6 +272,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.getById") {
       if (args === "skip" || !args?.jobId) {
         return undefined;
+      }
+      if (selectedJobError) {
+        throw selectedJobError;
       }
       if (
         args.clientRefreshKey !== undefined &&
@@ -686,6 +690,7 @@ describe("JobsPage", () => {
       currentCv: null,
     };
     listError = null;
+    selectedJobError = null;
   });
 
   afterEach(() => {
@@ -6043,5 +6048,51 @@ describe("JobsPage", () => {
     expect(
       screen.getByRole("button", { name: /Copy: npm run dev:backend/i }),
     ).toBeInTheDocument();
+  });
+
+  it("renders a recoverable unavailable state when the selected job is inaccessible", async () => {
+    selectedJobError = new Error(
+      "[CONVEX Q(manualApplicationHandoff:getForJob)] Server Error Job not found",
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_missing"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Job unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(/This offer is no longer available for this account/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to jobs" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
+    expect(
+      screen.queryByText(/manualApplicationHandoff|getForJob|Job not found/i),
+    ).not.toBeInTheDocument();
+    expect(markOpenedMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a direct inaccessible Job route out of the empty-account onboarding state", async () => {
+    listResult = [];
+    archivedListResult = [];
+    selectedJobResult = null;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_missing"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Job unavailable")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Commencez avec une offre."),
+    ).not.toBeInTheDocument();
   });
 });

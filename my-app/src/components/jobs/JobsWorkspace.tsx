@@ -304,6 +304,11 @@ function isMissingJobsFunctionError(error: unknown): boolean {
   );
 }
 
+function isUnavailableJobError(error: unknown): boolean {
+  const message = formatJobsDebugError(error);
+  return /\bjob not found\b|\bjob unavailable\b/i.test(message);
+}
+
 function formatJobsDebugError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -1013,6 +1018,29 @@ function JobsBackendUnavailable(): JSX.Element {
   );
 }
 
+function JobsJobUnavailable(): JSX.Element {
+  return (
+    <div className="dasti-page-scroll">
+      <div className="dasti-page-shell dasti-jobs-page">
+        <div className="dasti-empty-state dasti-jobs-empty-state">
+          <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
+          <div className="dasti-empty-state__title">Job unavailable</div>
+          <p className="dasti-empty-state__subtitle">
+            This offer is no longer available for this account. Choose another
+            offer from your Jobs list.
+          </p>
+          <a
+            className="dasti-button dasti-button--primary dasti-button--pill"
+            href="/jobs"
+          >
+            Back to jobs
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 class JobsPageRuntimeBoundary extends React.Component<
   { children: React.ReactNode },
   { error: unknown | null }
@@ -1030,6 +1058,9 @@ class JobsPageRuntimeBoundary extends React.Component<
     if (this.state.error !== null) {
       if (isMissingJobsFunctionError(this.state.error)) {
         return <JobsBackendUnavailable />;
+      }
+      if (isUnavailableJobError(this.state.error)) {
+        return <JobsJobUnavailable />;
       }
       throw this.state.error;
     }
@@ -1641,7 +1672,11 @@ function JobsPageContent(): JSX.Element {
     | undefined;
   const manualApplicationHandoff = useQuery(
     manualApplicationHandoffQueryReference,
-    selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
+    selectedJobRecord?.id &&
+      selectedJobId &&
+      isLoaded &&
+      isSignedIn &&
+      isConvexAuthenticated
       ? { jobId: selectedJobId }
       : "skip",
   ) as ManualApplicationHandoffPanelState | undefined;
@@ -1883,7 +1918,13 @@ function JobsPageContent(): JSX.Element {
   ]);
 
   React.useEffect(() => {
-    if (!selectedJobId || !isLoaded || !isSignedIn || !isConvexAuthenticated) {
+    if (
+      !selectedJobId ||
+      !selectedJobRecord?.id ||
+      !isLoaded ||
+      !isSignedIn ||
+      !isConvexAuthenticated
+    ) {
       return;
     }
 
@@ -1904,6 +1945,7 @@ function JobsPageContent(): JSX.Element {
     isSignedIn,
     markJobOpened,
     selectedJobId,
+    selectedJobRecord?.id,
   ]);
 
   const selectedJobSummary = React.useMemo(
@@ -3966,7 +4008,10 @@ function JobsPageContent(): JSX.Element {
           </div>
         ) : null}
 
-        {!authStatusMessage && !isJobsListLoading && !hasJobs ? (
+        {!authStatusMessage &&
+        !isJobsListLoading &&
+        !hasJobs &&
+        !selectedJobId ? (
           <FirstRunPanel
             onImportFirstJob={handleImportFirstJob}
             onTrySampleJob={handleTrySampleJob}
@@ -3975,7 +4020,9 @@ function JobsPageContent(): JSX.Element {
           />
         ) : null}
 
-        {!authStatusMessage && !isJobsListLoading && hasJobs ? (
+        {!authStatusMessage &&
+        !isJobsListLoading &&
+        (hasJobs || Boolean(selectedJobId)) ? (
           <div
             className={[
               "dasti-jobs-layout",
