@@ -87,6 +87,287 @@ def _build_retry_contradiction_result() -> OCRAnnotationResult:
     )
 
 
+def test_robert_cooper_decorated_sections_recover_from_semantically_incomplete_annotation() -> None:
+    profile = (
+        "Safety conscious individual with over five years of experience in protecting and "
+        "safeguarding people and property."
+    )
+    ocr_result = OCRAnnotationResult(
+        pages=[
+            {
+                "index": 0,
+                "markdown": (
+                    "![img-0.jpeg](img-0.jpeg)\n\n"
+                    "# ROBERT COOPER\n"
+                    "SECURITY GUARD ♦ LOS ANGELES, CA 90291, UNITED STATES ☎ 3868683442\n\n"
+                    "# ◦ DETAILS ◦\n"
+                    "1515 Pacific Ave\n"
+                    "Los Angeles, CA 90291\n"
+                    "United States\n"
+                    "3868683442\n"
+                    "email@email.com\n\n"
+                    "# ◦ LINKS ◦\n"
+                    "LinkedIn\n\n"
+                    "# PROFILE\n"
+                    f"{profile}\n\n"
+                    "# EMPLOYMENT HISTORY\n"
+                    "## Security Guard at ADT Security, Port Washington\n"
+                    "January 2021 — April 2022\n"
+                    "- Protected company belongings, visitors, employees, and clients.\n\n"
+                    "# ◦ SKILLS ◦\n"
+                    "Investigation skills\n"
+                    "Safety compliance\n"
+                    "Criminal justice knowledge\n"
+                    "Restraining devices\n"
+                    "Martial arts/Physical combat training\n\n"
+                    "# HOBBIES\n"
+                    "Running, Mtb, Enduro\n\n"
+                    "# ◦ LANGUAGES ◦\n"
+                    "English\n"
+                    "Spanish\n"
+                    "Italian\n\n"
+                    "# EDUCATION\n"
+                    "Certified Protection Guard Program (CPOP), International Foundation for Protection Guards, Alexandria\n"
+                    "January 2021 — April 2022\n"
+                    "Security Guard Certificate Program (SOCP), ASIS International, North Naples\n"
+                    "April 2022 — April 2022\n"
+                    "- Course Curriculum: security principles and emergency procedures.\n"
+                    "S.A.F.E. Approach Level II Training, Hawaii Western College\n"
+                    "January 2015 — November 2019\n\n"
+                    "# ACHIEVEMENTS\n"
+                    "- Completed S.A.F.E. Approach Level II Training.\n"
+                ),
+            }
+        ],
+        page_count=1,
+        diagnostics={
+            "model": "mistral-ocr-latest",
+            "page_count": 1,
+            "pages": 1,
+            "ocr_chars": 1200,
+            "document_name": "cv_png.pdf",
+        },
+        annotation_raw={
+            "identity": {},
+            "summary": {"text": ""},
+            "experience": [],
+            "education": [],
+            "skills": [],
+            "languages": [],
+            "hobbies": [],
+            "achievements": [],
+            "sectionOrder": [],
+        },
+        response_payload={},
+    )
+
+    result = _run_resume_pipeline_from_ocr_result(ocr_result)
+
+    assert result["status"] in {"success", "partial"}
+    normalized = result["canonical_payload"]["normalized"]
+    assert normalized["name"] == "Robert Cooper"
+    assert normalized["profile"]["desiredPosition"] == "Security Guard"
+    assert normalized["contact"]["addressBlock"] == "1515 Pacific Ave"
+    assert normalized["contact"]["email"] == "email@email.com"
+    assert normalized["contact"]["phone"] == "3868683442"
+    assert normalized["contact"]["location"] == "Los Angeles, CA 90291, United States"
+    assert normalized["summary"]["text"] == profile
+    assert [item["name"] for item in normalized["skills"]] == [
+        "Investigation skills",
+        "Safety compliance",
+        "Criminal justice knowledge",
+        "Restraining devices",
+        "Martial arts/Physical combat training",
+    ]
+    assert [item["name"] for item in normalized["languages"]] == ["English", "Spanish", "Italian"]
+    assert [item["degree"] for item in normalized["education"]] == [
+        "Certified Protection Guard Program (CPOP)",
+        "Security Guard Certificate Program (SOCP)",
+        "S.A.F.E. Approach Level II Training",
+    ]
+    assert [item["institution"] for item in normalized["education"]] == [
+        "International Foundation for Protection Guards",
+        "ASIS International",
+        "Hawaii Western College",
+    ]
+    assert [item["text"] for item in normalized["hobbies"]] == ["Running", "Mtb", "Enduro"]
+    assert [item["text"] for item in normalized["achievements"]] == [
+        "Completed S.A.F.E. Approach Level II Training."
+    ]
+
+
+def test_jake_markdown_recovers_heading_entries_without_collapsing_sections() -> None:
+    markdown = """# Jake Ryan
+
+123-456-7890 | jake@su.edu | linkedin.com/in/jake | github.com/jake
+
+## EDUCATION
+
+### Southwestern University
+*Bachelor of Arts in Computer Science, Minor in Business*
+Georgetown, TX
+*Aug. 2018 – May 2021*
+
+### Blinn College
+*Associate's in Liberal Arts*
+Bryan, TX
+*Aug. 2014 – May 2018*
+
+## EXPERIENCE
+
+### Undergraduate Research Assistant
+*Texas A&M University*
+June 2020 – Present
+*College Station, TX*
+- Developed a REST API using FastAPI and PostgreSQL.
+
+### Information Technology Support Specialist
+*Southwestern University*
+Sep. 2018 – Present
+*Georgetown, TX*
+- Troubleshot campus computers.
+
+### Artificial Intelligence Research Assistant
+*Southwestern University*
+May 2019 – July 2019
+*Georgetown, TX*
+- Developed a game in Java.
+
+## PROJECTS
+
+### Gitlytics | *Python, Flask, React*
+June 2020 – Present
+- Built a full-stack application.
+
+### Simple Paintball | *Spigot API, Java*
+May 2018 – May 2020
+- Developed a Minecraft server plugin.
+
+## TECHNICAL SKILLS
+
+**Languages:** Java, Python, C/C++, SQL (Postgres), JavaScript
+**Frameworks:** React, Node.js, Flask, FastAPI
+"""
+    ocr_result = OCRAnnotationResult(
+        pages=[{"index": 0, "markdown": markdown}],
+        page_count=1,
+        diagnostics={"model": "mistral-ocr-latest", "page_count": 1, "document_name": "jake.pdf"},
+        annotation_raw={},
+        response_payload={},
+    )
+
+    result = _run_resume_pipeline_from_ocr_result(ocr_result)
+
+    assert result["status"] in {"success", "partial"}
+    normalized = result["canonical_payload"]["normalized"]
+    assert normalized["name"] == "Jake Ryan"
+    assert normalized["contact"]["email"] == "jake@su.edu"
+    assert normalized["contact"]["phone"] == "123-456-7890"
+    assert [item["position"] for item in normalized["experience"]] == [
+        "Undergraduate Research Assistant",
+        "Information Technology Support Specialist",
+        "Artificial Intelligence Research Assistant",
+    ]
+    assert [item["company"] for item in normalized["experience"]] == [
+        "Texas A&M University",
+        "Southwestern University",
+        "Southwestern University",
+    ]
+    assert [item["institution"] for item in normalized["education"]] == [
+        "Southwestern University",
+        "Blinn College",
+    ]
+    assert [item["title"] for item in normalized["projects"]] == ["Gitlytics", "Simple Paintball"]
+    assert [item["name"] for item in normalized["skills"]] == [
+        "Java",
+        "Python",
+        "C/C++",
+        "SQL (Postgres)",
+        "JavaScript",
+        "React",
+        "Node.js",
+        "Flask",
+        "FastAPI",
+    ]
+
+
+def test_prasanna_markdown_recovers_bold_table_sections_and_profile_values() -> None:
+    markdown = """## **Curriculum Vitae**
+
+**NAME** : PRASANNA VENGATESH.S
+**ADDRESS** : 208, Second floor,
+Berkeley Staff Accommodation,
+Dubai,
+United Arab Emirates.
+**E-MAIL ID** : s.prasannavengatesh@gmail.com
+**PHONE NO** : +971-0505572568
+**OBJECTIVE** : To implement my knowledge and experience in our company.
+
+### **EDUCATIONAL QUALIFICATIONS:**
+| **Qualification** | **Institution** | **Percentage of marks** | **Year of passing** |
+| --- | --- | --- | --- |
+| Diploma in Instrumentation & Control Engineering | Seshasayee Institute of Technology, Trichy. | 78% | 2010 |
+| S.S.L.C | St.Joseph's hr secondary school, Trichy. | 88% | 2007 |
+
+### **COMPUTER SKILLS:**
+- AutoCAD
+- Web Designing & Development
+
+# **PROJECT TITLE:**
+Automatic Fuse change over system.
+
+# **Summary of Experience:**
+| **Name Of Organization** | **City, Country** | **Designation** | **From** | **To** | **Duration** | **Reason For Leaving** |
+| --- | --- | --- | --- | --- | --- | --- |
+| Applied Automation Systems | Coimbatore, India. | Plant Maintenance technician. | 02/05/2010 | 05/11/2010 | 6 Months | Layoff due to power cut. |
+| Berkeley Services | Dubai, UAE. | Maintenance Planner | 26/08/2014 | Till Now | 1 year 9 Months | Currently Working. |
+
+# **Nature Of Work :**
+- Develops maintenance planning strategies.
+- Creates work orders.
+
+#### **PERSONAL PROFILE:**
+| **Name** | : | PRASANNA VENGATESH.S |
+| --- | --- | --- |
+| **Languages known** | : | Tamil, English, Telugu, Hindi, Malayalam |
+| **Hobbies** | : | Watching cricket, Talking to people. |
+"""
+    ocr_result = OCRAnnotationResult(
+        pages=[{"index": 0, "markdown": markdown}],
+        page_count=1,
+        diagnostics={"model": "mistral-ocr-latest", "page_count": 1, "document_name": "prasanna.pdf"},
+        annotation_raw={},
+        response_payload={},
+    )
+
+    result = _run_resume_pipeline_from_ocr_result(ocr_result)
+
+    assert result["status"] in {"success", "partial"}
+    normalized = result["canonical_payload"]["normalized"]
+    assert normalized["name"] == "Prasanna Vengatesh.S"
+    assert normalized["contact"]["email"] == "s.prasannavengatesh@gmail.com"
+    assert normalized["contact"]["phone"] == "+971-0505572568"
+    assert normalized["summary"]["text"] == "To implement my knowledge and experience in our company."
+    assert [item["company"] for item in normalized["experience"]] == [
+        "Applied Automation Systems",
+        "Berkeley Services",
+    ]
+    assert normalized["experience"][0]["startDate"] != "2010-01-01"
+    assert normalized["experience"][1]["isCurrent"] is True
+    assert [item["degree"] for item in normalized["education"]] == [
+        "Diploma in Instrumentation & Control Engineering",
+        "S.S.L.C",
+    ]
+    assert [item["name"] for item in normalized["languages"]] == [
+        "Tamil",
+        "English",
+        "Telugu",
+        "Hindi",
+        "Malayalam",
+    ]
+    assert [item["text"] for item in normalized["hobbies"]] == ["Watching cricket", "Talking to people."]
+
+
 @pytest.mark.parametrize(
     ("heading", "family"),
     [

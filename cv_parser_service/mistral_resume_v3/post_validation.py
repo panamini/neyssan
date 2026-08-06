@@ -898,7 +898,12 @@ def _reclassify_education_and_certifications(
         institution = _clean_inline_text(item.institution)
         detail_blob = " ".join(_clean_list(item.details))
         combined_main = " ".join(part for part in [degree, detail_blob] if part)
-        if STRONG_CERTIFICATION_TOKEN_RE.search(combined_main) and not STRONG_DEGREE_TOKEN_RE.search(combined_main):
+        explicit_education_program = bool(institution and re.search(r"\bprogram\b", degree or "", re.IGNORECASE))
+        if (
+            STRONG_CERTIFICATION_TOKEN_RE.search(combined_main)
+            and not STRONG_DEGREE_TOKEN_RE.search(combined_main)
+            and not explicit_education_program
+        ):
             name = degree or institution
             if name:
                 kept_certifications.append(
