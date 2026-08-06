@@ -317,7 +317,7 @@ describe("StructuredUploadButton", () => {
     );
   });
 
-  it("re-probes Mistral on scanned upload instead of trusting stale cached success", async () => {
+  it("submits the selected file without a synthetic Mistral probe", async () => {
     structuredActionMock.mockResolvedValue({
       normalized: {
         summary: "Scanned import",
@@ -355,10 +355,10 @@ describe("StructuredUploadButton", () => {
     });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
-    expect(probeMistralMock).toHaveBeenCalledTimes(1);
+    expect(probeMistralMock).not.toHaveBeenCalled();
   });
 
-  it("continues scanned upload when the click-time probe fails transiently", async () => {
+  it("does not let a prior probe result add a second OCR request", async () => {
     structuredActionMock.mockResolvedValue({
       normalized: {
         summary: "Scanned import",
@@ -404,6 +404,28 @@ describe("StructuredUploadButton", () => {
     });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
-    expect(probeMistralMock).toHaveBeenCalledTimes(1);
+    expect(probeMistralMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the clear Mistral-unavailable message and does not apply sections", async () => {
+    const onApply = vi.fn();
+    structuredActionMock.mockRejectedValueOnce({
+      data: { code: "mistral_ocr_unavailable" },
+    });
+
+    render(<StructuredUploadButton onApplyToSections={onApply} />);
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    fireEvent.drop(screen.getByRole("button", { name: "Scanned PDF / Image" }), {
+      dataTransfer: { files: [file] },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Mistral OCR est momentanément indisponible. Réessayez."),
+      ).toBeInTheDocument(),
+    );
+    expect(onApply).not.toHaveBeenCalled();
+    expect(probeMistralMock).not.toHaveBeenCalled();
   });
 });

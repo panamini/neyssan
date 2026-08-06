@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   detectHealthyLocalParserOrigin,
+  MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS,
+  MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
   resetLocalParserProbeCacheForTest,
   resolveParserEndpoints,
+  selectParserAttemptsForImport,
+  shouldRetryMistralImportRequest,
 } from "../structuredUpload";
 
 afterEach(() => {
@@ -93,5 +97,55 @@ describe("resolveParserEndpoints", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("connection refused"));
 
     await expect(detectHealthyLocalParserOrigin()).resolves.toBeNull();
+  });
+});
+
+describe("Mistral import retry policy", () => {
+  it("keeps only the primary parser endpoint for Mistral imports", () => {
+    const candidates = resolveParserEndpoints("/mistral-ocr/parse", {
+      preferLoopback: true,
+      env: {
+        CONVEX_PARSER_URL: "https://parser.dasti.ai",
+      },
+    });
+
+    expect(selectParserAttemptsForImport(candidates, true)).toHaveLength(1);
+    expect(selectParserAttemptsForImport(candidates, true)[0]?.label).toBe(
+      "prefer:loopback",
+    );
+    expect(selectParserAttemptsForImport(candidates, false)).toHaveLength(
+      candidates.length,
+    );
+  });
+
+  it("permits one quick transient retry only while enough budget remains", () => {
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 1,
+        elapsedMs: MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
+        remainingMs: MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 1,
+        elapsedMs: MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
+        remainingMs: MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS - 1,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 2,
+        elapsedMs: 1,
+        remainingMs: 60_000,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 1,
+        elapsedMs: MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS + 1,
+        remainingMs: 60_000,
+      }),
+    ).toBe(false);
   });
 });
