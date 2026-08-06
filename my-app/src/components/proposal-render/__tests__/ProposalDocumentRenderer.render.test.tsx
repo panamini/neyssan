@@ -3413,4 +3413,52 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(toolbar).toHaveAttribute("data-toolbar-placement", "below");
     expect(toolbar).toHaveAttribute("data-toolbar-align", "right");
   });
+
+  it("marks the canonical default cover letter with the minimal treatment", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={[
+          "Hello Hiring Team,",
+          "I am writing to share my interest in the role.",
+          "Kind regards,\nAvery Stone",
+        ].join("\n\n")}
+        proposalType="cover_letter"
+        templateId="workshop_proposal_margin"
+        railTitle="Avery Stone"
+        railMeta="Product Designer"
+        contactLine="avery@example.com · Paris"
+        letterDate="May 30, 2026"
+        recipientDetails="Hiring Team\nNorthwind"
+        documentTitle="Product Designer"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+          showSubject: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const root = container.querySelector(
+      ".proposal-cover-letter--minimal",
+    );
+
+    expect(root).not.toBeNull();
+    expect(root).toHaveAttribute(
+      "data-proposal-template",
+      "workshop_proposal_margin",
+    );
+    expect(
+      root?.querySelector(".dasti-proposal-document__structured-header"),
+    ).not.toBeNull();
+    expect(root?.querySelector(".proposal-cover-letter--editorial")).toBeNull();
+  });
 });

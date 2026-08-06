@@ -3975,6 +3975,222 @@
   mix-blend-mode: multiply;
 }
 
+/*
+ * The default cover-letter style keeps the canonical Workshop geometry but
+ * gives it a quieter editorial voice: one margin register, clear sender
+ * hierarchy, and a restrained metadata band. The structure stays semantic so
+ * the preview and export paths continue to share the same document model.
+ */
+.proposal-cover-letter--minimal {
+  --proposal-minimal-rule: color-mix(
+    in srgb,
+    var(--proposal-document-accent-ink, var(--ac)) 42%,
+    var(--proposal-document-ink, var(--ti)) 58%
+  );
+  --proposal-minimal-soft-rule: color-mix(
+    in srgb,
+    var(--proposal-document-ink, var(--ti)) 16%,
+    transparent
+  );
+  --proposal-minimal-muted: color-mix(
+    in srgb,
+    var(--proposal-document-ink, var(--ti)) 68%,
+    var(--proposal-document-paper, var(--paper)) 32%
+  );
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__page {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(
+          in srgb,
+          var(--proposal-document-accent-ink, var(--ac)) 3%,
+          transparent
+        )
+        0,
+      transparent 35mm
+    ),
+    var(--proposal-document-paper);
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__rail {
+  position: relative;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__rail::before {
+  position: absolute;
+  inset-block-start: 0;
+  inset-block-end: 0;
+  inset-inline-end: calc(var(--proposal-grid-half-step-inline) / 2);
+  width: 0.22mm;
+  background: var(--proposal-minimal-rule);
+  content: "";
+  opacity: 0.72;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__rail::after {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: calc(
+    (var(--proposal-grid-half-step-inline) / 2) - 0.9mm
+  );
+  width: 2mm;
+  height: 2mm;
+  border-radius: 50%;
+  background: var(--proposal-document-accent-ink, var(--ac));
+  content: "";
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__header-stack {
+  position: relative;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__sender-header {
+  gap: calc(var(--proposal-inline-mm) * 1.15);
+  margin-block-end: calc(var(--proposal-inline-mm) * 5.2);
+  padding-block-end: calc(var(--proposal-inline-mm) * 3.2);
+  border-block-end: 0.22mm solid var(--proposal-minimal-rule);
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__sender-label {
+  font-size: calc(
+    var(--proposal-inline-mm) * 5.1 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__sender-label-key {
+  display: block;
+  margin-block-end: calc(var(--proposal-inline-mm) * 1.35);
+  font-size: 0.44em;
+  letter-spacing: 0.19em;
+  line-height: 1.1;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__sender-role {
+  font-family: var(--font-body-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 2.65 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__sender-contact {
+  max-width: 34ch;
+  padding-block-start: calc(var(--proposal-inline-mm) * 1.55);
+  border-block-start: 0.14mm solid var(--proposal-minimal-soft-rule);
+  color: var(--proposal-minimal-muted);
+  font-size: calc(
+    var(--proposal-inline-mm) * 2.35 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1.38;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__structured-header {
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: calc(var(--proposal-inline-mm) * 2.5)
+    calc(var(--proposal-inline-mm) * 3.8);
+  margin-block-end: calc(var(--proposal-inline-mm) * 4.8);
+  padding-block-end: calc(var(--proposal-inline-mm) * 2.8);
+  border-block-end: 0.14mm solid var(--proposal-minimal-soft-rule);
+}
+
+.proposal-cover-letter--minimal
+  .dasti-proposal-document__structured-header-item {
+  gap: calc(var(--proposal-inline-mm) * 0.95);
+}
+
+.proposal-cover-letter--minimal
+  .dasti-proposal-document__structured-header-label {
+  color: var(--proposal-document-accent-ink, var(--ac));
+  font-size: calc(
+    var(--proposal-inline-mm) * 2 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  letter-spacing: 0.18em;
+}
+
+.proposal-cover-letter--minimal
+  .dasti-proposal-document__structured-header-value {
+  font-family: var(--font-body-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 2.85 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 600;
+  line-height: 1.36;
+}
+
+.proposal-cover-letter--minimal
+  .dasti-proposal-document__structured-header-value--secondary {
+  color: var(--proposal-minimal-muted);
+  font-size: calc(
+    var(--proposal-inline-mm) * 2.45 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 400;
+}
+
+.proposal-cover-letter--minimal
+  .dasti-proposal-document__structured-header-item--subject {
+  grid-column: 1 / -1;
+  padding-block-start: calc(var(--proposal-inline-mm) * 2.2);
+  border-block-start: 0.14mm solid var(--proposal-minimal-soft-rule);
+}
+
+.proposal-cover-letter--minimal
+  .dasti-proposal-document__structured-header-item--subject
+  .dasti-proposal-document__structured-header-value {
+  padding-inline-start: calc(var(--proposal-inline-mm) * 1.8);
+  border-inline-start: 0.9mm solid var(--proposal-document-accent-ink, var(--ac));
+  font-family: var(--font-heading-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 4 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.12;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__salutation {
+  margin-bottom: calc(1em * var(--proposal-document-computed-line-height) * 1.25);
+  font-family: var(--font-heading-family);
+  font-weight: 600;
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__paragraph {
+  max-inline-size: 58ch;
+  color: color-mix(
+    in srgb,
+    var(--proposal-document-ink, var(--ti)) 92%,
+    var(--proposal-document-paper, var(--paper)) 8%
+  );
+  font-family: var(--proposal-document-font-family);
+  line-height: calc(1.52 * var(--proposal-fit-line-height-scale, 1));
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__closing {
+  margin-block-start: calc(var(--proposal-inline-mm) * 2.2);
+  padding-block-start: calc(1em * var(--proposal-document-computed-line-height) * 1.9);
+  border-block-start: 0.14mm solid var(--proposal-minimal-soft-rule);
+}
+
+.proposal-cover-letter--minimal .dasti-proposal-document__signature {
+  font-family: var(--font-heading-family);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
 .proposal-cover-letter--editorial {
   --proposal-editorial-paper: var(--proposal-document-paper, #eef4fb);
   --proposal-editorial-ink: var(--proposal-document-ink, #171511);

@@ -6002,6 +6002,9 @@ export function ProposalDocumentRenderer({
       className={[
         "dasti-proposal-document",
         `dasti-proposal-document--${resolvedTemplateId.replace(/_/g, "-")}`,
+        resolvedTemplateId === "workshop_proposal_margin"
+          ? "proposal-cover-letter--minimal"
+          : "",
         resolvedTemplateId === "editorial_wide"
           ? "proposal-cover-letter--editorial"
           : "",
