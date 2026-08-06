@@ -1217,7 +1217,6 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
                         flush_current()
                         start_date = cell("startDate")
                         end_date = cell("endDate")
-                        reason = cell("reason")
                         current = {
                             **({"company": company} if company else {}),
                             **({"position": position} if position else {}),
@@ -1225,7 +1224,10 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
                             **({"startDate": start_date} if start_date else {}),
                             **({"endDate": end_date} if end_date else {}),
                             **({"isCurrent": True} if _normalize_lookup(end_date or "") in {"present", "current", "now", "till now"} else {}),
-                            "responsibilityBullets": ([f"Reason for leaving: {reason}"] if reason else []),
+                            # A leaving reason is not work performed. Omit it
+                            # from responsibility bullets rather than turning
+                            # employment metadata into a candidate claim.
+                            "responsibilityBullets": [],
                             "achievements": [],
                         }
                     continue
@@ -1375,11 +1377,22 @@ def _extract_explicit_education_from_sections(sections: list[OCRMarkdownSection]
             cells = _markdown_table_cells(raw_line)
             if cells:
                 normalized_cells = [_normalize_lookup(cell) for cell in cells]
-                if any(cell in {"qualification", "degree", "education"} for cell in normalized_cells) and any(
+                if any(
+                    cell in {"qualification", "degree", "education", "course", "program", "programme"}
+                    or cell.startswith(("course ", "program ", "programme "))
+                    for cell in normalized_cells
+                ) and any(
                     "institution" in cell or "school" in cell or "university" in cell for cell in normalized_cells
                 ):
                     aliases = {
-                        "degree": ("qualification", "degree", "education"),
+                        "degree": (
+                            "qualification",
+                            "degree",
+                            "education",
+                            "course",
+                            "program",
+                            "programme",
+                        ),
                         "institution": ("institution", "school", "university"),
                         "details": ("percentage", "grade", "gpa", "marks"),
                         "endDate": ("year", "passing", "graduation"),
@@ -1411,10 +1424,13 @@ def _extract_explicit_education_from_sections(sections: list[OCRMarkdownSection]
 
             heading_match = MARKDOWN_HEADING_RE.match(raw_line)
             if heading_match and raw_line.lstrip().startswith("###"):
-                institution = _clean_markdown_inline(heading_match.group(1))
-                if institution and not _is_heading_value(institution):
+                heading_value = _clean_markdown_inline(heading_match.group(1))
+                if heading_value and not _is_heading_value(heading_value):
                     flush_current()
-                    current = {"institution": institution, "details": []}
+                    if _looks_like_degree_text(heading_value) and not _looks_like_institution_text(heading_value):
+                        current = {"degree": heading_value, "details": []}
+                    else:
+                        current = {"institution": heading_value, "details": []}
                 continue
             cleaned_markdown = _clean_markdown_inline(stripped)
             date_fields = _parse_experience_date_range(cleaned_markdown)
@@ -1434,8 +1450,11 @@ def _extract_explicit_education_from_sections(sections: list[OCRMarkdownSection]
                 flush_current()
                 current = {**parsed_header, "details": []}
                 continue
-            if cleaned_markdown and cleaned_markdown != stripped and current is not None and not current.get("degree"):
-                current["degree"] = cleaned_markdown
+            if cleaned_markdown and cleaned_markdown != stripped and current is not None:
+                if not current.get("degree"):
+                    current["degree"] = cleaned_markdown
+                elif not current.get("institution"):
+                    current["institution"] = cleaned_markdown
                 continue
             if stripped[:1] in {"-", "*", "•"} or LIST_PREFIX_RE.match(stripped):
                 detail = _clean_inline_text(_strip_list_prefix(stripped).strip("|"))
@@ -1497,10 +1516,10 @@ def _extract_explicit_contact_from_sections(sections: list[OCRMarkdownSection]) 
     return recovered
 
 
-def _extract_profile_table_value(
+def _extract_profile_table_values(
     sections: list[OCRMarkdownSection],
     labels: set[str],
-) -> Optional[str]:
+) -> list[str]:
     normalized_labels = {_normalize_lookup(label) for label in labels}
     for section in sections:
         for raw_line in section.lines:
@@ -1510,12 +1529,19 @@ def _extract_profile_table_value(
             label = _normalize_lookup(cells[0])
             if label not in normalized_labels:
                 continue
-            return next((_clean_inline_text(cell) for cell in reversed(cells[1:]) if _clean_inline_text(cell)), None)
-    return None
+            values: list[str] = []
+            for cell in cells[1:]:
+                cleaned = _clean_inline_text(cell)
+                if not cleaned or _normalize_lookup(cleaned) in {":", "-", "—"}:
+                    continue
+                values.append(cleaned)
+            return values
+    return []
 
 
 def _extract_profile_languages(sections: list[OCRMarkdownSection]) -> list[dict[str, Any]]:
-    value = _extract_profile_table_value(sections, {"language", "languages", "languages known"})
+    values = _extract_profile_table_values(sections, {"language", "languages", "languages known"})
+    value = " | ".join(values)
     if not value:
         return []
     return [
@@ -1526,7 +1552,8 @@ def _extract_profile_languages(sections: list[OCRMarkdownSection]) -> list[dict[
 
 
 def _extract_profile_hobbies(sections: list[OCRMarkdownSection]) -> list[str]:
-    value = _extract_profile_table_value(sections, {"hobby", "hobbies", "interests"})
+    values = _extract_profile_table_values(sections, {"hobby", "hobbies", "interests"})
+    value = " | ".join(values)
     if not value:
         return []
     return [

@@ -116,18 +116,22 @@ describe("resolveParserEndpoints", () => {
 });
 
 describe("Mistral import retry policy", () => {
-  it("keeps only the primary parser endpoint for Mistral imports", () => {
+  it("keeps one loopback alias while preserving configured Mistral gateways", () => {
     const candidates = resolveParserEndpoints("/mistral-ocr/parse", {
       preferLoopback: true,
+      includeConfiguredFallbacks: true,
       env: {
         CONVEX_PARSER_URL: "https://parser.dasti.ai",
+        PARSER_ORIGIN: "https://parser-backup.dasti.ai",
       },
     });
 
-    expect(selectParserAttemptsForImport(candidates, true)).toHaveLength(1);
-    expect(selectParserAttemptsForImport(candidates, true)[0]?.label).toBe(
+    const mistralCandidates = selectParserAttemptsForImport(candidates, true);
+    expect(mistralCandidates.map((attempt) => attempt.label)).toEqual([
       "prefer:loopback",
-    );
+      "env:CONVEX_PARSER_URL",
+      "env:PARSER_ORIGIN",
+    ]);
     expect(selectParserAttemptsForImport(candidates, false)).toHaveLength(
       candidates.length,
     );

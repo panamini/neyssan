@@ -13,8 +13,11 @@ from cv_parser_service.mistral_resume_v3.app_mapper import build_canonical_paylo
 from cv_parser_service.mistral_resume_v3.extraction_schema import build_document_annotation_format
 from cv_parser_service.mistral_resume_v3.ocr_client import OCRAnnotationResult
 from cv_parser_service.mistral_resume_v3.pipeline import (
+    OCRMarkdownSection,
     _extract_explicit_education_from_sections,
     _extract_explicit_experience_from_sections,
+    _extract_profile_hobbies,
+    _extract_profile_languages,
     _extract_explicit_projects_from_sections,
     _extract_explicit_skills_from_sections,
     _extract_explicit_sections_from_pages,
@@ -390,6 +393,66 @@ def test_recovery_handles_company_first_experience_tables_and_institution_first_
 
     projects = _extract_explicit_projects_from_sections(sections["projects"])
     assert [item["title"] for item in projects] == ["Project One", "Project Two"]
+
+    heading_education = _extract_explicit_education_from_sections(
+        [
+            OCRMarkdownSection(
+                family="education",
+                heading="Education",
+                lines=["### Bachelor of Science", "**State University**"],
+            )
+        ]
+    )
+    assert heading_education == [
+        {"degree": "Bachelor of Science", "institution": "State University", "details": []}
+    ]
+
+    course_table = _extract_explicit_education_from_sections(
+        [
+            OCRMarkdownSection(
+                family="education",
+                heading="Education",
+                lines=[
+                    "| Course | Institution | Year |",
+                    "| --- | --- | --- |",
+                    "| B.Tech | State University | 2020 |",
+                ],
+            )
+        ]
+    )
+    assert course_table[0]["degree"] == "B.Tech"
+    assert course_table[0]["institution"] == "State University"
+
+
+def test_profile_rows_recover_all_value_columns_and_ignore_leaving_reasons() -> None:
+    markdown = (
+        "# Personal Profile\n"
+        "| Languages | : | English | French |\n"
+        "| Hobbies | : | Running | Hiking |\n"
+        "# Experience\n"
+        "| Company | Role | From | To | Reason for Leaving |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| Acme | Engineer | 2020 | 2021 | Layoff |\n"
+    )
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": markdown,
+            }
+        ]
+    )
+    # The direct section parser is the source used by recovery; assert its
+    # source sections preserve every profile value and do not promote a
+    # leaving reason into work performed.
+    assert sections["contact"]
+    assert [item["name"] for item in _extract_profile_languages(sections["contact"])] == [
+        "English",
+        "French",
+    ]
+    assert _extract_profile_hobbies(sections["contact"]) == ["Running", "Hiking"]
+    experience = _extract_explicit_experience_from_sections(sections["experience"])
+    assert experience[0]["responsibilityBullets"] == []
 
 
 def test_prasanna_markdown_recovers_bold_table_sections_and_profile_values() -> None:

@@ -80,10 +80,31 @@ export function selectParserAttemptsForImport(
   attempts: ParserAttempt[],
   useMistral: boolean,
 ): ParserAttempt[] {
-  // 127.0.0.1 and localhost commonly address the same local parser. For the
-  // Mistral route, an alias cascade would repeat a provider request rather than
-  // provide independent recovery.
-  return useMistral ? attempts.slice(0, 1) : attempts;
+  if (!useMistral) {
+    return attempts;
+  }
+
+  // Keep one verified loopback parser, but preserve independently configured
+  // parser origins. They are separate Docker/parser gateways, not local OCR or
+  // pdfplumber fallbacks, and may be the only reachable route when the primary
+  // origin is unavailable.
+  const selected: ParserAttempt[] = [];
+  const seenOrigins = new Set<string>();
+  let selectedLoopback = false;
+  for (const attempt of attempts) {
+    const origin = attempt.endpoint.origin;
+    if (isLoopbackUrl(origin)) {
+      if (selectedLoopback) {
+        continue;
+      }
+      selectedLoopback = true;
+    } else if (seenOrigins.has(origin)) {
+      continue;
+    }
+    seenOrigins.add(origin);
+    selected.push(attempt);
+  }
+  return selected;
 }
 
 export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayload {
@@ -238,6 +259,7 @@ type ParserResolutionOptions = {
   env?: Record<string, string | undefined>;
   preferLoopback?: boolean;
   preferredLoopbackOrigin?: string | null;
+  includeConfiguredFallbacks?: boolean;
 };
 
 type LocalParserProbeResult = {
@@ -444,9 +466,11 @@ export function resolveParserEndpoints(
   }
 
   const primaryOrigin = envCandidates[0]?.origin ?? "";
-  const primaryLabel = envCandidates[0]?.label ?? "";
-  if (primaryOrigin) {
-    pushCandidate(primaryOrigin, primaryLabel);
+  const configuredCandidates = options?.includeConfiguredFallbacks
+    ? envCandidates
+    : envCandidates.slice(0, 1);
+  for (const candidate of configuredCandidates) {
+    pushCandidate(candidate.origin, candidate.label);
   }
 
   const allowLocalFallback = env.STRUCTURED_UPLOAD_ALLOW_LOOPBACK_FALLBACK === "1";
@@ -729,6 +753,7 @@ export const structuredUpload = action({
         env: parserEnv,
         preferLoopback,
         preferredLoopbackOrigin: healthyLocalParserOrigin,
+        includeConfiguredFallbacks: activeUseMistral,
       });
     } catch (err: any) {
       if (activeUseMistral) {
@@ -1073,6 +1098,10 @@ export const structuredUpload = action({
             body: formData,
             signal: controller.signal,
           });
+          // Consume the body while the same deadline is still armed. A parser
+          // can send headers promptly and then stall while streaming JSON; the
+          // import budget must cover that body read too.
+          const bodyText = await response.text();
           console.info("[resume-import-timing][structuredUpload] parser_request.finish", {
             traceId,
             label: attempt.label,
@@ -1082,7 +1111,7 @@ export const structuredUpload = action({
             status: response.status,
             elapsedMs: nowMs() - fetchStartedAt,
           });
-          return response;
+          return { response, bodyText };
         } catch (error: any) {
           console.info("[resume-import-timing][structuredUpload] parser_request.finish", {
             traceId,
@@ -1103,6 +1132,7 @@ export const structuredUpload = action({
       let endpointSucceeded = false;
       for (const modeVariant of modeSequence) {
         let response: UResponse | null = null;
+        let responseBodyText = "";
         let payload: ParserResponse | null = null;
 
         const maxRetries = activeUseMistral ? MISTRAL_IMPORT_MAX_ATTEMPTS : 2;
@@ -1117,7 +1147,9 @@ export const structuredUpload = action({
           }
           const form = buildFormData(modeVariant);
           try {
-            response = await performFetch(form, retryIndex, modeVariant);
+            const fetched = await performFetch(form, retryIndex, modeVariant);
+            response = fetched.response;
+            responseBodyText = fetched.bodyText;
           } catch (err: any) {
             const isAbort = err?.name === "AbortError";
             const message = err?.message ?? String(err);
@@ -1190,18 +1222,14 @@ export const structuredUpload = action({
             try {
               const ctype = response.headers.get("content-type") || "";
               if (ctype.includes("application/json")) {
-                errorDetail = await response.json();
+                errorDetail = JSON.parse(responseBodyText);
               } else {
-                bodyText = await response.text();
-                errorDetail = bodyText;
+                bodyText = responseBodyText;
+                errorDetail = responseBodyText;
               }
             } catch {
-              try {
-                bodyText = await response.text();
-                errorDetail = bodyText;
-              } catch {
-                errorDetail = null;
-              }
+              bodyText = responseBodyText;
+              errorDetail = bodyText || null;
             }
             lastHttpStatus = response.status;
             lastBodySnippet = (typeof errorDetail === "string" ? errorDetail : JSON.stringify(errorDetail ?? {})).slice(0, 400);
@@ -1277,7 +1305,7 @@ export const structuredUpload = action({
           );
 
           try {
-            payload = (await response.json()) as ParserResponse;
+            payload = JSON.parse(responseBodyText) as ParserResponse;
             if (activeUseMistral) {
               const parserResultForDebug = payload as Record<string, any> | null;
               console.info("[structuredUpload][mistral] raw parser JSON parserResult.diagnostics=%j parserResult.result?.diagnostics=%j",
