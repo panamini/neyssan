@@ -237,6 +237,7 @@ type ParserAttempt = {
 type ParserResolutionOptions = {
   env?: Record<string, string | undefined>;
   preferLoopback?: boolean;
+  preferredLoopbackOrigin?: string | null;
 };
 
 type LocalParserProbeResult = {
@@ -360,6 +361,7 @@ export function resolveParserEndpoints(
   const seen = new Set<string>();
   const env = options?.env ?? ((process as any).env as Record<string, string | undefined> | undefined) ?? {};
   const preferLoopback = options?.preferLoopback === true;
+  const preferredLoopbackOrigin = options?.preferredLoopbackOrigin?.trim() || null;
   const normalizedTarget = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
 
   const pushCandidate = (raw: string | undefined | null, label: string) => {
@@ -423,8 +425,16 @@ export function resolveParserEndpoints(
   );
 
   if (preferLoopback) {
-    pushCandidate(`http://127.0.0.1:8001${normalizedTarget}`, "prefer:loopback");
-    pushCandidate(`http://localhost:8001${normalizedTarget}`, "prefer:localhost");
+    const loopbackCandidates: Array<[string, string]> = [
+      ...(preferredLoopbackOrigin
+        ? [[preferredLoopbackOrigin, "prefer:healthy-loopback"] as [string, string]]
+        : []),
+      ["http://127.0.0.1:8001", "prefer:loopback"],
+      ["http://localhost:8001", "prefer:localhost"],
+    ];
+    for (const [origin, label] of loopbackCandidates) {
+      pushCandidate(`${origin}${normalizedTarget}`, label);
+    }
   }
 
   if (envCandidates.length === 0 && !preferLoopback) {
@@ -713,10 +723,25 @@ export const structuredUpload = action({
       ...((process as any).env ?? {}),
       CONVEX_PARSER_URL: baseOrigin || undefined,
     };
-    const parserAttempts = resolveParserEndpoints(parserPath, {
-      env: parserEnv,
-      preferLoopback,
-    });
+    let parserAttempts: ParserAttempt[];
+    try {
+      parserAttempts = resolveParserEndpoints(parserPath, {
+        env: parserEnv,
+        preferLoopback,
+        preferredLoopbackOrigin: healthyLocalParserOrigin,
+      });
+    } catch (err: any) {
+      if (activeUseMistral) {
+        const detail = err?.message ?? String(err);
+        throw buildMistralOcrUnavailableError({
+          status: null,
+          detail,
+          aggregatedErrors: [`parser endpoint resolution failed: ${detail}`],
+          lastError: detail,
+        });
+      }
+      throw err;
+    }
     const parserAttemptsToTry = selectParserAttemptsForImport(
       parserAttempts,
       activeUseMistral,

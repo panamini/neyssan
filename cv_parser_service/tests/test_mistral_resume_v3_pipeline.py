@@ -13,7 +13,13 @@ from cv_parser_service.mistral_resume_v3.app_mapper import build_canonical_paylo
 from cv_parser_service.mistral_resume_v3.extraction_schema import build_document_annotation_format
 from cv_parser_service.mistral_resume_v3.ocr_client import OCRAnnotationResult
 from cv_parser_service.mistral_resume_v3.pipeline import (
+    _extract_explicit_education_from_sections,
+    _extract_explicit_experience_from_sections,
+    _extract_explicit_projects_from_sections,
     _extract_explicit_sections_from_pages,
+    _parse_education_header_line,
+    _recover_contact_from_document,
+    _recover_identity_name_from_header,
     _run_resume_pipeline_from_ocr_result,
     run_resume_pipeline_from_bytes,
 )
@@ -289,6 +295,84 @@ May 2018 – May 2020
         "Flask",
         "FastAPI",
     ]
+
+
+def test_recovery_guards_titles_dates_links_and_contact_profile_variants() -> None:
+    raw_text = (
+        "# Curriculum Vitae\n"
+        "Jane Doe\n"
+        "2020 - 2024\n"
+        "[LinkedIn](https://linkedin.com/in/jane-doe)\n"
+        "[GitHub](https://github.com/janedoe)\n"
+        "Address: 1 Main Street\n"
+        "# Summary\n"
+        "Product designer.\n"
+    )
+
+    assert _recover_identity_name_from_header(raw_text) == "Jane Doe"
+    assert _recover_contact_from_document(raw_text) == {
+        "linkedin": "https://linkedin.com/in/jane-doe",
+        "github": "https://github.com/janedoe",
+        "address": "1 Main Street",
+    }
+
+    prose_sections = _extract_explicit_sections_from_pages(
+        [{"index": 0, "markdown": "# Personal Profile\nProduct designer with ten years of experience."}]
+    )
+    assert "summary" in prose_sections
+    assert "contact" not in prose_sections
+
+    table_sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": "# Personal Profile\n| Languages known | : | English, French |\n",
+            }
+        ]
+    )
+    assert "contact" in table_sections
+
+
+def test_recovery_handles_company_first_experience_tables_and_institution_first_education() -> None:
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": (
+                    "# Experience\n"
+                    "### Acme Corp\n"
+                    "**Senior Engineer**\n"
+                    "2020 - Present\n"
+                    "- Built systems.\n\n"
+                    "| Company | Role | From | To |\n"
+                    "| --- | --- | --- | --- |\n"
+                    "| Example Inc | Analyst | 2018 | 2020 |\n\n"
+                    "# Education\n"
+                    "Harvard University, Bachelor of Arts, Cambridge\n\n"
+                    "# Projects\n"
+                    "Project One\n"
+                    "Built one.\n\n"
+                    "Project Two\n"
+                    "Built two.\n"
+                ),
+            }
+        ]
+    )
+
+    experiences = _extract_explicit_experience_from_sections(sections["experience"])
+    assert experiences[0]["company"] == "Acme Corp"
+    assert experiences[0]["position"] == "Senior Engineer"
+    assert experiences[1]["company"] == "Example Inc"
+    assert experiences[1]["position"] == "Analyst"
+
+    education = _extract_explicit_education_from_sections(sections["education"])
+    assert education[0]["institution"] == "Harvard University"
+    assert education[0]["degree"] == "Bachelor of Arts"
+    assert education[0]["location"] == "Cambridge"
+    assert _parse_education_header_line("Harvard University, Bachelor of Arts")["institution"] == "Harvard University"
+
+    projects = _extract_explicit_projects_from_sections(sections["projects"])
+    assert [item["title"] for item in projects] == ["Project One", "Project Two"]
 
 
 def test_prasanna_markdown_recovers_bold_table_sections_and_profile_values() -> None:

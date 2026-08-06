@@ -24,6 +24,7 @@ from .section_headings import RAW_SECTION_HEADING_ALIASES
 
 INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY = "_mistral_resume_v3_canonical_payload"
 MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
+MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)", re.IGNORECASE)
 LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*•·●▪◦]+|\d+[.)])\s*")
 TABLE_DIVIDER_RE = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*$")
 MULTI_SPACE_RE = re.compile(r"\s+")
@@ -81,6 +82,41 @@ HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE = re.compile(
 )
 DETAILS_LOCATION_RE = re.compile(
     r"^[A-ZÀ-ÿ][A-Za-zÀ-ÿ.'-]+(?:\s+[A-Za-zÀ-ÿ.'-]+)*,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$"
+)
+DOCUMENT_TITLE_PLACEHOLDERS = {
+    "curriculum vitae",
+    "curriculum vitæ",
+    "cv",
+    "resume",
+    "résumé",
+}
+EXPERIENCE_ROLE_MARKERS = {
+    "analyst",
+    "assistant",
+    "consultant",
+    "coordinator",
+    "designer",
+    "developer",
+    "director",
+    "engineer",
+    "guard",
+    "lead",
+    "manager",
+    "officer",
+    "president",
+    "researcher",
+    "specialist",
+    "supervisor",
+    "technician",
+}
+DEGREE_MARKER_RE = re.compile(
+    r"\b(?:associate|bachelor|master|doctor(?:ate)?|ph\.?d|mba|mfa|bfa|b\.?a\.?|b\.?s\.?|b\.?sc\.?|b\.?tech\.?|"
+    r"m\.?a\.?|m\.?s\.?|m\.?sc\.?|m\.?tech\.?|jd|md|llm|diploma|certificate|certified|degree|engineering)\b",
+    re.IGNORECASE,
+)
+INSTITUTION_MARKER_RE = re.compile(
+    r"\b(?:university|college|school|institute|academy|polytechnic|faculty|conservatory)\b",
+    re.IGNORECASE,
 )
 
 
@@ -140,6 +176,7 @@ SUMMARY_RECOVERY_HEADING_ALIASES = {
     _normalize_lookup("profile"),
     _normalize_lookup("professional summary"),
     _normalize_lookup("professional profile"),
+    _normalize_lookup("personal profile"),
     _normalize_lookup("about"),
 }
 SKILLISH_LANGUAGE_MARKERS = (
@@ -253,6 +290,28 @@ def _classify_heading(value: str) -> Optional[str]:
     return None
 
 
+def _personal_profile_contains_contact_table(lines: list[str]) -> bool:
+    """Keep legacy personal-details tables in contact, but prose in summary."""
+    contact_markers = (
+        "name",
+        "email",
+        "phone",
+        "mobile",
+        "address",
+        "language",
+        "hobbies",
+        "interests",
+    )
+    for line in lines:
+        cleaned = _clean_inline_text(line) or ""
+        normalized = _normalize_lookup(cleaned)
+        if "|" in cleaned and any(marker in normalized for marker in contact_markers):
+            return True
+        if re.match(r"^(?:name|email|phone|mobile|address|languages? known|hobbies?)\b\s*:", normalized):
+            return True
+    return False
+
+
 def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[str, list[OCRMarkdownSection]]:
     sections: list[OCRMarkdownSection] = []
     current: Optional[OCRMarkdownSection] = None
@@ -260,6 +319,12 @@ def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[s
     def flush_current() -> None:
         nonlocal current
         if current is not None:
+            if (
+                current.family == "summary"
+                and _normalize_heading_text(current.heading) == "personal profile"
+                and _personal_profile_contains_contact_table(current.lines)
+            ):
+                current.family = "contact"
             sections.append(current)
         current = None
 
@@ -528,6 +593,35 @@ def _markdown_table_cells(value: str) -> list[str]:
     ]
 
 
+def _is_document_title_placeholder(value: Optional[str]) -> bool:
+    return _normalize_lookup(value or "") in {
+        _normalize_lookup(item) for item in DOCUMENT_TITLE_PLACEHOLDERS
+    }
+
+
+def _looks_like_phone_candidate(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    if _looks_like_experience_date_range(cleaned):
+        return False
+    if re.fullmatch(r"\d{4}\s*[-–—]\s*\d{4}", cleaned):
+        return False
+    digits = re.sub(r"\D", "", cleaned)
+    return 7 <= len(digits) <= 15
+
+
+def _extract_contact_url(value: str, marker: str) -> Optional[str]:
+    candidates = [match.group(1) for match in MARKDOWN_LINK_RE.finditer(value)]
+    candidates.extend(value.split())
+    marker_lower = marker.lower()
+    for candidate in candidates:
+        cleaned = candidate.strip(" |,;<>\"'")
+        if marker_lower in cleaned.lower():
+            return cleaned.rstrip(".,)")
+    return None
+
+
 def _recover_identity_name_from_header(raw_text: str) -> Optional[str]:
     for raw_line in str(raw_text or "").replace("\r", "").split("\n"):
         labeled_match = re.match(
@@ -555,7 +649,12 @@ def _recover_identity_name_from_header(raw_text: str) -> Optional[str]:
 
     if len(header_lines) < 2:
         return None
-    candidate = header_lines[0]
+    candidate = next(
+        (line for line in header_lines if not _is_document_title_placeholder(line)),
+        None,
+    )
+    if not candidate:
+        return None
     if any(pattern.search(candidate) for pattern in (EMAIL_FRAGMENT_RE, URL_FRAGMENT_RE, PHONE_FRAGMENT_RE)):
         return None
     if re.search(r"\d", candidate) or not re.fullmatch(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ' .-]{1,79}", candidate):
@@ -599,15 +698,14 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
 
         phone_candidates = PHONE_FRAGMENT_RE.findall(cleaned)
         if phone_candidates and "phone" not in recovered and "passport" not in cleaned.lower():
-            recovered["phone"] = _clean_inline_text(phone_candidates[0]) or phone_candidates[0]
+            phone = next((candidate for candidate in phone_candidates if _looks_like_phone_candidate(candidate)), None)
+            if phone:
+                recovered["phone"] = _clean_inline_text(phone) or phone
 
         for field, marker in (("linkedin", "linkedin.com/"), ("github", "github.com/")):
             if field in recovered or marker not in cleaned.lower():
                 continue
-            candidate = next(
-                (part.strip(" |,;") for part in cleaned.split() if marker in part.lower()),
-                None,
-            )
+            candidate = _extract_contact_url(cleaned, marker)
             if candidate:
                 recovered[field] = candidate
 
@@ -619,9 +717,13 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
                 address_fragments.append(first_fragment)
             continue
         if collecting_address:
-            if re.match(r"^\s*(?:\*\*)?[A-Z][A-Z .'-]+(?:\*\*)?\s*:", raw_line):
+            if (
+                MARKDOWN_HEADING_RE.match(raw_line)
+                or _classify_heading(cleaned)
+                or re.match(r"^\s*(?:\*\*)?[A-Z][A-Z .'-]+(?:\*\*)?\s*:", raw_line)
+            ):
                 collecting_address = False
-            elif cleaned and not MARKDOWN_HEADING_RE.match(raw_line):
+            elif cleaned:
                 address_fragments.append(cleaned)
 
     if address_fragments:
@@ -990,6 +1092,14 @@ def _parse_experience_header_line(value: Optional[str]) -> Optional[dict[str, An
     return None
 
 
+def _looks_like_experience_role_title(value: Optional[str]) -> bool:
+    normalized = _normalize_lookup(value or "")
+    if not normalized:
+        return False
+    tokens = set(normalized.split())
+    return bool(tokens & EXPERIENCE_ROLE_MARKERS)
+
+
 def _experience_entry_has_content(entry: Any) -> bool:
     company = _clean_inline_text(getattr(entry, "company", None) if not isinstance(entry, dict) else entry.get("company"))
     position = _clean_inline_text(getattr(entry, "position", None) if not isinstance(entry, dict) else entry.get("position"))
@@ -1009,6 +1119,7 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
     def flush_current() -> None:
         nonlocal current
         if current and _experience_entry_has_content(current):
+            current.pop("_heading_value", None)
             recovered.append(current)
         current = None
 
@@ -1021,7 +1132,10 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
             cells = _markdown_table_cells(raw_line)
             if cells:
                 normalized_cells = [_normalize_lookup(cell) for cell in cells]
-                if any("organization" in cell for cell in normalized_cells) and any(
+                if any(
+                    any(marker in cell for marker in ("organization", "company", "employer"))
+                    for cell in normalized_cells
+                ) and any(
                     cell in {"designation", "position", "role", "job title"} for cell in normalized_cells
                 ):
                     aliases = {
@@ -1070,6 +1184,7 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
                     flush_current()
                     current = {
                         "position": position,
+                        "_heading_value": position,
                         "responsibilityBullets": [],
                         "achievements": [],
                     }
@@ -1092,11 +1207,22 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
             if (
                 cleaned_markdown
                 and cleaned_markdown != stripped
-                and not current.get("company")
                 and not _parse_experience_date_line(cleaned_markdown)
             ):
-                current["company"] = cleaned_markdown
-                continue
+                pending_heading = current.pop("_heading_value", None)
+                if pending_heading and not current.get("company"):
+                    if _looks_like_experience_role_title(cleaned_markdown) and not _looks_like_experience_role_title(
+                        pending_heading
+                    ):
+                        current["company"] = pending_heading
+                        current["position"] = cleaned_markdown
+                    else:
+                        current["company"] = cleaned_markdown
+                        current["position"] = pending_heading
+                    continue
+                if not current.get("company"):
+                    current["company"] = cleaned_markdown
+                    continue
 
             date_fields = _parse_experience_date_line(raw_line)
             if date_fields:
@@ -1136,6 +1262,14 @@ def _education_entry_has_content(entry: Any) -> bool:
     )
 
 
+def _looks_like_degree_text(value: Optional[str]) -> bool:
+    return bool(DEGREE_MARKER_RE.search(_clean_inline_text(value) or ""))
+
+
+def _looks_like_institution_text(value: Optional[str]) -> bool:
+    return bool(INSTITUTION_MARKER_RE.search(_clean_inline_text(value) or ""))
+
+
 def _parse_education_header_line(value: Optional[str]) -> Optional[dict[str, Any]]:
     cleaned = _clean_header_line(value)
     if not cleaned or _is_heading_value(cleaned) or _parse_experience_date_range(cleaned):
@@ -1148,6 +1282,17 @@ def _parse_education_header_line(value: Optional[str]) -> Optional[dict[str, Any
         return None
     if len(parts) == 1:
         return {"degree": parts[0]}
+    if _looks_like_institution_text(parts[0]) and any(_looks_like_degree_text(part) for part in parts[1:]):
+        degree_index = next(index for index, part in enumerate(parts[1:], start=1) if _looks_like_degree_text(part))
+        parsed: dict[str, Any] = {
+            "institution": parts[0],
+            "degree": parts[degree_index],
+        }
+        if degree_index > 1:
+            parsed["fieldOfStudy"] = ", ".join(parts[1:degree_index])
+        if degree_index + 1 < len(parts):
+            parsed["location"] = ", ".join(parts[degree_index + 1 :])
+        return parsed
     parsed: dict[str, Any] = {
         "degree": parts[0],
         "institution": ", ".join(parts[1:-1]) if len(parts) > 2 else parts[1],
@@ -1332,6 +1477,7 @@ def _extract_profile_hobbies(sections: list[OCRMarkdownSection]) -> list[str]:
 def _extract_explicit_projects_from_sections(sections: list[OCRMarkdownSection]) -> list[dict[str, Any]]:
     projects: list[dict[str, Any]] = []
     current: Optional[dict[str, Any]] = None
+    pending_blank = False
 
     def flush_current() -> None:
         nonlocal current
@@ -1343,10 +1489,12 @@ def _extract_explicit_projects_from_sections(sections: list[OCRMarkdownSection])
         for raw_line in [*section.lines, ""]:
             stripped = raw_line.strip()
             if not stripped:
+                pending_blank = current is not None
                 continue
             heading_match = MARKDOWN_HEADING_RE.match(raw_line)
             if heading_match and raw_line.lstrip().startswith("###"):
                 flush_current()
+                pending_blank = False
                 heading = _clean_markdown_inline(heading_match.group(1))
                 if heading:
                     title, separator, meta = heading.partition(" | ")
@@ -1356,6 +1504,18 @@ def _extract_explicit_projects_from_sections(sections: list[OCRMarkdownSection])
                         "bullets": [],
                     }
                 continue
+            if pending_blank and current is not None and not (
+                stripped[:1] in {"-", "*", "•"} or LIST_PREFIX_RE.match(stripped)
+            ):
+                candidate = _clean_markdown_inline(stripped) or ""
+                if (
+                    (stripped != candidate or len(candidate.split()) <= 8)
+                    and not candidate.endswith((".", ":", ";"))
+                    and not _looks_like_experience_date_range(candidate)
+                    and (current.get("summary") or current.get("bullets"))
+                ):
+                    flush_current()
+            pending_blank = False
             if current is None:
                 title = _clean_markdown_inline(stripped)
                 if title and not _is_heading_value(title):
@@ -2205,11 +2365,14 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
             **_extract_explicit_contact_from_sections(explicit_sections.get("contact", [])),
         }
         if contact:
-            repaired_payload["contact"] = {
+            existing_contact = repaired_payload.get("contact")
+            existing_contact = existing_contact if isinstance(existing_contact, dict) else {}
+            recovered_contact = {
                 key: value
                 for key, value in contact.items()
                 if key in {"email", "phone", "address", "linkedin", "github", "website"}
             }
+            repaired_payload["contact"] = {**existing_contact, **recovered_contact}
             if contact.get("location"):
                 identity_payload = repaired_payload.setdefault("identity", {})
                 if isinstance(identity_payload, dict):

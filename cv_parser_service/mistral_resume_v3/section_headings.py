@@ -74,7 +74,14 @@ RAW_SECTION_HEADING_ALIASES: dict[str, set[str]] = {
         "academic qualifications",
         "educational qualifications",
     },
-    "summary": {"summary", "profile", "professional summary", "professional profile", "about"},
+    "summary": {
+        "summary",
+        "profile",
+        "professional summary",
+        "professional profile",
+        "personal profile",
+        "about",
+    },
     "projects": {"projects", "project experience", "project title"},
     "certifications": {"certifications", "certification", "licenses", "licenses & certifications"},
     "awards": {"awards", "honors", "honours"},
@@ -89,6 +96,5 @@ RAW_SECTION_HEADING_ALIASES: dict[str, set[str]] = {
         "details",
         "personal details",
         "contact details",
-        "personal profile",
     },
 }

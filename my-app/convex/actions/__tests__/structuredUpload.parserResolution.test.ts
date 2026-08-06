@@ -48,6 +48,21 @@ describe("resolveParserEndpoints", () => {
     );
   });
 
+  it("puts the healthy loopback origin first when localhost is the one that passed /ready", () => {
+    const attempts = resolveParserEndpoints("/mistral-ocr/parse", {
+      preferLoopback: true,
+      preferredLoopbackOrigin: "http://localhost:8001",
+      env: {
+        CONVEX_PARSER_URL: "https://parser.dasti.ai",
+      },
+    });
+
+    expect(attempts[0]?.label).toBe("prefer:healthy-loopback");
+    expect(attempts[0]?.endpoint.toString()).toBe(
+      "http://localhost:8001/mistral-ocr/parse",
+    );
+  });
+
   it("allows local dev to resolve loopback without a remote parser env", () => {
     const attempts = resolveParserEndpoints("/parse-cv", {
       preferLoopback: true,
