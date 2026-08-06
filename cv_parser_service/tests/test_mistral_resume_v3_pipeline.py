@@ -1508,6 +1508,13 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
                 "contact": {"email": "jane@example.com"},
             },
         ),
+        (
+            "JANE DOE\nParis, France\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com", "address": "Paris, France"},
+            },
+        ),
     ],
     ids=[
         "no-title-in-header",
@@ -1515,6 +1522,7 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
         "company-first-header-must-not-produce-junk",
         "name-prefixed-noisy-header-must-not-produce-name-title",
         "header-without-title-signal-returns-null",
+        "international-location-must-not-become-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_does_not_recover_desired_position_from_invalid_header_patterns(
