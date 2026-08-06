@@ -109,6 +109,32 @@ EXPERIENCE_ROLE_MARKERS = {
     "supervisor",
     "technician",
 }
+EXPERIENCE_MONTH_NUMBERS = {
+    "jan": "01",
+    "january": "01",
+    "feb": "02",
+    "february": "02",
+    "mar": "03",
+    "march": "03",
+    "apr": "04",
+    "april": "04",
+    "may": "05",
+    "jun": "06",
+    "june": "06",
+    "jul": "07",
+    "july": "07",
+    "aug": "08",
+    "august": "08",
+    "sep": "09",
+    "sept": "09",
+    "september": "09",
+    "oct": "10",
+    "october": "10",
+    "nov": "11",
+    "november": "11",
+    "dec": "12",
+    "december": "12",
+}
 DEGREE_MARKER_RE = re.compile(
     r"\b(?:associate|bachelor|master|doctor(?:ate)?|ph\.?d|mba|mfa|bfa|b\.?a\.?|b\.?s\.?|b\.?sc\.?|b\.?tech\.?|"
     r"m\.?a\.?|m\.?s\.?|m\.?sc\.?|m\.?tech\.?|jd|md|llm|diploma|certificate|certified|degree|engineering)\b",
@@ -929,8 +955,35 @@ def _extract_explicit_skills_from_sections(sections: list[OCRMarkdownSection]) -
     recovered: list[str] = []
     seen: set[str] = set()
     for section in sections:
+        skill_table_mode = False
+        category_column: Optional[int] = None
         for raw_line in section.lines:
-            cleaned_line = _clean_markdown_inline(_strip_list_prefix(raw_line.strip().strip("|")))
+            table_cells = _markdown_table_cells(raw_line)
+            if table_cells:
+                normalized_cells = [_normalize_lookup(cell) for cell in table_cells]
+                if any(
+                    cell in {"category", "categories", "skill", "skills", "technology", "technologies"}
+                    for cell in normalized_cells
+                ):
+                    skill_table_mode = True
+                    category_column = next(
+                        (
+                            index
+                            for index, cell in enumerate(normalized_cells)
+                            if cell in {"category", "categories"}
+                        ),
+                        None,
+                    )
+                    continue
+                if skill_table_mode:
+                    cells_for_skills = [
+                        cell for index, cell in enumerate(table_cells) if index != category_column
+                    ]
+                    cleaned_line = _clean_markdown_inline(" | ".join(cells_for_skills))
+                else:
+                    cleaned_line = _clean_markdown_inline(" | ".join(table_cells))
+            else:
+                cleaned_line = _clean_markdown_inline(_strip_list_prefix(raw_line.strip().strip("|")))
             if not cleaned_line or TABLE_DIVIDER_RE.match(cleaned_line):
                 continue
             content = cleaned_line
@@ -1368,6 +1421,19 @@ def _extract_explicit_education_from_sections(sections: list[OCRMarkdownSection]
             if date_fields and current is not None:
                 current.update({key: value for key, value in date_fields.items() if value is not None})
                 continue
+            parsed_header = _parse_education_header_line(stripped)
+            parsed_header_is_distinct = bool(
+                parsed_header
+                and (
+                    _looks_like_degree_text(parsed_header.get("degree"))
+                    or _looks_like_institution_text(parsed_header.get("institution"))
+                )
+                and (current is None or bool(current.get("degree")))
+            )
+            if parsed_header_is_distinct:
+                flush_current()
+                current = {**parsed_header, "details": []}
+                continue
             if cleaned_markdown and cleaned_markdown != stripped and current is not None and not current.get("degree"):
                 current["degree"] = cleaned_markdown
                 continue
@@ -1379,10 +1445,6 @@ def _extract_explicit_education_from_sections(sections: list[OCRMarkdownSection]
             if current is not None and not current.get("location"):
                 current["location"] = cleaned_markdown or _clean_inline_text(stripped)
                 continue
-            parsed_header = _parse_education_header_line(stripped)
-            if parsed_header:
-                flush_current()
-                current = {**parsed_header, "details": []}
     flush_current()
     return recovered
 
@@ -1729,6 +1791,26 @@ def _validated_recovered_skills(
     return None
 
 
+def _normalize_experience_date_for_identity(value: Optional[str]) -> str:
+    normalized = _normalize_lookup(value or "").replace(".", "")
+    if not normalized:
+        return ""
+    if normalized in {"present", "current", "now", "till now"}:
+        return "current"
+    match = re.fullmatch(r"(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?", normalized)
+    if match:
+        return f"{match.group(1)}-{int(match.group(2)):02d}"
+    match = re.fullmatch(r"(\d{1,2})/(\d{4})", normalized)
+    if match:
+        return f"{match.group(2)}-{int(match.group(1)):02d}"
+    match = re.fullmatch(r"([a-z]+)\s+(\d{4})", normalized)
+    if match and match.group(1) in EXPERIENCE_MONTH_NUMBERS:
+        return f"{match.group(2)}-{EXPERIENCE_MONTH_NUMBERS[match.group(1)]}"
+    if re.fullmatch(r"\d{4}", normalized):
+        return normalized
+    return normalized
+
+
 def _experience_entry_identity(entry: Any) -> Optional[tuple[str, str, str, str]]:
     company = _clean_inline_text(getattr(entry, "company", None) if not isinstance(entry, dict) else entry.get("company")) or ""
     position = _clean_inline_text(getattr(entry, "position", None) if not isinstance(entry, dict) else entry.get("position")) or ""
@@ -1739,8 +1821,8 @@ def _experience_entry_identity(entry: Any) -> Optional[tuple[str, str, str, str]
     return (
         _normalize_lookup(company),
         _normalize_lookup(position),
-        _normalize_lookup(start_date),
-        _normalize_lookup(end_date),
+        _normalize_experience_date_for_identity(start_date),
+        _normalize_experience_date_for_identity(end_date),
     )
 
 

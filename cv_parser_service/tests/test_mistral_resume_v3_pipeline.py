@@ -16,7 +16,9 @@ from cv_parser_service.mistral_resume_v3.pipeline import (
     _extract_explicit_education_from_sections,
     _extract_explicit_experience_from_sections,
     _extract_explicit_projects_from_sections,
+    _extract_explicit_skills_from_sections,
     _extract_explicit_sections_from_pages,
+    _experience_entry_identity,
     _parse_education_header_line,
     _recover_contact_from_document,
     _recover_identity_name_from_header,
@@ -349,6 +351,11 @@ def test_recovery_handles_company_first_experience_tables_and_institution_first_
                     "| Example Inc | Analyst | 2018 | 2020 |\n\n"
                     "# Education\n"
                     "Harvard University, Bachelor of Arts, Cambridge\n\n"
+                    "Master of Science, Tech University\n\n"
+                    "# Skills\n"
+                    "| Category | Skills |\n"
+                    "| --- | --- |\n"
+                    "| Frameworks | React, FastAPI |\n\n"
                     "# Projects\n"
                     "Project One\n"
                     "Built one.\n\n"
@@ -369,7 +376,17 @@ def test_recovery_handles_company_first_experience_tables_and_institution_first_
     assert education[0]["institution"] == "Harvard University"
     assert education[0]["degree"] == "Bachelor of Arts"
     assert education[0]["location"] == "Cambridge"
+    assert education[1]["degree"] == "Master of Science"
+    assert education[1]["institution"] == "Tech University"
     assert _parse_education_header_line("Harvard University, Bachelor of Arts")["institution"] == "Harvard University"
+
+    skills = _extract_explicit_skills_from_sections(sections["skills"])
+    assert skills == ["React", "FastAPI"]
+    assert _experience_entry_identity(
+        {"company": "Acme", "position": "Engineer", "startDate": "2020-06"}
+    ) == _experience_entry_identity(
+        {"company": "Acme", "position": "Engineer", "startDate": "June 2020"}
+    )
 
     projects = _extract_explicit_projects_from_sections(sections["projects"])
     assert [item["title"] for item in projects] == ["Project One", "Project Two"]
