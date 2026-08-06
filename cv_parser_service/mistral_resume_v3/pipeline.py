@@ -57,6 +57,7 @@ HEADER_CONTACT_LABEL_RE = re.compile(
     r"\b(?:phone|email|mobile|telephone|tel|contact|linkedin|website|portfolio|github|address|location)\b",
     re.IGNORECASE,
 )
+EMAIL_LABEL_RE = re.compile(r"(?:^|[|•·])\s*e[- ]?mail(?:\s+address)?\s*[:|]", re.IGNORECASE)
 HEADER_COMPANY_SUFFIX_RE = re.compile(
     r"\b(?:inc|llc|ltd|limited|corp|corporation|company|gmbh|plc|co)\b",
     re.IGNORECASE,
@@ -473,6 +474,25 @@ def _personal_profile_contains_contact_table(lines: list[str]) -> bool:
     return False
 
 
+def _contact_details_have_evidence(lines: list[str]) -> bool:
+    """Treat a generic Details heading as contact only when its body looks like contact data."""
+    for line in lines:
+        cleaned = _clean_inline_text(line) or ""
+        if not cleaned:
+            continue
+        if (
+            EMAIL_LABEL_RE.search(cleaned)
+            or PHONE_CONTEXT_MARKER_RE.search(cleaned)
+            or re.search(r"\b(?:linkedin|github)\.com/", cleaned, re.IGNORECASE)
+            or ADDRESSISH_STREET_RE.search(cleaned)
+            or ADDRESSISH_STREET_FRAGMENT_RE.search(cleaned)
+            or DETAILS_LOCATION_RE.fullmatch(cleaned)
+            or _personal_profile_contains_contact_table([line])
+        ):
+            return True
+    return False
+
+
 def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[str, list[OCRMarkdownSection]]:
     sections: list[OCRMarkdownSection] = []
     current: Optional[OCRMarkdownSection] = None
@@ -486,6 +506,12 @@ def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[s
                 and _personal_profile_contains_contact_table(current.lines)
             ):
                 current.family = "contact"
+            elif (
+                current.family == "contact"
+                and _normalize_heading_text(current.heading) == "details"
+                and not _contact_details_have_evidence(current.lines)
+            ):
+                current.family = "other"
             sections.append(current)
         current = None
 
@@ -496,6 +522,8 @@ def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[s
             if heading_match:
                 heading_text = heading_match.group(1).strip()
                 family = _classify_heading(heading_text)
+                if family is None and _normalize_heading_text(heading_text) == "details":
+                    family = "contact"
                 if family:
                     flush_current()
                     current = OCRMarkdownSection(family=family, heading=heading_text.rstrip(":").strip(), lines=[])
@@ -507,6 +535,8 @@ def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[s
             family = None
             if stripped and stripped[:1] not in {"-", "*", "•", "|"}:
                 family = _classify_heading(stripped)
+                if family is None and _normalize_heading_text(stripped) == "details":
+                    family = "contact"
             if family:
                 flush_current()
                 current = OCRMarkdownSection(family=family, heading=stripped.rstrip(":").strip(), lines=[])
@@ -850,6 +880,8 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
     address_fragments: list[str] = []
     collecting_address = False
     active_family: Optional[str] = None
+    details_context = False
+    details_contact_evidence = False
     in_header = True
     heading_count = 0
 
@@ -857,12 +889,22 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
         heading_match = MARKDOWN_HEADING_RE.match(raw_line)
         if heading_match:
             heading_text = heading_match.group(1).strip()
+            normalized_heading = _normalize_heading_text(heading_text)
             family = _classify_heading(heading_text)
-            if family:
+            if normalized_heading == "details" and family is None:
+                active_family = None
+                details_context = True
+                details_contact_evidence = False
+                in_header = False
+            elif family:
                 active_family = family
+                details_context = False
+                details_contact_evidence = False
                 in_header = False
             elif heading_count > 0 and not _is_document_title_placeholder(heading_text):
                 active_family = None
+                details_context = False
+                details_contact_evidence = False
                 in_header = False
             heading_count += 1
             if collecting_address:
@@ -870,8 +912,23 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
         cleaned = _clean_markdown_inline(raw_line)
         if not cleaned:
             continue
+        if details_context and not details_contact_evidence:
+            details_contact_evidence = bool(
+                EMAIL_LABEL_RE.search(cleaned)
+                or PHONE_CONTEXT_MARKER_RE.search(cleaned)
+                or re.search(r"\b(?:linkedin|github)\.com/", cleaned, re.IGNORECASE)
+                or ADDRESSISH_STREET_RE.search(cleaned)
+                or ADDRESSISH_STREET_FRAGMENT_RE.search(cleaned)
+                or DETAILS_LOCATION_RE.fullmatch(cleaned)
+            )
         email_match = EMAIL_FRAGMENT_RE.search(cleaned)
-        if email_match and "email" not in recovered:
+        email_context_ok = bool(
+            EMAIL_LABEL_RE.search(cleaned)
+            or active_family == "contact"
+            or (details_context and details_contact_evidence)
+            or in_header
+        )
+        if email_match and email_context_ok and "email" not in recovered:
             recovered["email"] = email_match.group(0)
 
         phone_candidates = PHONE_FRAGMENT_RE.findall(cleaned)
@@ -888,7 +945,9 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
                 or URL_FRAGMENT_RE.search(cleaned)
                 or HEADER_CONTACT_LABEL_RE.search(cleaned)
             )
-            phone_context_ok = phone_marker or active_family == "contact" or (in_header and (header_candidate or header_contact_line))
+            phone_context_ok = phone_marker or active_family == "contact" or (
+                details_context and details_contact_evidence
+            ) or (in_header and (header_candidate or header_contact_line))
             if phone and phone_context_ok:
                 recovered["phone"] = _clean_inline_text(phone) or phone
 

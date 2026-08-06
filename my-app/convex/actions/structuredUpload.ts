@@ -47,8 +47,32 @@ export const MISTRAL_OCR_UNAVAILABLE_MESSAGE =
   "Mistral OCR est momentanément indisponible. Réessayez.";
 export const MISTRAL_IMPORT_TOTAL_BUDGET_MS = 60_000;
 export const MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS = 20_000;
-export const MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS = 15_000;
+export const MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS = 15_000;
+export const MISTRAL_IMPORT_FALLBACK_RESERVE_MS = MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS;
+export const MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS = MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS;
 export const MISTRAL_IMPORT_MAX_ATTEMPTS = 2;
+
+export function computeMistralParserFetchTimeoutMs({
+  remainingMs,
+  remainingParserEndpoints,
+}: {
+  remainingMs: number;
+  remainingParserEndpoints: number;
+}): number {
+  const safeRemainingMs = Number.isFinite(remainingMs) ? Math.max(1, remainingMs) : 1;
+  const safeRemainingParserEndpoints = Number.isFinite(remainingParserEndpoints)
+    ? Math.max(0, Math.floor(remainingParserEndpoints))
+    : 0;
+  const reservedForFallbacks =
+    safeRemainingParserEndpoints * MISTRAL_IMPORT_FALLBACK_RESERVE_MS;
+  return Math.max(
+    1,
+    Math.min(
+      MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS,
+      safeRemainingMs - reservedForFallbacks,
+    ),
+  );
+}
 
 export function buildMistralOcrUnavailableError(
   details: Record<string, unknown> = {},
@@ -1003,7 +1027,7 @@ export const structuredUpload = action({
 
     const modeSequence: ParserMode[] = activeUseMistral ? ["auto"] : computeModeSequence();
 
-    for (const attempt of parserAttemptsToTry) {
+    for (const [attemptIndex, attempt] of parserAttemptsToTry.entries()) {
       const parserEndpoint = attempt.endpoint;
       let endpointForLog = parserEndpoint.toString();
       console.info(
@@ -1054,7 +1078,10 @@ export const structuredUpload = action({
           throw new Error("mistral_import_deadline_exceeded");
         }
         const parserFetchTimeoutMs = activeUseMistral
-          ? Math.max(1, remainingMistralBudgetMs as number)
+          ? computeMistralParserFetchTimeoutMs({
+              remainingMs: remainingMistralBudgetMs as number,
+              remainingParserEndpoints: parserAttemptsToTry.length - attemptIndex - 1,
+            })
           : 90_000;
         const fetchStartedAt = nowMs();
         const controller = new AbortController();

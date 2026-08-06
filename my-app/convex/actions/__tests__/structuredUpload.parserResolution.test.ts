@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  computeMistralParserFetchTimeoutMs,
   detectHealthyLocalParserOrigin,
   MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS,
   MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
@@ -116,6 +117,27 @@ describe("resolveParserEndpoints", () => {
 });
 
 describe("Mistral import retry policy", () => {
+  it("caps each request and reserves time for later configured parser origins", () => {
+    expect(
+      computeMistralParserFetchTimeoutMs({
+        remainingMs: 60_000,
+        remainingParserEndpoints: 2,
+      }),
+    ).toBe(15_000);
+    expect(
+      computeMistralParserFetchTimeoutMs({
+        remainingMs: 20_000,
+        remainingParserEndpoints: 1,
+      }),
+    ).toBe(5_000);
+    expect(
+      computeMistralParserFetchTimeoutMs({
+        remainingMs: 5_000,
+        remainingParserEndpoints: 0,
+      }),
+    ).toBe(5_000);
+  });
+
   it("keeps one loopback alias while preserving configured Mistral gateways", () => {
     const candidates = resolveParserEndpoints("/mistral-ocr/parse", {
       preferLoopback: true,

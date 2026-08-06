@@ -347,6 +347,42 @@ def test_recovery_guards_titles_dates_links_and_contact_profile_variants() -> No
     ) == {}
 
 
+def test_contact_recovery_does_not_promote_reference_emails_after_the_header() -> None:
+    recovered = _recover_contact_from_document(
+        "Jane Doe\n"
+        "jane@example.com\n"
+        "# EXPERIENCE\n"
+        "Senior Engineer at Example Corp\n"
+        "Reference: referee@example.com\n"
+    )
+
+    assert recovered == {"email": "jane@example.com"}
+    assert _recover_contact_from_document(
+        "# Jane Doe\n"
+        "# EXPERIENCE\n"
+        "Reference: referee@example.com\n"
+    ) == {}
+
+
+def test_generic_details_heading_is_not_treated_as_contact_without_contact_evidence() -> None:
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": (
+                    "# Details\n"
+                    "Managed projects and employment delivery across multiple teams.\n\n"
+                    "# Experience\n"
+                    "Example Corp | Senior Engineer | 2020 - Present\n"
+                ),
+            }
+        ]
+    )
+
+    assert "contact" not in sections
+    assert sections["other"][0].heading == "Details"
+
+
 def test_recovery_handles_company_first_experience_tables_and_institution_first_education() -> None:
     sections = _extract_explicit_sections_from_pages(
         [

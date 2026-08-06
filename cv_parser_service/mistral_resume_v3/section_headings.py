@@ -93,7 +93,6 @@ RAW_SECTION_HEADING_ALIASES: dict[str, set[str]] = {
     "contact": {
         "contact",
         "contact information",
-        "details",
         "personal details",
         "contact details",
     },
