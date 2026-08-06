@@ -16,6 +16,7 @@ from cv_parser_service.mistral_resume_v3.pipeline import (
     OCRMarkdownSection,
     _extract_explicit_education_from_sections,
     _extract_explicit_experience_from_sections,
+    _extract_explicit_hobbies_from_sections,
     _extract_profile_hobbies,
     _extract_profile_languages,
     _extract_explicit_projects_from_sections,
@@ -337,6 +338,14 @@ def test_recovery_guards_titles_dates_links_and_contact_profile_variants() -> No
     )
     assert "contact" in table_sections
 
+    assert _recover_contact_from_document(
+        "# Jane Doe\n"
+        "Credential ID: 12345678\n"
+        "# EXPERIENCE\n"
+        "### Engineer\n"
+        "Employee number: 87654321\n"
+    ) == {}
+
 
 def test_recovery_handles_company_first_experience_tables_and_institution_first_education() -> None:
     sections = _extract_explicit_sections_from_pages(
@@ -453,6 +462,39 @@ def test_profile_rows_recover_all_value_columns_and_ignore_leaving_reasons() -> 
     assert _extract_profile_hobbies(sections["contact"]) == ["Running", "Hiking"]
     experience = _extract_explicit_experience_from_sections(sections["experience"])
     assert experience[0]["responsibilityBullets"] == []
+
+    hobby_sections = [
+        OCRMarkdownSection(
+            family="hobbies",
+            heading="Hobbies",
+            lines=[
+                "| Hobby | Frequency |",
+                "| --- | --- |",
+                "| Cycling | Weekly |",
+            ],
+        )
+    ]
+    assert _extract_explicit_hobbies_from_sections(hobby_sections) == ["Cycling"]
+
+
+def test_project_metadata_after_blank_line_stays_attached_to_current_project() -> None:
+    projects = _extract_explicit_projects_from_sections(
+        [
+            OCRMarkdownSection(
+                family="projects",
+                heading="Projects",
+                lines=[
+                    "Project One",
+                    "Built one.",
+                    "",
+                    "React and TypeScript",
+                ],
+            )
+        ]
+    )
+    assert len(projects) == 1
+    assert projects[0]["title"] == "Project One"
+    assert "React and TypeScript" in projects[0]["summary"]
 
 
 def test_prasanna_markdown_recovers_bold_table_sections_and_profile_values() -> None:
@@ -2170,6 +2212,26 @@ def test_normalize_extraction_reclassifies_certification_like_education_entries_
     assert certification_names == [
         "Certified Protection Officer",
         "Certified Security Professional",
+    ]
+
+    academic_program = normalize_extraction(
+        parse_document_annotation(
+            {
+                "education": [
+                    {
+                        "institution": "Amazon Web Services",
+                        "degree": "AWS Certified Solutions Architect Program",
+                    }
+                ]
+            }
+        ),
+        raw_text="AWS Certified Solutions Architect Program",
+        page_count=1,
+        document_name="aws_program.pdf",
+    )
+    assert academic_program.education == []
+    assert [item.name for item in academic_program.certifications] == [
+        "AWS Certified Solutions Architect Program"
     ]
 
 

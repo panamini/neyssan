@@ -38,6 +38,10 @@ EXPERIENCE_DATE_RANGE_SEPARATOR_RE = re.compile(r"\s+(?:to|[-–—])\s+", re.IG
 EMAIL_FRAGMENT_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 URL_FRAGMENT_RE = re.compile(r"(https?://|www\.)", re.IGNORECASE)
 PHONE_FRAGMENT_RE = re.compile(r"(?:\+?\d[\d\s().-]{6,}\d)")
+PHONE_CONTEXT_MARKER_RE = re.compile(
+    r"\b(?:phone|mobile|telephone|tel|cell)\b|[☎☏✆📞]",
+    re.IGNORECASE,
+)
 ZIPISH_RE = re.compile(r"\b\d{5}(?:-\d{4})?\b")
 ADDRESSISH_STREET_RE = re.compile(
     r"\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,6}\s+"
@@ -713,8 +717,24 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
     lines = str(raw_text or "").replace("\r", "").split("\n")
     address_fragments: list[str] = []
     collecting_address = False
+    active_family: Optional[str] = None
+    in_header = True
+    heading_count = 0
 
     for raw_line in lines:
+        heading_match = MARKDOWN_HEADING_RE.match(raw_line)
+        if heading_match:
+            heading_text = heading_match.group(1).strip()
+            family = _classify_heading(heading_text)
+            if family:
+                active_family = family
+                in_header = False
+            elif heading_count > 0 and not _is_document_title_placeholder(heading_text):
+                active_family = None
+                in_header = False
+            heading_count += 1
+            if collecting_address:
+                collecting_address = False
         cleaned = _clean_markdown_inline(raw_line)
         if not cleaned:
             continue
@@ -724,8 +744,20 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
 
         phone_candidates = PHONE_FRAGMENT_RE.findall(cleaned)
         if phone_candidates and "phone" not in recovered and "passport" not in cleaned.lower():
+            phone_marker = bool(PHONE_CONTEXT_MARKER_RE.search(cleaned))
             phone = next((candidate for candidate in phone_candidates if _looks_like_phone_candidate(candidate)), None)
-            if phone:
+            # A whole-document scan must not turn credential, employee, or
+            # licence numbers into contact data. Keep unlabeled recovery to
+            # the document header/contact block; after a real section starts,
+            # require an explicit phone marker or the contact family.
+            header_candidate = phone is not None and cleaned.strip() == phone.strip()
+            header_contact_line = in_header and bool(
+                EMAIL_FRAGMENT_RE.search(cleaned)
+                or URL_FRAGMENT_RE.search(cleaned)
+                or HEADER_CONTACT_LABEL_RE.search(cleaned)
+            )
+            phone_context_ok = phone_marker or active_family == "contact" or (in_header and (header_candidate or header_contact_line))
+            if phone and phone_context_ok:
                 recovered["phone"] = _clean_inline_text(phone) or phone
 
         for field, marker in (("linkedin", "linkedin.com/"), ("github", "github.com/")):
@@ -1472,11 +1504,36 @@ def _extract_explicit_hobbies_from_sections(sections: list[OCRMarkdownSection]) 
     recovered: list[str] = []
     seen: set[str] = set()
     for section in sections:
+        hobby_table_column: Optional[int] = None
         for raw_line in section.lines:
-            cleaned = _clean_inline_text(_strip_list_prefix(raw_line.strip()).strip("|"))
-            if not cleaned or TABLE_DIVIDER_RE.match(cleaned):
+            if TABLE_DIVIDER_RE.match(raw_line.strip()):
                 continue
-            for item in re.split(r"\s*(?:,|;|\||•|·)\s*", cleaned):
+            table_cells = _markdown_table_cells(raw_line)
+            if table_cells:
+                normalized_cells = [_normalize_lookup(cell) for cell in table_cells]
+                if any(marker in cell for cell in normalized_cells for marker in ("hobby", "hobbies", "interest", "activity")):
+                    hobby_table_column = next(
+                        (
+                            index
+                            for index, cell in enumerate(normalized_cells)
+                            if any(marker in cell for marker in ("hobby", "hobbies", "interest", "activity"))
+                        ),
+                        0,
+                    )
+                    continue
+                if hobby_table_column is not None:
+                    table_values = [
+                        table_cells[hobby_table_column]
+                    ] if hobby_table_column < len(table_cells) else []
+                else:
+                    table_values = table_cells
+                items = table_values
+            else:
+                cleaned = _clean_inline_text(_strip_list_prefix(raw_line.strip()).strip("|"))
+                if not cleaned or TABLE_DIVIDER_RE.match(cleaned):
+                    continue
+                items = re.split(r"\s*(?:,|;|\||•|·)\s*", cleaned)
+            for item in items:
                 hobby = _clean_inline_text(item)
                 key = _normalize_lookup(hobby or "")
                 if not hobby or not key or key in seen or _is_heading_value(hobby):
@@ -1563,6 +1620,23 @@ def _extract_profile_hobbies(sections: list[OCRMarkdownSection]) -> list[str]:
     ]
 
 
+PROJECT_METADATA_MARKER_RE = re.compile(
+    r"\b(?:react|typescript|javascript|python|java|flask|fastapi|node(?:\.js)?|spigot|sql|postgres|docker|aws|azure|gcp|html|css|api|frameworks?|libraries|technologies|stack)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_project_metadata(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value) or ""
+    if not cleaned:
+        return False
+    normalized = _normalize_lookup(cleaned)
+    return bool(
+        PROJECT_METADATA_MARKER_RE.search(cleaned)
+        and re.search(r"\b(?:and|with|using)\b|[,/&|]", normalized)
+    )
+
+
 def _extract_explicit_projects_from_sections(sections: list[OCRMarkdownSection]) -> list[dict[str, Any]]:
     projects: list[dict[str, Any]] = []
     current: Optional[dict[str, Any]] = None
@@ -1598,7 +1672,10 @@ def _extract_explicit_projects_from_sections(sections: list[OCRMarkdownSection])
             ):
                 candidate = _clean_markdown_inline(stripped) or ""
                 if (
-                    (stripped != candidate or len(candidate.split()) <= 8)
+                    (stripped != candidate or (
+                        len(candidate.split()) <= 8
+                        and not _looks_like_project_metadata(candidate)
+                    ))
                     and not candidate.endswith((".", ":", ";"))
                     and not _looks_like_experience_date_range(candidate)
                     and (current.get("summary") or current.get("bullets"))
