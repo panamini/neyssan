@@ -772,15 +772,15 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
 
           // Derive preferred title and content from structured item
           let derivedTitle: string;
+          let hasExperienceHeading = true;
           if (secType === "experience") {
             const company = String(item?.company ?? "").trim();
             const position = String(item?.position ?? "").trim();
             const location = String(item?.location ?? "").trim();
-            // Skip synthesizing a block when both company and position are empty (headerless entry)
-            if (!company && !position) {
-              return;
-            }
-            const base = company && position ? `${position} at ${company}` : (position || company);
+            hasExperienceHeading = Boolean(company || position);
+            const base = company && position
+              ? `${position} at ${company}`
+              : position || company || `Experience ${idx + 1}`;
             derivedTitle = location ? `${base} — ${location}` : base;
           } else {
             derivedTitle = String(item?.institution ?? item?.degree ?? `Education ${idx + 1}`);
@@ -795,6 +795,13 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           } else if (secType === "education") {
             const desc = item?.description;
             if (typeof desc !== "undefined") derivedContent = ensureRemirrorDoc(desc as any);
+          }
+          if (
+            secType === "experience" &&
+            !hasExperienceHeading &&
+            isEmptyDoc(derivedContent)
+          ) {
+            return;
           }
 
           if (

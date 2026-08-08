@@ -243,10 +243,7 @@ describe("buildAuthoritativeResumeEnvelope", () => {
     ],
     [
       "affiliations",
-      {
-        organizationName: "Association of Operations Professionals",
-        roleOrMembershipType: "Board Member",
-      },
+      { text: "Association of Operations Professionals — Board Member" },
     ],
   ])("trusts a substantive %s section", (sectionName, entry) => {
     const envelope = buildAuthoritativeResumeEnvelope({

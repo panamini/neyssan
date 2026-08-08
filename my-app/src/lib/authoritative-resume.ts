@@ -249,7 +249,8 @@ export function hasMinimumAuthoritativeResumeContent(value: unknown): boolean {
           cleanString(record.organization) ||
           cleanString(record.organizationName) ||
           cleanString(record.role) ||
-          cleanString(record.roleOrMembershipType);
+          cleanString(record.roleOrMembershipType) ||
+          cleanString(record.text);
         return (
           isSubstantiveString(primaryLabel, 3) &&
           contentTextLength(record) >= 20

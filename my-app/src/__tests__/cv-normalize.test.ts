@@ -126,6 +126,43 @@ describe("Representative block stability", () => {
     );
     expect(ensureRepresentativeBlocks(refreshed)).toBe(refreshed);
   });
+
+  it("materializes a narrative-only experience when OCR misses its headings", () => {
+    const document = {
+      id: "cv-headerless-experience",
+      title: "Headerless experience",
+      metadata: {
+        createdAt: "2026-08-08T00:00:00.000Z",
+        updatedAt: "2026-08-08T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience-section",
+          title: "Experience",
+          type: "experience" as const,
+          blocks: [],
+          structuredContent: [
+            {
+              company: "",
+              position: "",
+              startDate: "2020-01-01T00:00:00.000Z",
+              responsibilities:
+                "Led cross-functional delivery and improved operational reliability across multiple teams.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const hydrated = ensureRepresentativeBlocks(document);
+
+    expect(hydrated.sections[0]?.blocks).toHaveLength(1);
+    expect(hydrated.sections[0]?.blocks[0]?.title).toBe("Experience 1");
+    expect(JSON.stringify(hydrated.sections[0]?.blocks[0]?.content)).toContain(
+      "improved operational reliability",
+    );
+  });
 });
 
  // Legacy suite: retained for reference; superseded by v1 precision-aware tests and parser→normalizer flows.
