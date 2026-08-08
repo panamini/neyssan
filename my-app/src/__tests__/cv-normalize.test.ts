@@ -1,7 +1,60 @@
 import { describe, it, expect } from "vitest";
 import { generateCvTemplate } from "../lib/cv-template";
-import { normalizeAndValidateCvDocument } from "../lib/normalize-cv";
+import {
+  ensureRepresentativeBlocks,
+  normalizeAndValidateCvDocument,
+} from "../lib/normalize-cv";
 import { parseCvDocumentStrict } from "../schemas/cvDocument.schema";
+
+describe("Representative block stability", () => {
+  it("reconstructs stripped structured blocks with stable ids and remains idempotent", () => {
+    const remoteDocument = {
+      id: "cv-remote-round-trip",
+      title: "Remote round trip",
+      metadata: {
+        createdAt: "2026-08-08T00:00:00.000Z",
+        updatedAt: "2026-08-08T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience-section",
+          title: "Experience",
+          type: "experience" as const,
+          blocks: [],
+          structuredContent: [
+            {
+              id: "experience-item",
+              company: "Acme",
+              position: "Lead",
+              startDate: "2024-01-01T00:00:00.000Z",
+              endDate: null,
+            },
+          ],
+        },
+        {
+          id: "achievements-section",
+          title: "Achievements",
+          type: "achievements" as const,
+          blocks: [],
+          structuredContent: [
+            {
+              id: "achievement-item",
+              text: "Reduced processing time by 40%",
+            },
+          ],
+        },
+      ],
+    };
+
+    const first = ensureRepresentativeBlocks(remoteDocument);
+    const secondFromRemote = ensureRepresentativeBlocks(remoteDocument);
+    const secondFromHydrated = ensureRepresentativeBlocks(first);
+
+    expect(secondFromRemote.sections).toEqual(first.sections);
+    expect(secondFromHydrated).toBe(first);
+  });
+});
 
  // Legacy suite: retained for reference; superseded by v1 precision-aware tests and parser→normalizer flows.
 describe.skip("CV template and normalizer (legacy suite — skipped)", () => {

@@ -17,7 +17,9 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       result: {
         normalized: {
           profile: { name: "Jane Doe" },
-          summary: { text: "Summary text" },
+          summary: {
+            text: "Product leader with ten years of experience delivering complex customer platforms.",
+          },
         },
       },
     });
@@ -28,7 +30,9 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       fallbackToLegacy: false,
       normalized: {
         profile: { name: "Jane Doe" },
-        summary: { text: "Summary text" },
+        summary: {
+          text: "Product leader with ten years of experience delivering complex customer platforms.",
+        },
       },
     });
   });
@@ -100,6 +104,7 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       },
       normalized: {
         profile: { name: "Jane Doe" },
+        skills: [{ name: "Product strategy" }, { name: "Roadmapping" }],
       },
     });
 
@@ -109,6 +114,43 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       fallbackToLegacy: false,
       normalized: {
         profile: { name: "Jane Doe" },
+        skills: [{ name: "Product strategy" }, { name: "Roadmapping" }],
+      },
+    });
+  });
+
+  it("does not trust a template-like payload with identity data but no substantive resume content", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          profile: {
+            name: "Robert Cooper",
+            email: "robert@example.com",
+          },
+          experience: [{}],
+          education: [{}],
+          skills: [],
+        },
+      },
+    });
+
+    expect(envelope).toEqual({
+      source: "mistral_v3",
+      trusted: false,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: {
+          name: "Robert Cooper",
+          email: "robert@example.com",
+        },
+        experience: [{}],
+        education: [{}],
+        skills: [],
       },
     });
   });

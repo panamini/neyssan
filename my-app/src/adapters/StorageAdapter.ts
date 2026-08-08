@@ -41,6 +41,7 @@ import {
   LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
 } from "../lib/cv-local-storage";
 import { isResumeTemplateId } from "../lib/layout/resumeTemplates";
+import { coerceAuthoritativeResume } from "../lib/authoritative-resume";
 
 function hasLocalStorage(): boolean {
   try {
@@ -251,7 +252,10 @@ function sanitizeRuntimeStateImages(value: unknown): unknown {
   return next;
 }
 
-function sanitizeRemoteMetadata(value: unknown): unknown {
+function sanitizeRemoteMetadata(
+  value: unknown,
+  options: { preserveAuthoritativeProvenance?: boolean } = {},
+): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
   }
@@ -261,7 +265,23 @@ function sanitizeRemoteMetadata(value: unknown): unknown {
   delete metadata.updatedAt;
   delete metadata.version;
   delete metadata.importRecoverySession;
-  delete metadata.authoritativeResume;
+  if (options.preserveAuthoritativeProvenance) {
+    const authoritativeResume = coerceAuthoritativeResume(
+      metadata.authoritativeResume,
+    );
+    if (authoritativeResume) {
+      metadata.authoritativeResume = {
+        source: authoritativeResume.source,
+        trusted: authoritativeResume.trusted,
+        fallbackToLegacy: authoritativeResume.fallbackToLegacy,
+        normalized: null,
+      };
+    } else {
+      delete metadata.authoritativeResume;
+    }
+  } else {
+    delete metadata.authoritativeResume;
+  }
 
   if (
     metadata.profileImage &&
@@ -294,7 +314,9 @@ function stripLargeBackendOnlyMetadata<T extends CvDocument>(cv: T): T {
     return cv;
   }
 
-  const metadata = sanitizeRemoteMetadata(cv.metadata) as Record<
+  const metadata = sanitizeRemoteMetadata(cv.metadata, {
+    preserveAuthoritativeProvenance: true,
+  }) as Record<
     string,
     unknown
   >;

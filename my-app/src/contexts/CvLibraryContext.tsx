@@ -41,6 +41,7 @@ import {
   isPlaceholderCvTitle,
   normalizeAndValidateCvDocument,
   ensureRepresentativeBlocks,
+  buildRepresentativeBlockId,
 } from "../lib/normalize-cv";
 import { buildAuthoritativeResumeDebugSnapshot } from "../lib/authoritative-resume";
 // Toggle verbose debug logging for editor flows. Enable by setting window.__CV_EDITOR_DEBUG__ = true in the dev console.
@@ -5395,7 +5396,10 @@ function normalizeToV1Section(input: CvSection): CvSection {
 
       if (!hasLinked) {
         const newBlock: CvBlock = {
-          id: uuidv4(),
+          id: buildRepresentativeBlockId(
+            s.id,
+            summaryItem.id,
+          ),
           title: "Summary",
           type: "text",
           content: ensureRemirrorDoc((summaryItem as any).summary),

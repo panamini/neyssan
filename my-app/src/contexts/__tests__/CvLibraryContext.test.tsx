@@ -969,6 +969,61 @@ describe('CvLibraryContext', () => {
     expect(localSnapshot.metadata.documentDecoration.resolvedUrl).toBeUndefined();
   });
 
+  it('reconstructs stripped summary blocks with a stable id during remote refresh', async () => {
+    const localCv = generateCvTemplateV1('Stable Summary Hydration CV');
+    localCv.id = 'cv_stable_summary_hydration';
+    localCv.metadata.updatedAt = '2026-08-08T12:00:00.000Z';
+    const localSummary = localCv.sections.find(
+      (section) => section.type === 'summary',
+    )!;
+    localSummary.blocks = [];
+
+    const remoteCv = JSON.parse(JSON.stringify(localCv));
+    remoteCv.metadata.updatedAt = '2026-08-08T12:01:00.000Z';
+    const remoteSummary = remoteCv.sections.find(
+      (section: any) => section.type === 'summary',
+    );
+    remoteSummary.blocks = [];
+
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_query: unknown, args: unknown) => {
+        if ((args as { profileId?: string } | undefined)?.profileId === localCv.id) {
+          return {
+            profileId: localCv.id,
+            cvDocument: remoteCv,
+          };
+        }
+        return [];
+      },
+    );
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([localCv]));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', `/cv?id=${localCv.id}`);
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() =>
+      expect(ctx.currentCv.metadata.updatedAt).toBe(
+        '2026-08-08T12:01:00.000Z',
+      ),
+    );
+    const hydratedSummary = ctx.currentCv.sections.find(
+      (section: any) => section.type === 'summary',
+    );
+    const summaryItemId = hydratedSummary.structuredContent[0].id;
+    expect(hydratedSummary.blocks).toHaveLength(1);
+    expect(hydratedSummary.blocks[0].id).toBe(
+      `representative:${hydratedSummary.id}:${summaryItemId}`,
+    );
+  });
+
   it('preserves remote visual metadata when weaker remote content is skipped', async () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;
