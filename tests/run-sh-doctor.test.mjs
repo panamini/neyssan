@@ -723,6 +723,28 @@ test("bootstrap reuses an existing Infisical session without a login call", (t) 
   assert.match(calls[0], /^secrets get VITE_CLERK_PUBLISHABLE_KEY /u);
 });
 
+test("bootstrap separates ready Infisical access from local runtime port blockers", (t) => {
+  const fixture = createFixture(t);
+  rmSync(fixture.appEnvFile);
+  const callLog = join(fixture.root, "infisical-calls.log");
+
+  const result = runBootstrap(fixture, {
+    FAKE_INFISICAL_CALL_LOG: callLog,
+    FAKE_INFISICAL_VALUE: "pk_test_bootstrap_port_blocker_fixture",
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /existing Infisical session is ready/i);
+  assert.match(result.output, /Infisical authentication is ready/i);
+  assert.match(result.output, /local-fast is blocked by readiness checks above/i);
+  assert.match(result.output, /do not repeat browser login/i);
+  assert.doesNotMatch(
+    result.output,
+    /pk_test_bootstrap_port_blocker_fixture/u,
+  );
+});
+
 test("bootstrap performs one browser login when needed and reuses it on retry", (t) => {
   const fixture = createFixture(t);
   rmSync(fixture.appEnvFile);

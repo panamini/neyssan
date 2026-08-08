@@ -267,6 +267,18 @@ ensure_local_fast_clerk_publishable_key() {
   return 1
 }
 
+bootstrap_after_configuration() {
+  local configuration_source="${1:-Clerk configuration}"
+
+  if doctor local-fast; then
+    return 0
+  fi
+
+  echo "[run] bootstrap: ${configuration_source} is ready; local-fast is blocked by readiness checks above." >&2
+  echo "[run] bootstrap: fix the listed runtime blocker(s), then rerun ./run.sh local-fast; do not repeat browser login." >&2
+  return 1
+}
+
 bootstrap() {
   local allow_browser_login=0
   local infisical_token="${INFISICAL_TOKEN:-}"
@@ -297,7 +309,7 @@ bootstrap() {
     ensure_local_fast_clerk_publishable_key "${infisical_token}"
     unset infisical_token
     echo "[run] bootstrap: Clerk configuration is already available; no Infisical login needed"
-    doctor local-fast
+    bootstrap_after_configuration "Clerk configuration"
     return
   fi
   if ! command -v infisical >/dev/null 2>&1; then
@@ -312,7 +324,7 @@ bootstrap() {
     fi
     unset infisical_token
     echo "[run] bootstrap: Clerk configuration loaded from headless Infisical authentication"
-    doctor local-fast
+    bootstrap_after_configuration "Infisical authentication"
     return
   fi
   if [[ -n "${CI:-}" ]]; then
@@ -321,7 +333,7 @@ bootstrap() {
   fi
   if load_local_fast_clerk_key_from_infisical; then
     echo "[run] bootstrap: existing Infisical session is ready"
-    doctor local-fast
+    bootstrap_after_configuration "Infisical authentication"
     return
   fi
   if [[ "${allow_browser_login}" != "1" ]] && { [[ ! -t 0 ]] || [[ ! -t 1 ]]; }; then
@@ -350,7 +362,7 @@ bootstrap() {
     return 1
   fi
   echo "[run] bootstrap: Infisical access is ready"
-  doctor local-fast
+  bootstrap_after_configuration "Infisical authentication"
 }
 
 map_platform() {
