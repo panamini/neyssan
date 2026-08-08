@@ -55,7 +55,9 @@ export function buildAuthoritativeResumeEnvelope(
     return null;
   }
 
-  const fallbackToLegacy = diagnostics.mistral_fallback === true;
+  const fallbackToLegacy =
+    diagnostics.mistral_fallback === true ||
+    normalizedDiagnosticValue(diagnostics.mistral_runtime) === "local_fallback";
   const normalized = fallbackToLegacy
     ? null
     : extractTrustedMistralNormalizedPayload(payload);

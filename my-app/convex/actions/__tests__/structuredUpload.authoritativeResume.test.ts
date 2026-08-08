@@ -64,6 +64,32 @@ describe("buildAuthoritativeResumeEnvelope", () => {
     });
   });
 
+  it("rejects a local fallback runtime even when its boolean flag is false", () => {
+    const payload = {
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "local_fallback",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          profile: { name: "Jane Doe" },
+          rawSections: [{ label: "BODY", content: "x".repeat(200) }],
+        },
+      },
+    };
+
+    expect(buildAuthoritativeResumeEnvelope(payload)).toEqual({
+      source: "mistral_v3",
+      trusted: false,
+      fallbackToLegacy: true,
+      normalized: null,
+    });
+    expect(
+      isMistralPayloadSelectable(payload, { ocrChars: 200, rawSectionsLen: 1 }),
+    ).toBe(false);
+  });
+
   it("accepts top-level normalized content from the live route payload when result.normalized is absent", () => {
     const envelope = buildAuthoritativeResumeEnvelope({
       diagnostics: {
