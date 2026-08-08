@@ -15,6 +15,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function asNonEmptyRecord(value: unknown): Record<string, unknown> | null {
+  const record = asRecord(value);
+  return record && Object.keys(record).length > 0 ? record : null;
+}
+
 function buildDiagnosticsEnvelope(
   payload: MistralPayload | null | undefined,
 ): Record<string, unknown> {
@@ -28,8 +33,8 @@ function extractTrustedMistralNormalizedPayload(
   payload: MistralPayload | null | undefined,
 ): Record<string, unknown> | null {
   return (
-    asRecord(payload?.result?.normalized) ??
-    asRecord(payload?.normalized) ??
+    asNonEmptyRecord(payload?.result?.normalized) ??
+    asNonEmptyRecord(payload?.normalized) ??
     null
   );
 }

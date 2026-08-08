@@ -1298,20 +1298,23 @@ export const structuredUpload = action({
               } as ParserResponse;
               if (payload.result && typeof payload.result === "object") {
                 const result = payload.result;
-                if (!result.normalized || typeof result.normalized !== "object") {
-                  result.normalized = {} as any;
-                }
-                const resultNormalized = result.normalized as Record<string, any>;
-                if (typeof result.rawText === "string") {
-                  if (typeof resultNormalized.rawText !== "string" || !resultNormalized.rawText.trim()) {
-                    resultNormalized.rawText = result.rawText;
+                if (
+                  result.normalized &&
+                  typeof result.normalized === "object" &&
+                  !Array.isArray(result.normalized)
+                ) {
+                  const resultNormalized = result.normalized as Record<string, any>;
+                  if (typeof result.rawText === "string") {
+                    if (typeof resultNormalized.rawText !== "string" || !resultNormalized.rawText.trim()) {
+                      resultNormalized.rawText = result.rawText;
+                    }
                   }
-                }
-                if (!Array.isArray(resultNormalized.rawSections)) {
-                  if (Array.isArray((result as any).rawSections)) {
-                    resultNormalized.rawSections = (result as any).rawSections;
-                  } else if (typeof result.rawText === "string" && result.rawText.trim()) {
-                    resultNormalized.rawSections = [{ label: "BODY", content: result.rawText }];
+                  if (!Array.isArray(resultNormalized.rawSections)) {
+                    if (Array.isArray((result as any).rawSections)) {
+                      resultNormalized.rawSections = (result as any).rawSections;
+                    } else if (typeof result.rawText === "string" && result.rawText.trim()) {
+                      resultNormalized.rawSections = [{ label: "BODY", content: result.rawText }];
+                    }
                   }
                 }
               }

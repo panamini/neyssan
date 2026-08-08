@@ -104,6 +104,24 @@ describe("buildAuthoritativeResumeEnvelope", () => {
     });
   });
 
+  it("does not trust an empty normalized object", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: { normalized: {} },
+    });
+
+    expect(envelope).toEqual({
+      source: "mistral_v3",
+      trusted: false,
+      fallbackToLegacy: false,
+      normalized: null,
+    });
+  });
+
   it("does not select a fallback payload even when it has OCR text and sections", () => {
     expect(
       isMistralPayloadSelectable(
