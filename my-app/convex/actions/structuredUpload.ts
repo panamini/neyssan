@@ -14,7 +14,6 @@ import {
 } from "../lib/parsing/mistralPayloadTrust";
 import {
   buildAuthoritativeResumeDebugSnapshot,
-  type AuthoritativeResume,
 } from "../../src/lib/authoritative-resume";
 
 type UResponse = Awaited<ReturnType<typeof undiciFetch>>;
@@ -205,64 +204,6 @@ export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayloa
       rawSections: mergedRawSections,
       sections: mergedSections,
     },
-  };
-}
-
-function buildDiagnosticsEnvelope(payload: ParserResponse | null | undefined): Record<string, any> {
-  const payloadDiagnostics =
-    payload?.diagnostics && typeof payload.diagnostics === "object"
-      ? payload.diagnostics
-      : {};
-  const resultDiagnostics =
-    payload?.result?.diagnostics && typeof payload.result.diagnostics === "object"
-      ? payload.result.diagnostics
-      : {};
-
-  return {
-    ...payloadDiagnostics,
-    ...resultDiagnostics,
-  } as Record<string, any>;
-}
-
-function extractTrustedMistralNormalizedPayload(
-  payload: ParserResponse | null | undefined,
-): Record<string, unknown> | null {
-  const resultNormalized =
-    payload?.result?.normalized && typeof payload.result.normalized === "object"
-      ? (payload.result.normalized as Record<string, unknown>)
-      : null;
-  if (resultNormalized) {
-    return resultNormalized;
-  }
-
-  return payload?.normalized && typeof payload.normalized === "object"
-    ? (payload.normalized as Record<string, unknown>)
-    : null;
-}
-
-export function buildAuthoritativeResumeEnvelope(
-  payload: ParserResponse | null | undefined,
-): AuthoritativeResume | null {
-  const diagnostics = buildDiagnosticsEnvelope(payload);
-  const routeLooksLikeMistral =
-    String(diagnostics.ocr_engine ?? "").trim().toLowerCase() === "mistral" ||
-    String(diagnostics.mistral_runtime ?? "").trim().toLowerCase() === "mistral" ||
-    String(diagnostics.mistral_runtime ?? "").trim().toLowerCase() ===
-      "local_fallback";
-  if (!routeLooksLikeMistral) {
-    return null;
-  }
-
-  const fallbackToLegacy = diagnostics.mistral_fallback === true;
-  const normalized = fallbackToLegacy
-    ? null
-    : extractTrustedMistralNormalizedPayload(payload);
-
-  return {
-    source: "mistral_v3",
-    trusted: fallbackToLegacy !== true && Boolean(normalized),
-    fallbackToLegacy,
-    normalized: fallbackToLegacy ? null : normalized,
   };
 }
 
