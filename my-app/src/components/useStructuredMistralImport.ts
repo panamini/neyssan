@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction } from "convex/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
 import { api } from "../../convex/_generated/api";
 import { convexClient } from "../lib/convex-client";
@@ -54,7 +54,6 @@ type StructuredImportRunnerArgs = {
     mode: "auto";
     useMistral: true;
   }) => Promise<StructuredPayload>;
-  invokeProbeMistral?: (() => Promise<any>) | undefined;
   callbacks?: StructuredImportCallbacks;
 };
 
@@ -77,9 +76,52 @@ export type StructuredImportOutcome =
   | StructuredImportRejected;
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const MISTRAL_PROBE_TTL_MS = 10_000;
+const MISTRAL_OCR_UNAVAILABLE_CODE = "mistral_ocr_unavailable";
+const MISTRAL_OCR_UNAVAILABLE_MESSAGE =
+  "Mistral OCR est momentanément indisponible. Réessayez.";
 export const TRUSTED_MISTRAL_FILE_INPUT_ACCEPT =
   ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
+
+function buildMistralOcrUnavailableOutcome(): StructuredImportRejected {
+  return {
+    status: "rejected",
+    payload: {
+      diagnostics: {
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+        mistral_import_error: MISTRAL_OCR_UNAVAILABLE_CODE,
+      },
+    },
+    message: MISTRAL_OCR_UNAVAILABLE_MESSAGE,
+  };
+}
+
+function isMistralImportUnavailableError(error: unknown): boolean {
+  const candidate =
+    error && typeof error === "object"
+      ? (error as Record<string, any>)
+      : null;
+  const codes = [
+    candidate?.code,
+    candidate?.data?.code,
+    candidate?.data?.error?.code,
+  ];
+  if (codes.some((code) => code === MISTRAL_OCR_UNAVAILABLE_CODE)) {
+    return true;
+  }
+
+  const message =
+    typeof error === "string"
+      ? error
+      : String(candidate?.message ?? error ?? "");
+  return (
+    message.includes(MISTRAL_OCR_UNAVAILABLE_CODE) ||
+    message.includes("Connection lost while action was in flight") ||
+    codes.some(
+      (code) => code === "NetworkingError" || code === "ClientDisconnected",
+    )
+  );
+}
 
 function nowMs(): number {
   if (
@@ -207,10 +249,6 @@ export function readEmptyReasonFromDiagnostics(
   return trimmed ? trimmed : null;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function resolveMimeType(file: File): string {
   const lower = file.name.toLowerCase();
   if (file.type) {
@@ -245,7 +283,7 @@ function buildSubmission(file: File): Promise<{
 
 async function runStructuredMistralImport(
   file: File,
-  { invokeStructuredAction, invokeProbeMistral, callbacks }: StructuredImportRunnerArgs,
+  { invokeStructuredAction, callbacks }: StructuredImportRunnerArgs,
 ): Promise<StructuredImportOutcome> {
   const trace =
     callbacks?.trace ??
@@ -261,34 +299,12 @@ async function runStructuredMistralImport(
     mimeType: submission.mimeType,
     byteLength: submission.buffer.byteLength,
   });
-  if (typeof invokeProbeMistral === "function") {
-    logStructuredImportTiming(trace, "readiness_probe.start");
-    try {
-      const result = await invokeProbeMistral();
-      const readyStatus = result?.ready?.status;
-      const parseStatus = result?.parse?.status;
-      logStructuredImportTiming(trace, "readiness_probe.finish", {
-        readyStatus: readyStatus ?? null,
-        parseStatus: parseStatus ?? null,
-      });
-      if (!(readyStatus === 200 && parseStatus === 200)) {
-        console.warn(
-          "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
-        );
-      }
-    } catch {
-      logStructuredImportTiming(trace, "readiness_probe.finish", {
-        readyStatus: null,
-        parseStatus: null,
-        outcome: "error",
-      });
-      console.warn(
-        "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
-      );
-    }
-  } else {
-    logStructuredImportTiming(trace, "readiness_probe.skipped");
-  }
+  // The upload action owns parser readiness, request retries, and the user-visible
+  // latency budget. A synthetic OCR probe here is another provider request and
+  // makes the user wait twice without improving the actual import result.
+  logStructuredImportTiming(trace, "readiness_probe.skipped", {
+    reason: "structured_upload_owns_mistral_request",
+  });
 
   console.info(
     "[StructuredUploadButton] invoking structured pipeline bytes=%d mistral=%s",
@@ -309,31 +325,14 @@ async function runStructuredMistralImport(
     logStructuredImportTiming(trace, "structured_upload.start");
     payload = await invokeStructuredAction(actionArgs);
     logStructuredImportTiming(trace, "structured_upload.finish");
-  } catch (err: any) {
-    const message = String(err?.message ?? err ?? "");
-    const code = String((err as any)?.code ?? "");
-    const shouldRetry =
-      message.includes("Connection lost while action was in flight") ||
-      code === "NetworkingError" ||
-      code === "ClientDisconnected";
-    if (!shouldRetry) {
+  } catch (err: unknown) {
+    // The action owns retries. Known terminal Mistral/transport failures must
+    // not be replayed by the browser and must use the same clear fail-closed
+    // message as the server's typed Mistral error.
+    if (!isMistralImportUnavailableError(err)) {
       throw err;
     }
-    logStructuredImportTiming(trace, "retry.start", {
-      reason: code || message || "unknown",
-    });
-    await callbacks?.onRetrying?.();
-    await sleep(500);
-    logStructuredImportTiming(trace, "structured_upload.start", {
-      attempt: "retry",
-    });
-    payload = await invokeStructuredAction(actionArgs);
-    console.info("[StructuredUploadButton] retry succeeded");
-    await callbacks?.onRetrySucceeded?.();
-    logStructuredImportTiming(trace, "retry.finish");
-    logStructuredImportTiming(trace, "structured_upload.finish", {
-      attempt: "retry",
-    });
+    return buildMistralOcrUnavailableOutcome();
   }
 
   logStructuredImportTiming(trace, "trusted_validation.start");
@@ -398,19 +397,12 @@ export async function importStructuredMistralFileViaClient(
 export function useStructuredMistralImport(options?: {
   probeOnMount?: boolean;
 }) {
-  const probeOnMount = options?.probeOnMount !== false;
+  void options;
   const structuredActionRef =
     (api as any).actions?.structuredUpload?.structuredUpload ??
     (api as any)["actions/structuredUpload"]?.structuredUpload ??
     null;
-  const structuredAction =
-    structuredActionRef ? useAction(structuredActionRef) : undefined;
-
-  const probeMistralRef =
-    (api as any).actions?._probeMistral?.probe ??
-    (api as any)["actions/_probeMistral"]?.probe ??
-    null;
-  const probeMistral = probeMistralRef ? useAction(probeMistralRef) : undefined;
+  const structuredAction = useAction(structuredActionRef);
 
   const enableMistral = (() => {
     if (
@@ -437,68 +429,6 @@ export function useStructuredMistralImport(options?: {
     return devDefault;
   })();
 
-  const [mistralOk, setMistralOk] = useState<boolean | null>(null);
-  const mountedRef = useRef(true);
-  const mistralProbePromiseRef = useRef<Promise<boolean> | null>(null);
-  const mistralProbeCheckedAtRef = useRef(0);
-
-  const resolveMistralProbeOk = useCallback((result: any): boolean => {
-    const readyStatus = result?.ready?.status;
-    const parseStatus = result?.parse?.status;
-    return readyStatus === 200 && parseStatus === 200;
-  }, []);
-
-  const ensureMistralReady = useCallback(
-    async (options?: { force?: boolean }): Promise<boolean> => {
-      const force = options?.force === true;
-      if (typeof probeMistral !== "function") {
-        setMistralOk(true);
-        return true;
-      }
-      const probeAgeMs = Date.now() - mistralProbeCheckedAtRef.current;
-      if (!force && mistralOk === true && probeAgeMs < MISTRAL_PROBE_TTL_MS) {
-        return true;
-      }
-      if (!force && mistralOk === false) {
-        return false;
-      }
-      if (!mistralProbePromiseRef.current) {
-        mistralProbePromiseRef.current = probeMistral({})
-          .then((result: any) => {
-            const ok = resolveMistralProbeOk(result);
-            mistralProbeCheckedAtRef.current = Date.now();
-            if (mountedRef.current) {
-              setMistralOk(ok);
-            }
-            return ok;
-          })
-          .catch(() => {
-            mistralProbeCheckedAtRef.current = Date.now();
-            if (mountedRef.current) {
-              setMistralOk(false);
-            }
-            return false;
-          })
-          .finally(() => {
-            mistralProbePromiseRef.current = null;
-          });
-      }
-      return await mistralProbePromiseRef.current;
-    },
-    [mistralOk, probeMistral, resolveMistralProbeOk],
-  );
-
-  useEffect(() => {
-    mountedRef.current = true;
-    if (probeOnMount) {
-      void ensureMistralReady();
-    }
-    return () => {
-      mountedRef.current = false;
-      mistralProbePromiseRef.current = null;
-    };
-  }, [ensureMistralReady, probeOnMount]);
-
   const importFile = useCallback(
     async (
       file: File,
@@ -509,25 +439,14 @@ export function useStructuredMistralImport(options?: {
       }
       return await runStructuredMistralImport(file, {
         invokeStructuredAction: structuredAction,
-        invokeProbeMistral:
-          typeof probeMistral === "function"
-            ? async () => {
-                const probeOk = await ensureMistralReady({ force: true });
-                return probeOk
-                  ? { ready: { status: 200 }, parse: { status: 200 } }
-                  : { ready: { status: 0 }, parse: { status: 0 } };
-              }
-            : undefined,
         callbacks,
       });
     },
-    [ensureMistralReady, probeMistral, structuredAction],
+    [structuredAction],
   );
 
   return {
     enableMistral,
-    mistralOk,
-    ensureMistralReady,
     importFile,
   };
 }

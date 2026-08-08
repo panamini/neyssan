@@ -105,6 +105,10 @@ export type MatchReadResumeProfile = {
   _id?: string;
   id?: string;
   profileId?: string;
+  email?: string;
+  name?: string;
+  preferences?: unknown;
+  cvDocument?: unknown;
   defaultResumeId?: string | null;
   defaultResumeName?: string | null;
   version?: number;

@@ -13,7 +13,19 @@ from cv_parser_service.mistral_resume_v3.app_mapper import build_canonical_paylo
 from cv_parser_service.mistral_resume_v3.extraction_schema import build_document_annotation_format
 from cv_parser_service.mistral_resume_v3.ocr_client import OCRAnnotationResult
 from cv_parser_service.mistral_resume_v3.pipeline import (
+    OCRMarkdownSection,
+    _extract_explicit_education_from_sections,
+    _extract_explicit_experience_from_sections,
+    _extract_explicit_hobbies_from_sections,
+    _extract_profile_hobbies,
+    _extract_profile_languages,
+    _extract_explicit_projects_from_sections,
+    _extract_explicit_skills_from_sections,
     _extract_explicit_sections_from_pages,
+    _experience_entry_identity,
+    _parse_education_header_line,
+    _recover_contact_from_document,
+    _recover_identity_name_from_header,
     _run_resume_pipeline_from_ocr_result,
     run_resume_pipeline_from_bytes,
 )
@@ -85,6 +97,517 @@ def _build_retry_contradiction_result() -> OCRAnnotationResult:
         },
         response_payload={},
     )
+
+
+def test_robert_cooper_decorated_sections_recover_from_semantically_incomplete_annotation() -> None:
+    profile = (
+        "Safety conscious individual with over five years of experience in protecting and "
+        "safeguarding people and property."
+    )
+    ocr_result = OCRAnnotationResult(
+        pages=[
+            {
+                "index": 0,
+                "markdown": (
+                    "![img-0.jpeg](img-0.jpeg)\n\n"
+                    "# ROBERT COOPER\n"
+                    "SECURITY GUARD ♦ LOS ANGELES, CA 90291, UNITED STATES ☎ 3868683442\n\n"
+                    "# ◦ DETAILS ◦\n"
+                    "1515 Pacific Ave\n"
+                    "Los Angeles, CA 90291\n"
+                    "United States\n"
+                    "3868683442\n"
+                    "email@email.com\n\n"
+                    "# ◦ LINKS ◦\n"
+                    "LinkedIn\n\n"
+                    "# PROFILE\n"
+                    f"{profile}\n\n"
+                    "# EMPLOYMENT HISTORY\n"
+                    "## Security Guard at ADT Security, Port Washington\n"
+                    "January 2021 — April 2022\n"
+                    "- Protected company belongings, visitors, employees, and clients.\n\n"
+                    "# ◦ SKILLS ◦\n"
+                    "Investigation skills\n"
+                    "Safety compliance\n"
+                    "Criminal justice knowledge\n"
+                    "Restraining devices\n"
+                    "Martial arts/Physical combat training\n\n"
+                    "# HOBBIES\n"
+                    "Running, Mtb, Enduro\n\n"
+                    "# ◦ LANGUAGES ◦\n"
+                    "English\n"
+                    "Spanish\n"
+                    "Italian\n\n"
+                    "# EDUCATION\n"
+                    "Certified Protection Guard Program (CPOP), International Foundation for Protection Guards, Alexandria\n"
+                    "January 2021 — April 2022\n"
+                    "Security Guard Certificate Program (SOCP), ASIS International, North Naples\n"
+                    "April 2022 — April 2022\n"
+                    "- Course Curriculum: security principles and emergency procedures.\n"
+                    "S.A.F.E. Approach Level II Training, Hawaii Western College\n"
+                    "January 2015 — November 2019\n\n"
+                    "# ACHIEVEMENTS\n"
+                    "- Completed S.A.F.E. Approach Level II Training.\n"
+                ),
+            }
+        ],
+        page_count=1,
+        diagnostics={
+            "model": "mistral-ocr-latest",
+            "page_count": 1,
+            "pages": 1,
+            "ocr_chars": 1200,
+            "document_name": "cv_png.pdf",
+        },
+        annotation_raw={
+            "identity": {},
+            "summary": {"text": ""},
+            "experience": [],
+            "education": [],
+            "skills": [],
+            "languages": [],
+            "hobbies": [],
+            "achievements": [],
+            "sectionOrder": [],
+        },
+        response_payload={},
+    )
+
+    result = _run_resume_pipeline_from_ocr_result(ocr_result)
+
+    assert result["status"] in {"success", "partial"}
+    normalized = result["canonical_payload"]["normalized"]
+    assert normalized["name"] == "Robert Cooper"
+    assert normalized["profile"]["desiredPosition"] == "Security Guard"
+    assert normalized["contact"]["addressBlock"] == "1515 Pacific Ave"
+    assert normalized["contact"]["email"] == "email@email.com"
+    assert normalized["contact"]["phone"] == "3868683442"
+    assert normalized["contact"]["location"] == "Los Angeles, CA 90291, United States"
+    assert normalized["summary"]["text"] == profile
+    assert [item["name"] for item in normalized["skills"]] == [
+        "Investigation skills",
+        "Safety compliance",
+        "Criminal justice knowledge",
+        "Restraining devices",
+        "Martial arts/Physical combat training",
+    ]
+    assert [item["name"] for item in normalized["languages"]] == ["English", "Spanish", "Italian"]
+    assert [item["degree"] for item in normalized["education"]] == [
+        "Certified Protection Guard Program (CPOP)",
+        "Security Guard Certificate Program (SOCP)",
+        "S.A.F.E. Approach Level II Training",
+    ]
+    assert [item["institution"] for item in normalized["education"]] == [
+        "International Foundation for Protection Guards",
+        "ASIS International",
+        "Hawaii Western College",
+    ]
+    assert [item["text"] for item in normalized["hobbies"]] == ["Running", "Mtb", "Enduro"]
+    assert [item["text"] for item in normalized["achievements"]] == [
+        "Completed S.A.F.E. Approach Level II Training."
+    ]
+
+
+def test_jake_markdown_recovers_heading_entries_without_collapsing_sections() -> None:
+    markdown = """# Jake Ryan
+
+123-456-7890 | jake@su.edu | linkedin.com/in/jake | github.com/jake
+
+## EDUCATION
+
+### Southwestern University
+*Bachelor of Arts in Computer Science, Minor in Business*
+Georgetown, TX
+*Aug. 2018 – May 2021*
+
+### Blinn College
+*Associate's in Liberal Arts*
+Bryan, TX
+*Aug. 2014 – May 2018*
+
+## EXPERIENCE
+
+### Undergraduate Research Assistant
+*Texas A&M University*
+June 2020 – Present
+*College Station, TX*
+- Developed a REST API using FastAPI and PostgreSQL.
+
+### Information Technology Support Specialist
+*Southwestern University*
+Sep. 2018 – Present
+*Georgetown, TX*
+- Troubleshot campus computers.
+
+### Artificial Intelligence Research Assistant
+*Southwestern University*
+May 2019 – July 2019
+*Georgetown, TX*
+- Developed a game in Java.
+
+## PROJECTS
+
+### Gitlytics | *Python, Flask, React*
+June 2020 – Present
+- Built a full-stack application.
+
+### Simple Paintball | *Spigot API, Java*
+May 2018 – May 2020
+- Developed a Minecraft server plugin.
+
+## TECHNICAL SKILLS
+
+**Languages:** Java, Python, C/C++, SQL (Postgres), JavaScript
+**Frameworks:** React, Node.js, Flask, FastAPI
+"""
+    ocr_result = OCRAnnotationResult(
+        pages=[{"index": 0, "markdown": markdown}],
+        page_count=1,
+        diagnostics={"model": "mistral-ocr-latest", "page_count": 1, "document_name": "jake.pdf"},
+        annotation_raw={},
+        response_payload={},
+    )
+
+    result = _run_resume_pipeline_from_ocr_result(ocr_result)
+
+    assert result["status"] in {"success", "partial"}
+    normalized = result["canonical_payload"]["normalized"]
+    assert normalized["name"] == "Jake Ryan"
+    assert normalized["contact"]["email"] == "jake@su.edu"
+    assert normalized["contact"]["phone"] == "123-456-7890"
+    assert [item["position"] for item in normalized["experience"]] == [
+        "Undergraduate Research Assistant",
+        "Information Technology Support Specialist",
+        "Artificial Intelligence Research Assistant",
+    ]
+    assert [item["company"] for item in normalized["experience"]] == [
+        "Texas A&M University",
+        "Southwestern University",
+        "Southwestern University",
+    ]
+    assert [item["institution"] for item in normalized["education"]] == [
+        "Southwestern University",
+        "Blinn College",
+    ]
+    assert [item["title"] for item in normalized["projects"]] == ["Gitlytics", "Simple Paintball"]
+    assert [item["name"] for item in normalized["skills"]] == [
+        "Java",
+        "Python",
+        "C/C++",
+        "SQL (Postgres)",
+        "JavaScript",
+        "React",
+        "Node.js",
+        "Flask",
+        "FastAPI",
+    ]
+
+
+def test_recovery_guards_titles_dates_links_and_contact_profile_variants() -> None:
+    raw_text = (
+        "# Curriculum Vitae\n"
+        "Jane Doe\n"
+        "2020 - 2024\n"
+        "[LinkedIn](https://linkedin.com/in/jane-doe)\n"
+        "[GitHub](https://github.com/janedoe)\n"
+        "Address: 1 Main Street\n"
+        "# Summary\n"
+        "Product designer.\n"
+    )
+
+    assert _recover_identity_name_from_header(raw_text) == "Jane Doe"
+    assert _recover_contact_from_document(raw_text) == {
+        "linkedin": "https://linkedin.com/in/jane-doe",
+        "github": "https://github.com/janedoe",
+        "address": "1 Main Street",
+    }
+
+    prose_sections = _extract_explicit_sections_from_pages(
+        [{"index": 0, "markdown": "# Personal Profile\nProduct designer with ten years of experience."}]
+    )
+    assert "summary" in prose_sections
+    assert "contact" not in prose_sections
+
+    table_sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": "# Personal Profile\n| Languages known | : | English, French |\n",
+            }
+        ]
+    )
+    assert "contact" in table_sections
+
+    assert _recover_contact_from_document(
+        "# Jane Doe\n"
+        "Credential ID: 12345678\n"
+        "# EXPERIENCE\n"
+        "### Engineer\n"
+        "Employee number: 87654321\n"
+    ) == {}
+
+
+def test_contact_recovery_does_not_promote_reference_emails_after_the_header() -> None:
+    recovered = _recover_contact_from_document(
+        "Jane Doe\n"
+        "jane@example.com\n"
+        "# EXPERIENCE\n"
+        "Senior Engineer at Example Corp\n"
+        "Reference: referee@example.com\n"
+    )
+
+    assert recovered == {"email": "jane@example.com"}
+    assert _recover_contact_from_document(
+        "# Jane Doe\n"
+        "# EXPERIENCE\n"
+        "Reference: referee@example.com\n"
+    ) == {}
+
+
+def test_generic_details_heading_is_not_treated_as_contact_without_contact_evidence() -> None:
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": (
+                    "# Details\n"
+                    "Managed projects and employment delivery across multiple teams.\n\n"
+                    "# Experience\n"
+                    "Example Corp | Senior Engineer | 2020 - Present\n"
+                ),
+            }
+        ]
+    )
+
+    assert "contact" not in sections
+    assert sections["other"][0].heading == "Details"
+
+
+def test_recovery_handles_company_first_experience_tables_and_institution_first_education() -> None:
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": (
+                    "# Experience\n"
+                    "### Acme Corp\n"
+                    "**Senior Engineer**\n"
+                    "2020 - Present\n"
+                    "- Built systems.\n\n"
+                    "| Company | Role | From | To |\n"
+                    "| --- | --- | --- | --- |\n"
+                    "| Example Inc | Analyst | 2018 | 2020 |\n\n"
+                    "# Education\n"
+                    "Harvard University, Bachelor of Arts, Cambridge\n\n"
+                    "Master of Science, Tech University\n\n"
+                    "# Skills\n"
+                    "| Category | Skills |\n"
+                    "| --- | --- |\n"
+                    "| Frameworks | React, FastAPI |\n\n"
+                    "# Projects\n"
+                    "Project One\n"
+                    "Built one.\n\n"
+                    "Project Two\n"
+                    "Built two.\n"
+                ),
+            }
+        ]
+    )
+
+    experiences = _extract_explicit_experience_from_sections(sections["experience"])
+    assert experiences[0]["company"] == "Acme Corp"
+    assert experiences[0]["position"] == "Senior Engineer"
+    assert experiences[1]["company"] == "Example Inc"
+    assert experiences[1]["position"] == "Analyst"
+
+    education = _extract_explicit_education_from_sections(sections["education"])
+    assert education[0]["institution"] == "Harvard University"
+    assert education[0]["degree"] == "Bachelor of Arts"
+    assert education[0]["location"] == "Cambridge"
+    assert education[1]["degree"] == "Master of Science"
+    assert education[1]["institution"] == "Tech University"
+    assert _parse_education_header_line("Harvard University, Bachelor of Arts")["institution"] == "Harvard University"
+
+    skills = _extract_explicit_skills_from_sections(sections["skills"])
+    assert skills == ["React", "FastAPI"]
+    assert _experience_entry_identity(
+        {"company": "Acme", "position": "Engineer", "startDate": "2020-06"}
+    ) == _experience_entry_identity(
+        {"company": "Acme", "position": "Engineer", "startDate": "June 2020"}
+    )
+
+    projects = _extract_explicit_projects_from_sections(sections["projects"])
+    assert [item["title"] for item in projects] == ["Project One", "Project Two"]
+
+    heading_education = _extract_explicit_education_from_sections(
+        [
+            OCRMarkdownSection(
+                family="education",
+                heading="Education",
+                lines=["### Bachelor of Science", "**State University**"],
+            )
+        ]
+    )
+    assert heading_education == [
+        {"degree": "Bachelor of Science", "institution": "State University", "details": []}
+    ]
+
+    course_table = _extract_explicit_education_from_sections(
+        [
+            OCRMarkdownSection(
+                family="education",
+                heading="Education",
+                lines=[
+                    "| Course | Institution | Year |",
+                    "| --- | --- | --- |",
+                    "| B.Tech | State University | 2020 |",
+                ],
+            )
+        ]
+    )
+    assert course_table[0]["degree"] == "B.Tech"
+    assert course_table[0]["institution"] == "State University"
+
+
+def test_profile_rows_recover_all_value_columns_and_ignore_leaving_reasons() -> None:
+    markdown = (
+        "# Personal Profile\n"
+        "| Languages | : | English | French |\n"
+        "| Hobbies | : | Running | Hiking |\n"
+        "# Experience\n"
+        "| Company | Role | From | To | Reason for Leaving |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| Acme | Engineer | 2020 | 2021 | Layoff |\n"
+    )
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": markdown,
+            }
+        ]
+    )
+    # The direct section parser is the source used by recovery; assert its
+    # source sections preserve every profile value and do not promote a
+    # leaving reason into work performed.
+    assert sections["contact"]
+    assert [item["name"] for item in _extract_profile_languages(sections["contact"])] == [
+        "English",
+        "French",
+    ]
+    assert _extract_profile_hobbies(sections["contact"]) == ["Running", "Hiking"]
+    experience = _extract_explicit_experience_from_sections(sections["experience"])
+    assert experience[0]["responsibilityBullets"] == []
+
+    hobby_sections = [
+        OCRMarkdownSection(
+            family="hobbies",
+            heading="Hobbies",
+            lines=[
+                "| Hobby | Frequency |",
+                "| --- | --- |",
+                "| Cycling | Weekly |",
+            ],
+        )
+    ]
+    assert _extract_explicit_hobbies_from_sections(hobby_sections) == ["Cycling"]
+
+
+def test_project_metadata_after_blank_line_stays_attached_to_current_project() -> None:
+    projects = _extract_explicit_projects_from_sections(
+        [
+            OCRMarkdownSection(
+                family="projects",
+                heading="Projects",
+                lines=[
+                    "Project One",
+                    "Built one.",
+                    "",
+                    "React and TypeScript",
+                ],
+            )
+        ]
+    )
+    assert len(projects) == 1
+    assert projects[0]["title"] == "Project One"
+    assert "React and TypeScript" in projects[0]["summary"]
+
+
+def test_prasanna_markdown_recovers_bold_table_sections_and_profile_values() -> None:
+    markdown = """## **Curriculum Vitae**
+
+**NAME** : PRASANNA VENGATESH.S
+**ADDRESS** : 208, Second floor,
+Berkeley Staff Accommodation,
+Dubai,
+United Arab Emirates.
+**E-MAIL ID** : s.prasannavengatesh@gmail.com
+**PHONE NO** : +971-0505572568
+**OBJECTIVE** : To implement my knowledge and experience in our company.
+
+### **EDUCATIONAL QUALIFICATIONS:**
+| **Qualification** | **Institution** | **Percentage of marks** | **Year of passing** |
+| --- | --- | --- | --- |
+| Diploma in Instrumentation & Control Engineering | Seshasayee Institute of Technology, Trichy. | 78% | 2010 |
+| S.S.L.C | St.Joseph's hr secondary school, Trichy. | 88% | 2007 |
+
+### **COMPUTER SKILLS:**
+- AutoCAD
+- Web Designing & Development
+
+# **PROJECT TITLE:**
+Automatic Fuse change over system.
+
+# **Summary of Experience:**
+| **Name Of Organization** | **City, Country** | **Designation** | **From** | **To** | **Duration** | **Reason For Leaving** |
+| --- | --- | --- | --- | --- | --- | --- |
+| Applied Automation Systems | Coimbatore, India. | Plant Maintenance technician. | 02/05/2010 | 05/11/2010 | 6 Months | Layoff due to power cut. |
+| Berkeley Services | Dubai, UAE. | Maintenance Planner | 26/08/2014 | Till Now | 1 year 9 Months | Currently Working. |
+
+# **Nature Of Work :**
+- Develops maintenance planning strategies.
+- Creates work orders.
+
+#### **PERSONAL PROFILE:**
+| **Name** | : | PRASANNA VENGATESH.S |
+| --- | --- | --- |
+| **Languages known** | : | Tamil, English, Telugu, Hindi, Malayalam |
+| **Hobbies** | : | Watching cricket, Talking to people. |
+"""
+    ocr_result = OCRAnnotationResult(
+        pages=[{"index": 0, "markdown": markdown}],
+        page_count=1,
+        diagnostics={"model": "mistral-ocr-latest", "page_count": 1, "document_name": "prasanna.pdf"},
+        annotation_raw={},
+        response_payload={},
+    )
+
+    result = _run_resume_pipeline_from_ocr_result(ocr_result)
+
+    assert result["status"] in {"success", "partial"}
+    normalized = result["canonical_payload"]["normalized"]
+    assert normalized["name"] == "Prasanna Vengatesh.S"
+    assert normalized["contact"]["email"] == "s.prasannavengatesh@gmail.com"
+    assert normalized["contact"]["phone"] == "+971-0505572568"
+    assert normalized["summary"]["text"] == "To implement my knowledge and experience in our company."
+    assert [item["company"] for item in normalized["experience"]] == [
+        "Applied Automation Systems",
+        "Berkeley Services",
+    ]
+    assert normalized["experience"][0]["startDate"] != "2010-01-01"
+    assert normalized["experience"][1]["isCurrent"] is True
+    assert [item["degree"] for item in normalized["education"]] == [
+        "Diploma in Instrumentation & Control Engineering",
+        "S.S.L.C",
+    ]
+    assert [item["name"] for item in normalized["languages"]] == [
+        "Tamil",
+        "English",
+        "Telugu",
+        "Hindi",
+        "Malayalam",
+    ]
+    assert [item["text"] for item in normalized["hobbies"]] == ["Watching cricket", "Talking to people."]
 
 
 @pytest.mark.parametrize(
@@ -1021,6 +1544,13 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
                 "contact": {"email": "jane@example.com"},
             },
         ),
+        (
+            "JANE DOE\nParis, France\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com", "address": "Paris, France"},
+            },
+        ),
     ],
     ids=[
         "no-title-in-header",
@@ -1028,6 +1558,7 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
         "company-first-header-must-not-produce-junk",
         "name-prefixed-noisy-header-must-not-produce-name-title",
         "header-without-title-signal-returns-null",
+        "international-location-must-not-become-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_does_not_recover_desired_position_from_invalid_header_patterns(
@@ -1725,6 +2256,26 @@ def test_normalize_extraction_reclassifies_certification_like_education_entries_
     assert certification_names == [
         "Certified Protection Officer",
         "Certified Security Professional",
+    ]
+
+    academic_program = normalize_extraction(
+        parse_document_annotation(
+            {
+                "education": [
+                    {
+                        "institution": "Amazon Web Services",
+                        "degree": "AWS Certified Solutions Architect Program",
+                    }
+                ]
+            }
+        ),
+        raw_text="AWS Certified Solutions Architect Program",
+        page_count=1,
+        document_name="aws_program.pdf",
+    )
+    assert academic_program.education == []
+    assert [item.name for item in academic_program.certifications] == [
+        "AWS Certified Solutions Architect Program"
     ]
 
 

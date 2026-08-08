@@ -456,7 +456,7 @@ function buildApplicationPackage(
   ids: ControlledFixtureIds,
   now: number,
 ): ApplicationPackageStorageRecordV1 {
-  const provenance = {
+  const provenance: ApplicationPackageStorageRecordV1["package"]["provenance"] = {
     applicationContextId: ids.contextId,
     resumeVariantArtifactId: ids.resumeVariantArtifactId,
     coverLetterArtifactId: ids.coverLetterArtifactId,

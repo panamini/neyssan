@@ -46,7 +46,7 @@ export async function persistApplicationContext(
     };
   }
 
-  const contextForWrite: ApplicationContextV1 = {
+  const contextForWrite = {
     ...context,
     job: { ...context.job },
     candidate: { ...context.candidate },

@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  computeMistralParserFetchTimeoutMs,
   detectHealthyLocalParserOrigin,
+  MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS,
+  MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
   resetLocalParserProbeCacheForTest,
   resolveParserEndpoints,
+  selectParserAttemptsForImport,
+  shouldRetryMistralImportRequest,
 } from "../structuredUpload";
 
 afterEach(() => {
@@ -41,6 +46,21 @@ describe("resolveParserEndpoints", () => {
     expect(attempts[0]?.label).toBe("env:CONVEX_PARSER_URL");
     expect(attempts[0]?.endpoint.toString()).toBe(
       "https://parser.dasti.ai/mistral-ocr/parse",
+    );
+  });
+
+  it("puts the healthy loopback origin first when localhost is the one that passed /ready", () => {
+    const attempts = resolveParserEndpoints("/mistral-ocr/parse", {
+      preferLoopback: true,
+      preferredLoopbackOrigin: "http://localhost:8001",
+      env: {
+        CONVEX_PARSER_URL: "https://parser.dasti.ai",
+      },
+    });
+
+    expect(attempts[0]?.label).toBe("prefer:healthy-loopback");
+    expect(attempts[0]?.endpoint.toString()).toBe(
+      "http://localhost:8001/mistral-ocr/parse",
     );
   });
 
@@ -93,5 +113,80 @@ describe("resolveParserEndpoints", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("connection refused"));
 
     await expect(detectHealthyLocalParserOrigin()).resolves.toBeNull();
+  });
+});
+
+describe("Mistral import retry policy", () => {
+  it("caps each request and reserves time for later configured parser origins", () => {
+    expect(
+      computeMistralParserFetchTimeoutMs({
+        remainingMs: 60_000,
+        remainingParserEndpoints: 2,
+      }),
+    ).toBe(15_000);
+    expect(
+      computeMistralParserFetchTimeoutMs({
+        remainingMs: 20_000,
+        remainingParserEndpoints: 1,
+      }),
+    ).toBe(5_000);
+    expect(
+      computeMistralParserFetchTimeoutMs({
+        remainingMs: 5_000,
+        remainingParserEndpoints: 0,
+      }),
+    ).toBe(5_000);
+  });
+
+  it("keeps one loopback alias while preserving configured Mistral gateways", () => {
+    const candidates = resolveParserEndpoints("/mistral-ocr/parse", {
+      preferLoopback: true,
+      includeConfiguredFallbacks: true,
+      env: {
+        CONVEX_PARSER_URL: "https://parser.dasti.ai",
+        PARSER_ORIGIN: "https://parser-backup.dasti.ai",
+      },
+    });
+
+    const mistralCandidates = selectParserAttemptsForImport(candidates, true);
+    expect(mistralCandidates.map((attempt) => attempt.label)).toEqual([
+      "prefer:loopback",
+      "env:CONVEX_PARSER_URL",
+      "env:PARSER_ORIGIN",
+    ]);
+    expect(selectParserAttemptsForImport(candidates, false)).toHaveLength(
+      candidates.length,
+    );
+  });
+
+  it("permits one quick transient retry only while enough budget remains", () => {
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 1,
+        elapsedMs: MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
+        remainingMs: MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 1,
+        elapsedMs: MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS,
+        remainingMs: MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS - 1,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 2,
+        elapsedMs: 1,
+        remainingMs: 60_000,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetryMistralImportRequest({
+        completedAttempts: 1,
+        elapsedMs: MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS + 1,
+        remainingMs: 60_000,
+      }),
+    ).toBe(false);
   });
 });

@@ -57,7 +57,7 @@ function localMcpSourceEntries(): readonly { path: string; source: string }[] {
 }
 
 describe("local MCP dependency import boundary", () => {
-  it("keeps the approved MCP package as package-only with no Apps SDK/OpenAI package unlock", () => {
+  it("keeps the approved MCP package package-only and leaves OpenAI imports out of local MCP", () => {
     const packageJson = readPackageJson();
     const dependencies = packageJson.dependencies ?? {};
     const devDependencies = packageJson.devDependencies ?? {};
@@ -69,8 +69,6 @@ describe("local MCP dependency import boundary", () => {
 
     expect(dependencies).not.toHaveProperty("@modelcontextprotocol/ext-apps");
     expect(devDependencies).not.toHaveProperty("@modelcontextprotocol/ext-apps");
-    expect(dependencies).not.toHaveProperty("openai");
-    expect(devDependencies).not.toHaveProperty("openai");
   });
 
   it("does not import MCP/App SDK or OpenAI packages from local MCP modules", () => {

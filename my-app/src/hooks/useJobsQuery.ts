@@ -40,6 +40,8 @@ export type JobsQueryListItem = {
   linkedProposalCount?: number;
   linkedProposals?: unknown[];
   sourceLanguage?: string | null;
+  resumeId?: string;
+  resumeName?: string;
   keywords?: string[];
   visibleKeywords?: string[];
   skills?: string[];

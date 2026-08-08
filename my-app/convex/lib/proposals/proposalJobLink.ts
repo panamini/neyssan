@@ -1,13 +1,7 @@
+import type { MutationCtx } from "../../_generated/server";
+
 export async function resolveOwnedProposalJobId(
-  ctx: {
-    db: {
-      normalizeId: (table: "jobs", id: string) => string | null;
-      get: (id: unknown) => Promise<{
-        userId?: unknown;
-        clerkId?: unknown;
-      } | null>;
-    };
-  },
+  ctx: Pick<MutationCtx, "db">,
   proposalUserId: unknown,
   jobId: string | undefined,
 ): Promise<string | undefined> {
@@ -26,14 +20,20 @@ export async function resolveOwnedProposalJobId(
   }
 
   const proposalProfileId =
-    typeof proposalUserId === "string" ? proposalUserId : "";
-  const jobProfileId = typeof job.userId === "string" ? job.userId : "";
+    typeof proposalUserId === "string"
+      ? ctx.db.normalizeId("userProfiles", proposalUserId)
+      : null;
+  const jobProfileId = job.userId;
   if (proposalProfileId && jobProfileId === proposalProfileId) {
     const ownerProfile = await ctx.db.get(jobProfileId);
     if (!ownerProfile) {
       throw new Error("Job not found");
     }
     return normalizedJobId;
+  }
+
+  if (!proposalProfileId) {
+    throw new Error("Job not found");
   }
 
   const [proposalOwner, jobOwner] = await Promise.all([

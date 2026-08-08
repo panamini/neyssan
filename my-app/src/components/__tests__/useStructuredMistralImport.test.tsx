@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -111,46 +111,18 @@ describe("useStructuredMistralImport", () => {
     );
   });
 
-  it("re-probes and retries transient network failures before returning trusted sections", async () => {
+  it("does not probe or replay a connection failure and returns the clear terminal message", async () => {
     const retryingMock = vi.fn();
     const retrySucceededMock = vi.fn();
 
-    structuredActionMock
-      .mockRejectedValueOnce(
-        new Error("Connection lost while action was in flight"),
-      )
-      .mockResolvedValueOnce({
-        normalized: {
-          summary: "Scanned import",
-        },
-        strict: null,
-        diagnostics: {
-          ocr_request_path: "/mistral-ocr/parse",
-          ocr_engine: "mistral",
-          mistral_model: "mistral-ocr-latest",
-          mistral_fallback: false,
-          mistral_runtime: "mistral",
-        },
-        authoritativeResume: {
-          source: "mistral_v3",
-          trusted: true,
-          fallbackToLegacy: false,
-          normalized: {
-            profile: {
-              name: "Shared Candidate",
-            },
-            summary: {
-              text: "Scanned import",
-            },
-          },
-        },
-      });
+    structuredActionMock.mockRejectedValueOnce(
+      new Error("Connection lost while action was in flight"),
+    );
 
     const { useStructuredMistralImport } = await import(
       "../useStructuredMistralImport"
     );
     const { result } = renderHook(() => useStructuredMistralImport());
-    await waitFor(() => expect(probeMistralMock).toHaveBeenCalledTimes(1));
     const file = new File(["scan"], "scan.pdf", {
       type: "application/pdf",
     });
@@ -168,16 +140,68 @@ describe("useStructuredMistralImport", () => {
       });
     });
 
-    expect(probeMistralMock).toHaveBeenCalledTimes(2);
-    expect(structuredActionMock).toHaveBeenCalledTimes(2);
-    expect(retryingMock).toHaveBeenCalledTimes(1);
-    expect(retrySucceededMock).toHaveBeenCalledTimes(1);
     expect(outcome).toMatchObject({
-      status: "success",
-      sections: expect.arrayContaining([
-        expect.objectContaining({ type: "profile" }),
-        expect.objectContaining({ type: "summary" }),
-      ]),
+      status: "rejected",
+      message: "Mistral OCR est momentanément indisponible. Réessayez.",
+    });
+    expect(probeMistralMock).not.toHaveBeenCalled();
+    expect(structuredActionMock).toHaveBeenCalledTimes(1);
+    expect(retryingMock).not.toHaveBeenCalled();
+    expect(retrySucceededMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the clear Mistral-unavailable message without importable sections", async () => {
+    structuredActionMock.mockRejectedValueOnce(
+      new Error(
+        'Uncaught ConvexError: {"code":"mistral_ocr_unavailable","message":"Mistral OCR est momentanément indisponible. Réessayez."}',
+      ),
+    );
+
+    const { useStructuredMistralImport } = await import(
+      "../useStructuredMistralImport"
+    );
+    const { result } = renderHook(() => useStructuredMistralImport());
+    const file = new File(["scan"], "scan.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(file, "arrayBuffer", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+
+    let outcome: Awaited<ReturnType<typeof result.current.importFile>> | null =
+      null;
+    await act(async () => {
+      outcome = await result.current.importFile(file);
+    });
+
+    expect(outcome).toMatchObject({
+      status: "rejected",
+      message: "Mistral OCR est momentanément indisponible. Réessayez.",
+    });
+    expect(probeMistralMock).not.toHaveBeenCalled();
+    expect(structuredActionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves unknown action errors instead of mislabeling them as Mistral downtime", async () => {
+    structuredActionMock.mockRejectedValueOnce(new Error("unauthorized"));
+
+    const { useStructuredMistralImport } = await import(
+      "../useStructuredMistralImport"
+    );
+    const { result } = renderHook(() => useStructuredMistralImport());
+    const file = new File(["scan"], "scan.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(file, "arrayBuffer", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+
+    await act(async () => {
+      await expect(result.current.importFile(file)).rejects.toThrow(
+        "unauthorized",
+      );
     });
   });
 
@@ -226,11 +250,11 @@ describe("useStructuredMistralImport", () => {
     });
   });
 
-  it("can skip the mount-time probe for surfaces that should stay inert until upload", async () => {
+  it("never issues a mount-time OCR probe", async () => {
     const { useStructuredMistralImport } = await import(
       "../useStructuredMistralImport"
     );
-    renderHook(() => useStructuredMistralImport({ probeOnMount: false }));
+    renderHook(() => useStructuredMistralImport());
 
     await Promise.resolve();
 

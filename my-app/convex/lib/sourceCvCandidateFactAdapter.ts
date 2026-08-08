@@ -45,6 +45,11 @@ export async function buildSourceCvCandidateFactApplicationComposition(
 
   const userId = input.applicationContext.userId;
   const canonicalCvId = input.applicationContext.candidate.cvId;
+  if (!canonicalCvId) {
+    throw new TypeError(
+      "source CV candidate-fact adapter requires a canonical CV id",
+    );
+  }
   const sourceDocuments =
     await input.persistence.listSourceDocumentsForCanonicalCv({
       userId,

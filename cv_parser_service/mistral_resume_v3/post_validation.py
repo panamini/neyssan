@@ -80,6 +80,15 @@ STRONG_CERTIFICATION_TOKEN_RE = re.compile(
     r"\b(certif|certificate|certified|credential|licen[sc]e|training program|course completion|bootcamp|permit|cpo)\b",
     re.IGNORECASE,
 )
+ACADEMIC_PROGRAM_MARKER_RE = re.compile(
+    r"\b(?:academic|undergraduate|graduate|vocational|apprenticeship)\b",
+    re.IGNORECASE,
+)
+ACADEMIC_INSTITUTION_MARKER_RE = re.compile(
+    r"\b(?:university|college|school|institute|academy|foundation|faculty|polytechnic|conservatory)\b",
+    re.IGNORECASE,
+)
+NAMED_PROGRAM_ACRONYM_RE = re.compile(r"\([A-Z][A-Z0-9.-]{1,}\)")
 ACHIEVEMENT_RESULT_RE = re.compile(
     r"\b(increased|reduced|improved|saved|grew|generated|achieved|awarded|won|delivered|launched|led|recognized|recognised|promoted)\b",
     re.IGNORECASE,
@@ -898,7 +907,20 @@ def _reclassify_education_and_certifications(
         institution = _clean_inline_text(item.institution)
         detail_blob = " ".join(_clean_list(item.details))
         combined_main = " ".join(part for part in [degree, detail_blob] if part)
-        if STRONG_CERTIFICATION_TOKEN_RE.search(combined_main) and not STRONG_DEGREE_TOKEN_RE.search(combined_main):
+        explicit_education_program = bool(
+            institution
+            and re.search(r"\bprogram(?:me)?\b", degree or "", re.IGNORECASE)
+            and (
+                ACADEMIC_PROGRAM_MARKER_RE.search(degree or "")
+                or ACADEMIC_INSTITUTION_MARKER_RE.search(institution or "")
+                or NAMED_PROGRAM_ACRONYM_RE.search(degree or "")
+            )
+        )
+        if (
+            STRONG_CERTIFICATION_TOKEN_RE.search(combined_main)
+            and not STRONG_DEGREE_TOKEN_RE.search(combined_main)
+            and not explicit_education_program
+        ):
             name = degree or institution
             if name:
                 kept_certifications.append(

@@ -42,6 +42,95 @@ type ParserResponse = {
   source_kind?: string;
 } & CanonicalPayload;
 
+export const MISTRAL_OCR_UNAVAILABLE_CODE = "mistral_ocr_unavailable";
+export const MISTRAL_OCR_UNAVAILABLE_MESSAGE =
+  "Mistral OCR est momentanément indisponible. Réessayez.";
+export const MISTRAL_IMPORT_TOTAL_BUDGET_MS = 60_000;
+export const MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS = 20_000;
+export const MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS = 15_000;
+export const MISTRAL_IMPORT_FALLBACK_RESERVE_MS = MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS;
+export const MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS = MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS;
+export const MISTRAL_IMPORT_MAX_ATTEMPTS = 2;
+
+export function computeMistralParserFetchTimeoutMs({
+  remainingMs,
+  remainingParserEndpoints,
+}: {
+  remainingMs: number;
+  remainingParserEndpoints: number;
+}): number {
+  const safeRemainingMs = Number.isFinite(remainingMs) ? Math.max(1, remainingMs) : 1;
+  const safeRemainingParserEndpoints = Number.isFinite(remainingParserEndpoints)
+    ? Math.max(0, Math.floor(remainingParserEndpoints))
+    : 0;
+  const reservedForFallbacks =
+    safeRemainingParserEndpoints * MISTRAL_IMPORT_FALLBACK_RESERVE_MS;
+  return Math.max(
+    1,
+    Math.min(
+      MISTRAL_IMPORT_MAX_ATTEMPT_TIMEOUT_MS,
+      safeRemainingMs - reservedForFallbacks,
+    ),
+  );
+}
+
+export function buildMistralOcrUnavailableError(
+  details: Record<string, unknown> = {},
+): ConvexError<any> {
+  return new ConvexError({
+    ...details,
+    code: MISTRAL_OCR_UNAVAILABLE_CODE,
+    message: MISTRAL_OCR_UNAVAILABLE_MESSAGE,
+  });
+}
+
+export function shouldRetryMistralImportRequest({
+  completedAttempts,
+  elapsedMs,
+  remainingMs,
+}: {
+  completedAttempts: number;
+  elapsedMs: number;
+  remainingMs: number;
+}): boolean {
+  return (
+    completedAttempts < MISTRAL_IMPORT_MAX_ATTEMPTS &&
+    elapsedMs <= MISTRAL_IMPORT_MAX_RETRY_ELAPSED_MS &&
+    remainingMs >= MISTRAL_IMPORT_MIN_RETRY_REMAINING_MS
+  );
+}
+
+export function selectParserAttemptsForImport(
+  attempts: ParserAttempt[],
+  useMistral: boolean,
+): ParserAttempt[] {
+  if (!useMistral) {
+    return attempts;
+  }
+
+  // Keep one verified loopback parser, but preserve independently configured
+  // parser origins. They are separate Docker/parser gateways, not local OCR or
+  // pdfplumber fallbacks, and may be the only reachable route when the primary
+  // origin is unavailable.
+  const selected: ParserAttempt[] = [];
+  const seenOrigins = new Set<string>();
+  let selectedLoopback = false;
+  for (const attempt of attempts) {
+    const origin = attempt.endpoint.origin;
+    if (isLoopbackUrl(origin)) {
+      if (selectedLoopback) {
+        continue;
+      }
+      selectedLoopback = true;
+    } else if (seenOrigins.has(origin)) {
+      continue;
+    }
+    seenOrigins.add(origin);
+    selected.push(attempt);
+  }
+  return selected;
+}
+
 export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayload {
   const resultPayload =
     payload?.result && typeof payload.result === "object" ? payload.result : {};
@@ -193,6 +282,8 @@ type ParserAttempt = {
 type ParserResolutionOptions = {
   env?: Record<string, string | undefined>;
   preferLoopback?: boolean;
+  preferredLoopbackOrigin?: string | null;
+  includeConfiguredFallbacks?: boolean;
 };
 
 type LocalParserProbeResult = {
@@ -316,6 +407,7 @@ export function resolveParserEndpoints(
   const seen = new Set<string>();
   const env = options?.env ?? ((process as any).env as Record<string, string | undefined> | undefined) ?? {};
   const preferLoopback = options?.preferLoopback === true;
+  const preferredLoopbackOrigin = options?.preferredLoopbackOrigin?.trim() || null;
   const normalizedTarget = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
 
   const pushCandidate = (raw: string | undefined | null, label: string) => {
@@ -379,8 +471,16 @@ export function resolveParserEndpoints(
   );
 
   if (preferLoopback) {
-    pushCandidate(`http://127.0.0.1:8001${normalizedTarget}`, "prefer:loopback");
-    pushCandidate(`http://localhost:8001${normalizedTarget}`, "prefer:localhost");
+    const loopbackCandidates: Array<[string, string]> = [
+      ...(preferredLoopbackOrigin
+        ? [[preferredLoopbackOrigin, "prefer:healthy-loopback"] as [string, string]]
+        : []),
+      ["http://127.0.0.1:8001", "prefer:loopback"],
+      ["http://localhost:8001", "prefer:localhost"],
+    ];
+    for (const [origin, label] of loopbackCandidates) {
+      pushCandidate(`${origin}${normalizedTarget}`, label);
+    }
   }
 
   if (envCandidates.length === 0 && !preferLoopback) {
@@ -390,9 +490,11 @@ export function resolveParserEndpoints(
   }
 
   const primaryOrigin = envCandidates[0]?.origin ?? "";
-  const primaryLabel = envCandidates[0]?.label ?? "";
-  if (primaryOrigin) {
-    pushCandidate(primaryOrigin, primaryLabel);
+  const configuredCandidates = options?.includeConfiguredFallbacks
+    ? envCandidates
+    : envCandidates.slice(0, 1);
+  for (const candidate of configuredCandidates) {
+    pushCandidate(candidate.origin, candidate.label);
   }
 
   const allowLocalFallback = env.STRUCTURED_UPLOAD_ALLOW_LOOPBACK_FALLBACK === "1";
@@ -541,6 +643,9 @@ export const structuredUpload = action({
 
     const resolvedMode = mode ?? (hasFileSource ? "auto" : "text");
     const activeUseMistral = !!useMistral;
+    const mistralDeadlineAt = activeUseMistral
+      ? handlerStartedAt + MISTRAL_IMPORT_TOTAL_BUDGET_MS
+      : null;
     if (activeUseMistral && (resolvedMode === "text" || !hasFileSource)) {
       throw new ConvexError({ code: "mistral_requires_file" });
     }
@@ -666,10 +771,30 @@ export const structuredUpload = action({
       ...((process as any).env ?? {}),
       CONVEX_PARSER_URL: baseOrigin || undefined,
     };
-    const parserAttempts = resolveParserEndpoints(parserPath, {
-      env: parserEnv,
-      preferLoopback,
-    });
+    let parserAttempts: ParserAttempt[];
+    try {
+      parserAttempts = resolveParserEndpoints(parserPath, {
+        env: parserEnv,
+        preferLoopback,
+        preferredLoopbackOrigin: healthyLocalParserOrigin,
+        includeConfiguredFallbacks: activeUseMistral,
+      });
+    } catch (err: any) {
+      if (activeUseMistral) {
+        const detail = err?.message ?? String(err);
+        throw buildMistralOcrUnavailableError({
+          status: null,
+          detail,
+          aggregatedErrors: [`parser endpoint resolution failed: ${detail}`],
+          lastError: detail,
+        });
+      }
+      throw err;
+    }
+    const parserAttemptsToTry = selectParserAttemptsForImport(
+      parserAttempts,
+      activeUseMistral,
+    );
     const primaryUrl = (() => {
       try {
         const origin = parserAttempts[0]?.endpoint?.origin || baseOrigin || "http://127.0.0.1:8001";
@@ -704,7 +829,7 @@ export const structuredUpload = action({
       hasFileSource,
       fileBytes ? fileBytes.byteLength : trimmed.length,
       mimeTypeForUpload,
-      parserAttempts.length,
+      parserAttemptsToTry.length,
       activeUseMistral,
     );
     const aggregatedErrors: string[] = [];
@@ -902,7 +1027,7 @@ export const structuredUpload = action({
 
     const modeSequence: ParserMode[] = activeUseMistral ? ["auto"] : computeModeSequence();
 
-    for (const attempt of parserAttempts) {
+    for (const [attemptIndex, attempt] of parserAttemptsToTry.entries()) {
       const parserEndpoint = attempt.endpoint;
       let endpointForLog = parserEndpoint.toString();
       console.info(
@@ -929,7 +1054,7 @@ export const structuredUpload = action({
         }
       } else {
         console.info(
-          "[structuredUpload] Health check skipped via STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1 (label=%s)",
+          "[structuredUpload] Health check skipped for Mistral import or STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1 (label=%s)",
           attempt.label,
         );
       }
@@ -946,9 +1071,18 @@ export const structuredUpload = action({
         return next;
       };
 
-      const parserFetchTimeoutMs = activeUseMistral ? 240_000 : 90_000;
-
       const performFetch = async (formData: FormData, retryIndex: number, modeUsed: ParserMode) => {
+        const remainingMistralBudgetMs =
+          mistralDeadlineAt == null ? null : mistralDeadlineAt - nowMs();
+        if (activeUseMistral && (remainingMistralBudgetMs == null || remainingMistralBudgetMs <= 0)) {
+          throw new Error("mistral_import_deadline_exceeded");
+        }
+        const parserFetchTimeoutMs = activeUseMistral
+          ? computeMistralParserFetchTimeoutMs({
+              remainingMs: remainingMistralBudgetMs as number,
+              remainingParserEndpoints: parserAttemptsToTry.length - attemptIndex - 1,
+            })
+          : 90_000;
         const fetchStartedAt = nowMs();
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), parserFetchTimeoutMs);
@@ -991,6 +1125,10 @@ export const structuredUpload = action({
             body: formData,
             signal: controller.signal,
           });
+          // Consume the body while the same deadline is still armed. A parser
+          // can send headers promptly and then stall while streaming JSON; the
+          // import budget must cover that body read too.
+          const bodyText = await response.text();
           console.info("[resume-import-timing][structuredUpload] parser_request.finish", {
             traceId,
             label: attempt.label,
@@ -1000,7 +1138,7 @@ export const structuredUpload = action({
             status: response.status,
             elapsedMs: nowMs() - fetchStartedAt,
           });
-          return response;
+          return { response, bodyText };
         } catch (error: any) {
           console.info("[resume-import-timing][structuredUpload] parser_request.finish", {
             traceId,
@@ -1021,20 +1159,39 @@ export const structuredUpload = action({
       let endpointSucceeded = false;
       for (const modeVariant of modeSequence) {
         let response: UResponse | null = null;
+        let responseBodyText = "";
         let payload: ParserResponse | null = null;
 
-        const maxRetries = activeUseMistral ? 3 : 2;
+        const maxRetries = activeUseMistral ? MISTRAL_IMPORT_MAX_ATTEMPTS : 2;
         for (let retryIndex = 0; retryIndex < maxRetries; retryIndex++) {
+          const remainingBeforeAttemptMs =
+            mistralDeadlineAt == null ? null : mistralDeadlineAt - nowMs();
+          if (activeUseMistral && (remainingBeforeAttemptMs == null || remainingBeforeAttemptMs <= 0)) {
+            aggregatedErrors.push(
+              `${attempt.label}:${modeVariant} Mistral import deadline exhausted before retry ${retryIndex + 1}`,
+            );
+            break;
+          }
           const form = buildFormData(modeVariant);
           try {
-            response = await performFetch(form, retryIndex, modeVariant);
+            const fetched = await performFetch(form, retryIndex, modeVariant);
+            response = fetched.response;
+            responseBodyText = fetched.bodyText;
           } catch (err: any) {
             const isAbort = err?.name === "AbortError";
             const message = err?.message ?? String(err);
             const errorNote = isAbort
-              ? `timeout after ${Math.round(parserFetchTimeoutMs / 1000)}s (${message})`
+              ? `timeout within Mistral import budget (${message})`
               : message;
-            const willRetry = retryIndex + 1 < maxRetries;
+            const remainingAfterAttemptMs =
+              mistralDeadlineAt == null ? 0 : mistralDeadlineAt - nowMs();
+            const willRetry = activeUseMistral
+              ? shouldRetryMistralImportRequest({
+                  completedAttempts: retryIndex + 1,
+                  elapsedMs: nowMs() - handlerStartedAt,
+                  remainingMs: remainingAfterAttemptMs,
+                })
+              : retryIndex + 1 < maxRetries;
             aggregatedErrors.push(
               `${attempt.label}:${modeVariant} network error (retry ${retryIndex + 1}) (${endpointForLog}): ${errorNote}`,
             );
@@ -1047,11 +1204,13 @@ export const structuredUpload = action({
                 endpointForLog,
                 err?.stack ?? err,
               );
-              const recovered = await waitForParserRecovery(
-                parserEndpoint,
-                parserAccessHeaders,
-                activeUseMistral ? 20_000 : 8_000,
-              );
+              const recovered = activeUseMistral
+                ? true
+                : await waitForParserRecovery(
+                    parserEndpoint,
+                    parserAccessHeaders,
+                    8_000,
+                  );
               console.info(
                 "[structuredUpload] retrying after network error label=%s mode=%s retry=%d recovered=%s",
                 attempt.label,
@@ -1070,6 +1229,9 @@ export const structuredUpload = action({
               );
             }
             response = null;
+            if (!willRetry) {
+              break;
+            }
             continue;
           }
 
@@ -1087,18 +1249,14 @@ export const structuredUpload = action({
             try {
               const ctype = response.headers.get("content-type") || "";
               if (ctype.includes("application/json")) {
-                errorDetail = await response.json();
+                errorDetail = JSON.parse(responseBodyText);
               } else {
-                bodyText = await response.text();
-                errorDetail = bodyText;
+                bodyText = responseBodyText;
+                errorDetail = responseBodyText;
               }
             } catch {
-              try {
-                bodyText = await response.text();
-                errorDetail = bodyText;
-              } catch {
-                errorDetail = null;
-              }
+              bodyText = responseBodyText;
+              errorDetail = bodyText || null;
             }
             lastHttpStatus = response.status;
             lastBodySnippet = (typeof errorDetail === "string" ? errorDetail : JSON.stringify(errorDetail ?? {})).slice(0, 400);
@@ -1109,7 +1267,16 @@ export const structuredUpload = action({
               `${attempt.label}:${modeVariant} responded ${response.status} ${response.statusText} (retry ${retryIndex + 1}) (${endpointForLog}): ${errorMessage}`,
             );
             const isTransient = isTransientParserStatus(response.status);
-            const willRetry = isTransient && retryIndex + 1 < maxRetries;
+            const remainingAfterAttemptMs =
+              mistralDeadlineAt == null ? 0 : mistralDeadlineAt - nowMs();
+            const willRetry = activeUseMistral
+              ? isTransient &&
+                shouldRetryMistralImportRequest({
+                  completedAttempts: retryIndex + 1,
+                  elapsedMs: nowMs() - handlerStartedAt,
+                  remainingMs: remainingAfterAttemptMs,
+                })
+              : isTransient && retryIndex + 1 < maxRetries;
             if (willRetry) {
               console.warn(
                 "[structuredUpload] transient parser error status=%d label=%s mode=%s retry=%d url=%s cfRay=%s detail=%s",
@@ -1121,11 +1288,13 @@ export const structuredUpload = action({
                 cfRay,
                 errorMessage,
               );
-              const recovered = await waitForParserRecovery(
-                parserEndpoint,
-                parserAccessHeaders,
-                activeUseMistral ? 20_000 : 8_000,
-              );
+              const recovered = activeUseMistral
+                ? true
+                : await waitForParserRecovery(
+                    parserEndpoint,
+                    parserAccessHeaders,
+                    8_000,
+                  );
               console.info(
                 "[structuredUpload] retrying after transient parser error status=%d label=%s mode=%s retry=%d recovered=%s",
                 response.status,
@@ -1147,6 +1316,9 @@ export const structuredUpload = action({
               );
             }
             response = null;
+            if (!willRetry) {
+              break;
+            }
             continue;
           }
 
@@ -1160,7 +1332,7 @@ export const structuredUpload = action({
           );
 
           try {
-            payload = (await response.json()) as ParserResponse;
+            payload = JSON.parse(responseBodyText) as ParserResponse;
             if (activeUseMistral) {
               const parserResultForDebug = payload as Record<string, any> | null;
               console.info("[structuredUpload][mistral] raw parser JSON parserResult.diagnostics=%j parserResult.result?.diagnostics=%j",
@@ -1214,6 +1386,9 @@ export const structuredUpload = action({
             );
             response = null;
             payload = null;
+            if (activeUseMistral) {
+              break;
+            }
             continue;
           }
 
@@ -1321,9 +1496,10 @@ export const structuredUpload = action({
             endpointSucceeded = true;
           } else {
             if (activeUseMistral) {
-              const e: any = new Error("mistral_unusable_content: Insufficient OCR text (<200 chars) and no sections");
-              e.code = "mistral_unusable_content";
-              throw e;
+              throw buildMistralOcrUnavailableError({
+                reason: "mistral_unusable_content",
+                detail: "Insufficient OCR text (<200 chars) and no sections",
+              });
             }
             const sectionsFound = diagnostics?.sections_found ?? {};
             const sectionsFoundSummary = Object.entries(sectionsFound)
@@ -1379,6 +1555,15 @@ export const structuredUpload = action({
     if (!lastPayload || !selectedEndpoint) {
       const joined = aggregatedErrors.length ? aggregatedErrors.join("; ") : "no parser attempts succeeded";
       const lastSnippet = aggregatedErrors[aggregatedErrors.length - 1] ?? joined;
+      if (activeUseMistral) {
+        throw buildMistralOcrUnavailableError({
+          status: lastHttpStatus ?? null,
+          detail: lastBodySnippet ?? null,
+          aggregatedErrors,
+          lastError: lastSnippet,
+          cfRay: lastCfRay ?? undefined,
+        });
+      }
       const code = (() => {
         if (lastHttpStatus === 404) return "mistral_route_missing";
         if (lastHttpStatus === 503) return "mistral_ocr_disabled_or_missing_key";

@@ -194,12 +194,16 @@ export async function buildSourceCvPlanFromPersistence(
   assertCurrentContext(applicationContext, rebuilt.context);
 
   if (input.mode === "full_source_cv") {
-    return composeSourceCvVariantPlan({
+    const composition = await composeSourceCvVariantPlan({
       mode: "full_source_cv",
       callerUserId,
       applicationContext,
       sourceCv,
     });
+    if (composition.mode !== "full_source_cv") {
+      throw new TypeError("full source CV composition returned wrong mode");
+    }
+    return composition;
   }
 
   const demands = await buildJobDemandsFromCanonicalJobBrief({
