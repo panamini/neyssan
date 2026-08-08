@@ -123,7 +123,7 @@ describe("Mistral import retry policy", () => {
         remainingMs: 60_000,
         remainingParserEndpoints: 2,
       }),
-    ).toBe(15_000);
+    ).toBe(30_000);
     expect(
       computeMistralParserFetchTimeoutMs({
         remainingMs: 20_000,

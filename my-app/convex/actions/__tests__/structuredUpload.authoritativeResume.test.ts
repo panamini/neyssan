@@ -17,7 +17,9 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       result: {
         normalized: {
           profile: { name: "Jane Doe" },
-          summary: { text: "Summary text" },
+          summary: {
+            text: "Product leader with ten years of experience delivering complex customer platforms.",
+          },
         },
       },
     });
@@ -28,7 +30,9 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       fallbackToLegacy: false,
       normalized: {
         profile: { name: "Jane Doe" },
-        summary: { text: "Summary text" },
+        summary: {
+          text: "Product leader with ten years of experience delivering complex customer platforms.",
+        },
       },
     });
   });
@@ -100,6 +104,7 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       },
       normalized: {
         profile: { name: "Jane Doe" },
+        skills: [{ name: "Product strategy" }, { name: "Roadmapping" }],
       },
     });
 
@@ -109,8 +114,152 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       fallbackToLegacy: false,
       normalized: {
         profile: { name: "Jane Doe" },
+        skills: [{ name: "Product strategy" }, { name: "Roadmapping" }],
       },
     });
+  });
+
+  it("does not trust a template-like payload with identity data but no substantive resume content", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          profile: {
+            name: "Robert Cooper",
+            email: "robert@example.com",
+          },
+          experience: [{}],
+          education: [{}],
+          skills: [],
+        },
+      },
+    });
+
+    expect(envelope).toEqual({
+      source: "mistral_v3",
+      trusted: false,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: {
+          name: "Robert Cooper",
+          email: "robert@example.com",
+        },
+        experience: [{}],
+        education: [{}],
+        skills: [],
+      },
+    });
+  });
+
+  it("trusts a substantive anonymized resume without identity fields", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          profile: {},
+          experience: [
+            {
+              company: "Acme",
+              position: "Operations Lead",
+              startDate: "2015-01-01",
+              endDate: "2025-01-01",
+              responsibilities:
+                "Led cross-functional delivery and improved processing reliability across the organization.",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(true);
+    expect(envelope?.fallbackToLegacy).toBe(false);
+  });
+
+  it("trusts a detailed narrative-only experience when OCR misses its headings", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          experience: [
+            {
+              responsibilities:
+                "Led cross-functional delivery, reduced processing delays, and improved operational reliability across multiple teams.",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(true);
+  });
+
+  it("rejects common experience field labels as template placeholders", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          experience: [{ company: "Company", position: "Position" }],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(false);
+  });
+
+  it.each([
+    [
+      "awards",
+      { name: "National Research Award", issuer: "Engineering Council" },
+    ],
+    [
+      "publications",
+      {
+        title: "Reliable distributed systems in constrained environments",
+        publisher: "Systems Journal",
+      },
+    ],
+    [
+      "volunteering",
+      {
+        organization: "Community Technology Network",
+        role: "Volunteer Coordinator",
+      },
+    ],
+    [
+      "affiliations",
+      { text: "Association of Operations Professionals — Board Member" },
+    ],
+  ])("trusts a substantive %s section", (sectionName, entry) => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          [sectionName]: [entry],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(true);
   });
 
   it("does not trust a non-object normalized payload", () => {

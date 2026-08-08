@@ -563,6 +563,24 @@ function matchesSectionTitle(section: any, title: string): boolean {
   return String(section?.title ?? "").trim().toLowerCase() === title.trim().toLowerCase();
 }
 
+export function buildRepresentativeBlockId(
+  sectionId: unknown,
+  itemId: unknown,
+  index = 0,
+): string {
+  const sectionPart =
+    typeof sectionId === "string" && sectionId.trim()
+      ? sectionId.trim()
+      : "section";
+  const itemPart =
+    typeof itemId === "string" && itemId.trim()
+      ? itemId.trim()
+      : typeof itemId === "number" && Number.isFinite(itemId)
+        ? String(itemId)
+        : String(index);
+  return `representative:${sectionPart}:${itemPart}`;
+}
+
 /** Normalize language item; ensure id and default level */
 function normalizeLanguageItem(entry: any, idx: number): ILanguageItem {
   const id =
@@ -618,7 +636,7 @@ function normalizeSummaryItem(entry: any, idx = 0): z.infer<typeof SummaryItemSc
  * - For each structured item in experience/education:
  *   - If a block already exists with attributes.linkedStructuredId == item.id, do not duplicate.
  *   - Otherwise append a new "text" block at the end with:
- *       id: uuidv4()
+ *       id: deterministic from section and structured item ids
  *       title: experience -> company || position || "Experience N"
  *              education  -> institution || degree || "Education N"
  *       content: responsibilities/description -> ensureRemirrorDoc(value)
@@ -640,13 +658,54 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
       const originalBlocks: CvBlock[] = Array.isArray(s.blocks) ? s.blocks : [];
       let blocks: CvBlock[] = originalBlocks; // preserve reference unless we actually change
       let blocksChanged = false;
+      const ensureSectionBlocksCopy = () => {
+        if (blocks === originalBlocks) {
+          blocks = [...originalBlocks];
+        }
+      };
+      const refreshRepresentativeBlock = ({
+        id,
+        title,
+        content,
+        linkedStructuredId,
+      }: {
+        id: string;
+        title: string;
+        content: unknown;
+        linkedStructuredId?: string;
+      }): boolean => {
+        const blockIndex = blocks.findIndex((block) => block.id === id);
+        if (blockIndex < 0) {
+          return false;
+        }
+        const currentBlock = blocks[blockIndex];
+        const nextBlock = CvBlockSchemaStrict.parse({
+          ...(currentBlock as any),
+          id,
+          title,
+          type: "text",
+          content,
+          attributes: linkedStructuredId
+            ? {
+                ...((currentBlock as any)?.attributes ?? {}),
+                linkedStructuredId,
+              }
+            : undefined,
+        });
+        if (JSON.stringify(nextBlock) !== JSON.stringify(currentBlock)) {
+          ensureSectionBlocksCopy();
+          blocks[blockIndex] = nextBlock;
+          blocksChanged = true;
+        }
+        return true;
+      };
 
       // Legacy: convert section.content -> single block when no blocks and no structured
       const hasLegacyContent = (s as any).content !== undefined && (s as any).content !== null;
       if ((originalBlocks.length === 0) && !hasStructured && hasLegacyContent) {
         blocks = [
           CvBlockSchemaStrict.parse({
-            id: uuidv4(),
+            id: buildRepresentativeBlockId(s.id, "legacy-content"),
             type: "text",
             title: (s as any).title ?? "Block 1",
             content: ensureRemirrorDoc((s as any).content),
@@ -709,18 +768,19 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return; // already represented
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
 
           // Derive preferred title and content from structured item
           let derivedTitle: string;
+          let hasExperienceHeading = true;
           if (secType === "experience") {
             const company = String(item?.company ?? "").trim();
             const position = String(item?.position ?? "").trim();
             const location = String(item?.location ?? "").trim();
-            // Skip synthesizing a block when both company and position are empty (headerless entry)
-            if (!company && !position) {
-              return;
-            }
-            const base = company && position ? `${position} at ${company}` : (position || company);
+            hasExperienceHeading = Boolean(company || position);
+            const base = company && position
+              ? `${position} at ${company}`
+              : position || company || `Experience ${idx + 1}`;
             derivedTitle = location ? `${base} — ${location}` : base;
           } else {
             derivedTitle = String(item?.institution ?? item?.degree ?? `Education ${idx + 1}`);
@@ -735,6 +795,24 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           } else if (secType === "education") {
             const desc = item?.description;
             if (typeof desc !== "undefined") derivedContent = ensureRemirrorDoc(desc as any);
+          }
+          if (
+            secType === "experience" &&
+            !hasExperienceHeading &&
+            isEmptyDoc(derivedContent)
+          ) {
+            return;
+          }
+
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title: derivedTitle,
+              content: derivedContent,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
           }
 
           // Try to repurpose an existing unlinked block for this item
@@ -787,7 +865,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           if (!repurposed) {
             // Append a new representative block
             const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-              id: uuidv4(),
+              id: representativeBlockId,
               title: derivedTitle,
               type: "text",
               content: derivedContent,
@@ -862,13 +940,24 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
           const certificationName = String(item?.certificationName ?? "").trim();
           const issuer = String(item?.issuingOrganization ?? "").trim();
           const title = certificationName || `Certification ${idx + 1}`;
           const detailBits = [issuer, String(item?.credentialId ?? "").trim()].filter(Boolean);
           const content = ensureRemirrorDoc(detailBits.join("\n"));
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title,
+              content,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
+          }
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-            id: uuidv4(),
+            id: representativeBlockId,
             title,
             type: "text",
             content,
@@ -901,6 +990,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
           const organizationName = String(item?.organizationName ?? "").trim();
           const membershipType = String(item?.roleOrMembershipType ?? "").trim();
           const title = organizationName || `Affiliation ${idx + 1}`;
@@ -911,8 +1001,18 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
                 ? normalizeWhitespace(JSON.stringify(item.notes))
                 : "";
           const content = ensureRemirrorDoc([membershipType, notes].filter(Boolean).join("\n"));
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title,
+              content,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
+          }
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-            id: uuidv4(),
+            id: representativeBlockId,
             title,
             type: "text",
             content,
@@ -935,20 +1035,43 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
             blocks = [...originalBlocks];
           }
         };
+        const existingLinked = new Set<string>();
+        for (const block of originalBlocks) {
+          const linked =
+            (block as any)?.attributes?.linkedStructuredId ??
+            (block as any)?.attributes?.linkedstructuredid;
+          if (typeof linked === "string" && linked.trim()) {
+            existingLinked.add(linked);
+          }
+        }
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
+          if (itemId && existingLinked.has(itemId)) return;
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
           const text = String(item?.text ?? "").trim();
           const title = text || `Achievement ${idx + 1}`;
+          const content = ensureRemirrorDoc(text);
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title,
+              content,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
+          }
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-            id: uuidv4(),
+            id: representativeBlockId,
             title,
             type: "text",
-            content: ensureRemirrorDoc(text),
+            content,
             attributes: itemId ? { linkedStructuredId: itemId } : undefined,
           });
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
+          if (itemId) existingLinked.add(itemId);
         });
       }
 

@@ -1,4 +1,7 @@
-import type { AuthoritativeResume } from "../../../src/lib/authoritative-resume";
+import {
+  hasMinimumAuthoritativeResumeContent,
+  type AuthoritativeResume,
+} from "../../../src/lib/authoritative-resume";
 
 type MistralPayload = {
   diagnostics?: unknown;
@@ -64,7 +67,7 @@ export function buildAuthoritativeResumeEnvelope(
 
   return {
     source: "mistral_v3",
-    trusted: !fallbackToLegacy && Boolean(normalized),
+    trusted: !fallbackToLegacy && hasMinimumAuthoritativeResumeContent(normalized),
     fallbackToLegacy,
     normalized,
   };

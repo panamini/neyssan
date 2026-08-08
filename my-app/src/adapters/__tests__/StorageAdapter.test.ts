@@ -527,7 +527,7 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
-  it("strips authoritativeResume from backend payloads but keeps it in the runtime snapshot", async () => {
+  it("persists compact authoritative provenance without duplicating normalized import data remotely", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Trusted Runtime CV");
@@ -543,7 +543,12 @@ describe("StorageAdapter persistence", () => {
     expect(patchMutation).toHaveBeenCalledTimes(1);
     const payload = patchMutation.mock.calls[0][0].patch;
     expect(payload.metadata.authoritativeResume).toBeUndefined();
-    expect(payload.cvDocument.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.cvDocument.metadata.authoritativeResume).toEqual({
+      source: "mistral_v3",
+      trusted: false,
+      fallbackToLegacy: true,
+      normalized: null,
+    });
 
     const cachedDocument = JSON.parse(
       window.localStorage.getItem(`cv:${cv.id}`) as string,
@@ -933,7 +938,12 @@ describe("StorageAdapter persistence", () => {
     const serializedPayload = JSON.stringify(payload);
     expect(payload.metadata.authoritativeResume).toBeUndefined();
     expect(payload.metadata.importRecoverySession).toBeUndefined();
-    expect(payload.cvDocument.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.cvDocument.metadata.authoritativeResume).toEqual({
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: null,
+    });
     expect(payload.cvDocument.metadata.importRecoverySession).toBeUndefined();
     expect(serializedPayload.length).toBeLessThan(250_000);
     expect(payload.metadata.verbatiStyle).toEqual({

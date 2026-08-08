@@ -104,6 +104,168 @@ function cleanString(value: unknown): string {
   return value.trim();
 }
 
+const TEMPLATE_PLACEHOLDER_VALUES = new Set([
+  "candidate",
+  "company",
+  "degree",
+  "employer",
+  "imported cv",
+  "institution",
+  "job title",
+  "name",
+  "position",
+  "role",
+  "school",
+  "untitled cv",
+  "your name",
+]);
+
+function isSubstantiveString(value: unknown, minimumLength = 2): boolean {
+  const cleaned = cleanString(value);
+  return (
+    cleaned.length >= minimumLength &&
+    !TEMPLATE_PLACEHOLDER_VALUES.has(cleaned.toLowerCase())
+  );
+}
+
+function contentTextLength(value: unknown): number {
+  if (typeof value === "string") {
+    return value.trim().length;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce((total, entry) => total + contentTextLength(entry), 0);
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return 0;
+  }
+  return Object.entries(record).reduce(
+    (total, [key, entry]) =>
+      key === "id" ? total : total + contentTextLength(entry),
+    0,
+  );
+}
+
+export function hasMinimumAuthoritativeResumeContent(value: unknown): boolean {
+  const normalized = asRecord(value);
+  if (!normalized) {
+    return false;
+  }
+
+  const summary = asRecord(normalized.summary);
+  if (contentTextLength(summary?.text ?? normalized.summary) >= 40) {
+    return true;
+  }
+
+  const experiences = asArray(normalized.experience ?? normalized.experiences);
+  if (
+    experiences.some((entry) => {
+      const record = asRecord(entry);
+      const company = isSubstantiveString(record?.company);
+      const position = isSubstantiveString(record?.position ?? record?.title);
+      const hasDates = Boolean(
+        cleanString(record?.startDate) || cleanString(record?.endDate),
+      );
+      const hasNarrative =
+        contentTextLength(
+          record?.responsibilityBullets ??
+            record?.responsibilities ??
+            record?.description ??
+            record?.achievements,
+        ) >= 20;
+      return (
+        hasNarrative ||
+        (company && position) ||
+        ((company || position) && hasDates)
+      );
+    })
+  ) {
+    return true;
+  }
+
+  const education = asArray(normalized.education ?? normalized.educations);
+  if (
+    education.some((entry) => {
+      const record = asRecord(entry);
+      const institution = isSubstantiveString(record?.institution ?? record?.school);
+      const qualification =
+        isSubstantiveString(record?.degree) ||
+        isSubstantiveString(record?.fieldOfStudy ?? record?.field);
+      const hasDates = Boolean(
+        cleanString(record?.startDate) || cleanString(record?.endDate),
+      );
+      return institution && (qualification || hasDates);
+    })
+  ) {
+    return true;
+  }
+
+  const skills = cleanNamedStringArray(normalized.skills).filter((skill) =>
+    isSubstantiveString(skill),
+  );
+  if (new Set(skills.map((skill) => skill.toLowerCase())).size >= 2) {
+    return true;
+  }
+
+  const projects = asArray(normalized.projects);
+  if (
+    projects.some((entry) => {
+      const record = asRecord(entry);
+      return (
+        isSubstantiveString(record?.title ?? record?.name) &&
+        contentTextLength(record?.summary ?? record?.description ?? record?.meta) >= 10
+      );
+    })
+  ) {
+    return true;
+  }
+
+  const certifications = asArray(normalized.certifications);
+  if (
+    certifications.some((entry) => {
+      const record = asRecord(entry);
+      return isSubstantiveString(record?.name ?? record?.certificationName, 3);
+    })
+  ) {
+    return true;
+  }
+
+  const extendedProfessionalSections = [
+    normalized.awards,
+    normalized.publications,
+    normalized.volunteering,
+    normalized.affiliations,
+  ];
+  if (
+    extendedProfessionalSections.some((section) =>
+      asArray(section).some((entry) => {
+        const record = asRecord(entry);
+        if (!record) {
+          return false;
+        }
+        const primaryLabel =
+          cleanString(record.name) ||
+          cleanString(record.title) ||
+          cleanString(record.organization) ||
+          cleanString(record.organizationName) ||
+          cleanString(record.role) ||
+          cleanString(record.roleOrMembershipType) ||
+          cleanString(record.text);
+        return (
+          isSubstantiveString(primaryLabel, 3) &&
+          contentTextLength(record) >= 20
+        );
+      }),
+    )
+  ) {
+    return true;
+  }
+
+  return asArray(normalized.achievements).some(
+    (entry) => contentTextLength(entry) >= 10,
+  );
+}
+
 function isNotNull<T>(value: T | null): value is T {
   return value !== null;
 }
