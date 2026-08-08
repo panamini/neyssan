@@ -925,7 +925,12 @@ def _recover_contact_from_document(raw_text: str) -> dict[str, str]:
         email_context_ok = bool(
             EMAIL_LABEL_RE.search(cleaned)
             or active_family == "contact"
-            or (details_context and details_contact_evidence)
+            or (
+                details_context
+                and details_contact_evidence
+                and email_match
+                and cleaned.strip() == email_match.group(0)
+            )
             or in_header
         )
         if email_match and email_context_ok and "email" not in recovered:
@@ -1736,17 +1741,26 @@ def _extract_explicit_hobbies_from_sections(sections: list[OCRMarkdownSection]) 
 
 def _extract_explicit_contact_from_sections(sections: list[OCRMarkdownSection]) -> dict[str, str]:
     recovered: dict[str, str] = {}
-    lines: list[str] = []
+    lines: list[tuple[bool, str]] = []
     for section in sections:
-        lines.extend(section.lines)
+        is_generic_details_section = _normalize_heading_text(section.heading) == "details"
+        lines.extend((is_generic_details_section, line) for line in section.lines)
 
-    for raw_line in lines:
+    for is_generic_details_section, raw_line in lines:
         cleaned = _clean_inline_text(raw_line.strip().strip("|"))
         if not cleaned:
             continue
         if "email" not in recovered:
             email_match = EMAIL_FRAGMENT_RE.search(cleaned)
-            if email_match:
+            email_is_explicit = bool(EMAIL_LABEL_RE.search(cleaned))
+            email_is_standalone = bool(
+                email_match and cleaned.strip() == email_match.group(0)
+            )
+            if email_match and (
+                not is_generic_details_section
+                or email_is_explicit
+                or email_is_standalone
+            ):
                 recovered["email"] = email_match.group(0)
         if "phone" not in recovered and PHONE_FRAGMENT_RE.fullmatch(cleaned):
             recovered["phone"] = cleaned

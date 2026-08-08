@@ -81,8 +81,15 @@ function createContext({
       },
       db: {
         query: createProfileQuery(),
-        normalizeId: (_table: string, id: string) =>
-          id.startsWith("job_") ? id : null,
+        normalizeId: (table: string, id: string) => {
+          if (table === "jobs") {
+            return id.startsWith("job_") ? id : null;
+          }
+          if (table === "userProfiles") {
+            return id.startsWith("profile_") ? id : null;
+          }
+          return null;
+        },
         get,
         insert,
         patch,
