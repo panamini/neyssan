@@ -155,6 +155,34 @@ describe("buildAuthoritativeResumeEnvelope", () => {
     });
   });
 
+  it("trusts a substantive anonymized resume without identity fields", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          profile: {},
+          experience: [
+            {
+              company: "Acme",
+              position: "Operations Lead",
+              startDate: "2015-01-01",
+              endDate: "2025-01-01",
+              responsibilities:
+                "Led cross-functional delivery and improved processing reliability across the organization.",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(true);
+    expect(envelope?.fallbackToLegacy).toBe(false);
+  });
+
   it("does not trust a non-object normalized payload", () => {
     const envelope = buildAuthoritativeResumeEnvelope({
       diagnostics: {

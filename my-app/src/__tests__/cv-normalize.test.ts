@@ -54,6 +54,38 @@ describe("Representative block stability", () => {
     expect(secondFromRemote.sections).toEqual(first.sections);
     expect(secondFromHydrated).toBe(first);
   });
+
+  it("does not duplicate a representative block for an id-less legacy item", () => {
+    const remoteDocument = {
+      id: "cv-idless-round-trip",
+      title: "ID-less round trip",
+      metadata: {
+        createdAt: "2026-08-08T00:00:00.000Z",
+        updatedAt: "2026-08-08T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "achievements-section",
+          title: "Achievements",
+          type: "achievements" as const,
+          blocks: [],
+          structuredContent: [
+            {
+              text: "Reduced processing time by 40%",
+            },
+          ],
+        },
+      ],
+    };
+
+    const first = ensureRepresentativeBlocks(remoteDocument);
+    const second = ensureRepresentativeBlocks(first);
+
+    expect(first.sections[0]?.blocks).toHaveLength(1);
+    expect(second.sections[0]?.blocks).toHaveLength(1);
+    expect(second).toBe(first);
+  });
 });
 
  // Legacy suite: retained for reference; superseded by v1 precision-aware tests and parser→normalizer flows.

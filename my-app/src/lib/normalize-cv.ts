@@ -656,6 +656,11 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
       const hasStructured = Array.isArray((s as any)?.structuredContent);
 
       const originalBlocks: CvBlock[] = Array.isArray(s.blocks) ? s.blocks : [];
+      const existingBlockIds = new Set(
+        originalBlocks
+          .map((block) => (typeof block?.id === "string" ? block.id.trim() : ""))
+          .filter(Boolean),
+      );
       let blocks: CvBlock[] = originalBlocks; // preserve reference unless we actually change
       let blocksChanged = false;
 
@@ -727,6 +732,8 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return; // already represented
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
+          if (existingBlockIds.has(representativeBlockId)) return;
 
           // Derive preferred title and content from structured item
           let derivedTitle: string;
@@ -805,7 +812,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           if (!repurposed) {
             // Append a new representative block
             const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-              id: buildRepresentativeBlockId(s.id, itemId, idx),
+              id: representativeBlockId,
               title: derivedTitle,
               type: "text",
               content: derivedContent,
@@ -814,6 +821,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
             ensureBlocksCopy();
             blocks.push(newBlock);
             blocksChanged = true;
+            existingBlockIds.add(representativeBlockId);
             if (itemId) existingLinked.add(itemId);
           }
         });
@@ -880,13 +888,15 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
+          if (existingBlockIds.has(representativeBlockId)) return;
           const certificationName = String(item?.certificationName ?? "").trim();
           const issuer = String(item?.issuingOrganization ?? "").trim();
           const title = certificationName || `Certification ${idx + 1}`;
           const detailBits = [issuer, String(item?.credentialId ?? "").trim()].filter(Boolean);
           const content = ensureRemirrorDoc(detailBits.join("\n"));
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-            id: buildRepresentativeBlockId(s.id, itemId, idx),
+            id: representativeBlockId,
             title,
             type: "text",
             content,
@@ -895,6 +905,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
+          existingBlockIds.add(representativeBlockId);
           if (itemId) existingLinked.add(itemId);
         });
       }
@@ -919,6 +930,8 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
+          if (existingBlockIds.has(representativeBlockId)) return;
           const organizationName = String(item?.organizationName ?? "").trim();
           const membershipType = String(item?.roleOrMembershipType ?? "").trim();
           const title = organizationName || `Affiliation ${idx + 1}`;
@@ -930,7 +943,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
                 : "";
           const content = ensureRemirrorDoc([membershipType, notes].filter(Boolean).join("\n"));
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-            id: buildRepresentativeBlockId(s.id, itemId, idx),
+            id: representativeBlockId,
             title,
             type: "text",
             content,
@@ -939,6 +952,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
+          existingBlockIds.add(representativeBlockId);
           if (itemId) existingLinked.add(itemId);
         });
       }
@@ -965,10 +979,12 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         items.forEach((item, idx) => {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
+          const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
+          if (existingBlockIds.has(representativeBlockId)) return;
           const text = String(item?.text ?? "").trim();
           const title = text || `Achievement ${idx + 1}`;
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
-            id: buildRepresentativeBlockId(s.id, itemId, idx),
+            id: representativeBlockId,
             title,
             type: "text",
             content: ensureRemirrorDoc(text),
@@ -977,6 +993,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
+          existingBlockIds.add(representativeBlockId);
           if (itemId) existingLinked.add(itemId);
         });
       }

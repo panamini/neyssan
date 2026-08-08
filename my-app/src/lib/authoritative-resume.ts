@@ -146,26 +146,6 @@ export function hasMinimumAuthoritativeResumeContent(value: unknown): boolean {
     return false;
   }
 
-  const profile = asRecord(normalized.profile);
-  const contact = asRecord(normalized.contact);
-  const name =
-    readString(profile, "name") ||
-    readString(contact, "name") ||
-    cleanString(normalized.name);
-  const email = readString(profile, "email") || readString(contact, "email");
-  const phone = readString(profile, "phone") || readString(contact, "phone");
-  const linkedIn =
-    readString(profile, "linkedin", "linkedIn") ||
-    readString(contact, "linkedin", "linkedIn");
-  const hasIdentity =
-    isSubstantiveString(name) ||
-    email.includes("@") ||
-    phone.replace(/\D/g, "").length >= 7 ||
-    isSubstantiveString(linkedIn, 6);
-  if (!hasIdentity) {
-    return false;
-  }
-
   const summary = asRecord(normalized.summary);
   if (contentTextLength(summary?.text ?? normalized.summary) >= 40) {
     return true;
