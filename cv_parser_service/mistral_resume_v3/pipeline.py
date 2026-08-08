@@ -270,6 +270,12 @@ HEADER_DESIRED_POSITION_ROLE_MARKERS = EXPERIENCE_ROLE_MARKERS | {
     "trainer",
     "writer",
 }
+US_STATE_CODES = set(
+    (
+        "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO "
+        "MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC"
+    ).split()
+)
 EXPERIENCE_MONTH_NUMBERS = {
     "jan": "01",
     "january": "01",
@@ -644,6 +650,11 @@ def _has_header_desired_position_role_marker(value: Optional[str]) -> bool:
     return bool(role_tokens & HEADER_DESIRED_POSITION_ROLE_MARKERS)
 
 
+def _has_us_state_code_tail(value: str) -> bool:
+    parts = value.rsplit(",", 1)
+    return len(parts) == 2 and parts[1].strip().upper() in US_STATE_CODES
+
+
 def _looks_like_header_desired_position_candidate(value: Optional[str], *, identity_name: Optional[str]) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -669,13 +680,17 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
         return False
     if ADDRESSISH_STREET_RE.search(cleaned) or ADDRESSISH_STREET_FRAGMENT_RE.search(cleaned):
         return False
-    if (
+    location_shape_match = (
         HEADER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(cleaned)
         or HEADER_UPPER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(cleaned)
         or HEADER_LOCATION_TAIL_RE.fullmatch(cleaned)
         or HEADER_UPPER_LOCATION_TAIL_RE.fullmatch(cleaned)
-        or HEADER_INTERNATIONAL_LOCATION_RE.search(cleaned)
-    ) and not has_role_marker:
+    )
+    if HEADER_INTERNATIONAL_LOCATION_RE.search(cleaned):
+        return False
+    if location_shape_match and (
+        not has_role_marker or _has_us_state_code_tail(cleaned)
+    ):
         return False
     if ":" in cleaned:
         return False

@@ -1617,6 +1617,13 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
                 "contact": {"email": "jane@example.com"},
             },
         ),
+        (
+            "JANE DOE\nTrainer, PA\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
     ],
     ids=[
         "no-title-in-header",
@@ -1628,6 +1635,7 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
         "citizenship-metadata-must-not-become-title",
         "security-clearance-metadata-must-not-become-title",
         "document-label-must-not-become-title",
+        "role-named-city-must-not-become-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_does_not_recover_desired_position_from_invalid_header_patterns(
