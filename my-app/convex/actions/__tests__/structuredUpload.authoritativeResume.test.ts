@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAuthoritativeResumeEnvelope } from "../structuredUpload";
+import {
+  buildAuthoritativeResumeEnvelope,
+  isMistralPayloadSelectable,
+} from "../../lib/parsing/mistralPayloadTrust";
 
 describe("buildAuthoritativeResumeEnvelope", () => {
   it("marks a non-fallback Mistral v3 route payload as trusted", () => {
@@ -81,5 +84,26 @@ describe("buildAuthoritativeResumeEnvelope", () => {
         profile: { name: "Jane Doe" },
       },
     });
+  });
+
+  it("does not select a fallback payload even when it has OCR text and sections", () => {
+    expect(
+      isMistralPayloadSelectable(
+        {
+          diagnostics: {
+            ocr_engine: "mistral",
+            mistral_runtime: "local_fallback",
+            mistral_fallback: true,
+          },
+          result: {
+            normalized: {
+              rawText: "x".repeat(200),
+              rawSections: [{ label: "BODY", content: "x".repeat(200) }],
+            },
+          },
+        },
+        { ocrChars: 200, rawSectionsLen: 1 },
+      ),
+    ).toBe(false);
   });
 });

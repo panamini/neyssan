@@ -245,6 +245,28 @@ EXPERIENCE_ROLE_MARKERS = {
     "supervisor",
     "technician",
 }
+HEADER_DESIRED_POSITION_ROLE_MARKERS = EXPERIENCE_ROLE_MARKERS | {
+    "accountant",
+    "administrator",
+    "architect",
+    "attorney",
+    "chef",
+    "counselor",
+    "editor",
+    "executive",
+    "intern",
+    "journalist",
+    "nurse",
+    "operator",
+    "planner",
+    "producer",
+    "recruiter",
+    "representative",
+    "scientist",
+    "teacher",
+    "trainer",
+    "writer",
+}
 EXPERIENCE_MONTH_NUMBERS = {
     "jan": "01",
     "january": "01",
@@ -645,7 +667,7 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
     token_count = len(cleaned.split())
     if token_count < 2 or token_count > 8:
         return False
-    return True
+    return bool(set(tokens) & HEADER_DESIRED_POSITION_ROLE_MARKERS)
 
 
 def _looks_like_non_title_header_phrase(value: Optional[str]) -> bool:

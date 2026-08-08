@@ -1551,6 +1551,27 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
                 "contact": {"email": "jane@example.com", "address": "Paris, France"},
             },
         ),
+        (
+            "JANE DOE\nUS Citizen\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+        (
+            "JANE DOE\nSecurity Clearance Secret\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+        (
+            "JANE DOE\nProfessional Resume\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
     ],
     ids=[
         "no-title-in-header",
@@ -1559,6 +1580,9 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
         "name-prefixed-noisy-header-must-not-produce-name-title",
         "header-without-title-signal-returns-null",
         "international-location-must-not-become-title",
+        "citizenship-metadata-must-not-become-title",
+        "security-clearance-metadata-must-not-become-title",
+        "document-label-must-not-become-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_does_not_recover_desired_position_from_invalid_header_patterns(

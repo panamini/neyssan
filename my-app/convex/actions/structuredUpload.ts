@@ -9,6 +9,10 @@ import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonica
 import { buildImportRecoveryPayload } from "../lib/parsing/importRecovery";
 import { filterRecoverySourceSectionsForRedundantHeader } from "../lib/parsing/recoverySourceFilter";
 import {
+  buildAuthoritativeResumeEnvelope,
+  isMistralPayloadSelectable,
+} from "../lib/parsing/mistralPayloadTrust";
+import {
   buildAuthoritativeResumeDebugSnapshot,
   type AuthoritativeResume,
 } from "../../src/lib/authoritative-resume";
@@ -1478,8 +1482,9 @@ export const structuredUpload = action({
               return Number.isFinite(num) ? num : 0;
             } catch { return 0; }
           })();
-          const sectionsOk = rawSectionsLen > 0;
-          const meaningful = activeUseMistral ? (sectionsOk || ocrChars >= 200) : (meaningfulBaseline || canonicalPass);
+          const meaningful = activeUseMistral
+            ? isMistralPayloadSelectable(payload, { ocrChars, rawSectionsLen })
+            : (meaningfulBaseline || canonicalPass);
           console.debug(
             "[structuredUpload] payload content check label=%s mode=%s meaningful=%s diagnostics=%j",
             attempt.label,
@@ -1496,10 +1501,16 @@ export const structuredUpload = action({
             endpointSucceeded = true;
           } else {
             if (activeUseMistral) {
-              throw buildMistralOcrUnavailableError({
-                reason: "mistral_unusable_content",
-                detail: "Insufficient OCR text (<200 chars) and no sections",
-              });
+              const authoritativeResume = buildAuthoritativeResumeEnvelope(payload);
+              const reason = authoritativeResume?.fallbackToLegacy
+                ? "mistral_fallback"
+                : authoritativeResume?.trusted
+                  ? "insufficient_ocr_evidence"
+                  : "missing_trusted_normalized_payload";
+              aggregatedErrors.push(
+                `${attempt.label}:${modeVariant} rejected Mistral payload (${reason}; ocrChars=${ocrChars} rawSections=${rawSectionsLen})`,
+              );
+              break;
             }
             const sectionsFound = diagnostics?.sections_found ?? {};
             const sectionsFoundSummary = Object.entries(sectionsFound)
