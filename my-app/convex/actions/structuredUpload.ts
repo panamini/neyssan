@@ -9,6 +9,7 @@ import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonica
 import { buildImportRecoveryPayload } from "../lib/parsing/importRecovery";
 import { filterRecoverySourceSectionsForRedundantHeader } from "../lib/parsing/recoverySourceFilter";
 import {
+  asNonEmptyRecord,
   buildAuthoritativeResumeEnvelope,
   isMistralPayloadSelectable,
 } from "../lib/parsing/mistralPayloadTrust";
@@ -1298,12 +1299,8 @@ export const structuredUpload = action({
               } as ParserResponse;
               if (payload.result && typeof payload.result === "object") {
                 const result = payload.result;
-                if (
-                  result.normalized &&
-                  typeof result.normalized === "object" &&
-                  !Array.isArray(result.normalized)
-                ) {
-                  const resultNormalized = result.normalized as Record<string, any>;
+                const resultNormalized = asNonEmptyRecord(result.normalized);
+                if (resultNormalized) {
                   if (typeof result.rawText === "string") {
                     if (typeof resultNormalized.rawText !== "string" || !resultNormalized.rawText.trim()) {
                       resultNormalized.rawText = result.rawText;

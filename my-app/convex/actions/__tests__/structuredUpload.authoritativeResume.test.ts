@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  asNonEmptyRecord,
   buildAuthoritativeResumeEnvelope,
   isMistralPayloadSelectable,
 } from "../../lib/parsing/mistralPayloadTrust";
@@ -131,6 +132,8 @@ describe("buildAuthoritativeResumeEnvelope", () => {
   });
 
   it("does not trust an empty normalized object", () => {
+    expect(asNonEmptyRecord({})).toBeNull();
+
     const envelope = buildAuthoritativeResumeEnvelope({
       diagnostics: {
         ocr_engine: "mistral",

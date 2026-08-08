@@ -1475,6 +1475,22 @@ def _run_desired_position_header_case(
             },
             "UX Strategist",
         ),
+        (
+            "JANE DOE\nProduct Designer, UX\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Product Designer, UX",
+        ),
+        (
+            "JANE DOE\nSenior Engineer, AI\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Senior Engineer, AI",
+        ),
     ],
     ids=[
         "name-title-contact",
@@ -1486,6 +1502,8 @@ def _run_desired_position_header_case(
         "product-owner-header-title",
         "growth-hacker-header-title",
         "ux-strategist-header-title",
+        "punctuated-product-designer-header-title",
+        "punctuated-senior-engineer-header-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_recovers_desired_position_from_structural_header_patterns(

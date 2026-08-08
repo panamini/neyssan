@@ -633,6 +633,17 @@ def _contains_identity_name_tokens(value: Optional[str], identity_name: Optional
     return matched >= min(2, len(name_tokens))
 
 
+def _has_header_desired_position_role_marker(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    role_tokens = {
+        re.sub(r"^[^\w]+|[^\w]+$", "", token)
+        for token in _normalize_lookup(cleaned).split()
+    }
+    return bool(role_tokens & HEADER_DESIRED_POSITION_ROLE_MARKERS)
+
+
 def _looks_like_header_desired_position_candidate(value: Optional[str], *, identity_name: Optional[str]) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -645,6 +656,7 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
     tokens = [token for token in normalized.split() if token]
     if len(tokens) >= 2 and all(token in SECTION_HEADING_WORDS for token in tokens):
         return False
+    has_role_marker = _has_header_desired_position_role_marker(cleaned)
     if _is_heading_value(cleaned) or _classify_heading(cleaned):
         return False
     if HEADER_CONTACT_LABEL_RE.search(cleaned):
@@ -663,14 +675,14 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
         or HEADER_LOCATION_TAIL_RE.fullmatch(cleaned)
         or HEADER_UPPER_LOCATION_TAIL_RE.fullmatch(cleaned)
         or HEADER_INTERNATIONAL_LOCATION_RE.search(cleaned)
-    ):
+    ) and not has_role_marker:
         return False
     if ":" in cleaned:
         return False
     token_count = len(cleaned.split())
     if token_count < 2 or token_count > 8:
         return False
-    return bool(set(tokens) & HEADER_DESIRED_POSITION_ROLE_MARKERS)
+    return has_role_marker
 
 
 def _looks_like_non_title_header_phrase(value: Optional[str]) -> bool:
@@ -725,6 +737,9 @@ def _strip_location_fragments_from_header_line(value: Optional[str]) -> Optional
         HEADER_TRAILING_LOCATION_WITH_POSTAL_RE,
         HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE,
     ):
+        match = pattern.search(working)
+        if match and _has_header_desired_position_role_marker(match.group(0)):
+            continue
         working = pattern.sub(" ", working)
     return _clean_inline_text(working.strip(" -|,"))
 

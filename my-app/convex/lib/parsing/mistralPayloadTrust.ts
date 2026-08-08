@@ -15,7 +15,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function asNonEmptyRecord(value: unknown): Record<string, unknown> | null {
+export function asNonEmptyRecord(value: unknown): Record<string, unknown> | null {
   const record = asRecord(value);
   return record && Object.keys(record).length > 0 ? record : null;
 }
