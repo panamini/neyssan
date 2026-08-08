@@ -183,6 +183,88 @@ describe("buildAuthoritativeResumeEnvelope", () => {
     expect(envelope?.fallbackToLegacy).toBe(false);
   });
 
+  it("trusts a detailed narrative-only experience when OCR misses its headings", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          experience: [
+            {
+              responsibilities:
+                "Led cross-functional delivery, reduced processing delays, and improved operational reliability across multiple teams.",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(true);
+  });
+
+  it("rejects common experience field labels as template placeholders", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          experience: [{ company: "Company", position: "Position" }],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(false);
+  });
+
+  it.each([
+    [
+      "awards",
+      { name: "National Research Award", issuer: "Engineering Council" },
+    ],
+    [
+      "publications",
+      {
+        title: "Reliable distributed systems in constrained environments",
+        publisher: "Systems Journal",
+      },
+    ],
+    [
+      "volunteering",
+      {
+        organization: "Community Technology Network",
+        role: "Volunteer Coordinator",
+      },
+    ],
+    [
+      "affiliations",
+      {
+        organizationName: "Association of Operations Professionals",
+        roleOrMembershipType: "Board Member",
+      },
+    ],
+  ])("trusts a substantive %s section", (sectionName, entry) => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_engine: "mistral",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      result: {
+        normalized: {
+          [sectionName]: [entry],
+        },
+      },
+    });
+
+    expect(envelope?.trusted).toBe(true);
+  });
+
   it("does not trust a non-object normalized payload", () => {
     const envelope = buildAuthoritativeResumeEnvelope({
       diagnostics: {

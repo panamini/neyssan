@@ -106,10 +106,16 @@ function cleanString(value: unknown): string {
 
 const TEMPLATE_PLACEHOLDER_VALUES = new Set([
   "candidate",
+  "company",
   "degree",
+  "employer",
   "imported cv",
+  "institution",
   "job title",
   "name",
+  "position",
+  "role",
+  "school",
   "untitled cv",
   "your name",
 ]);
@@ -167,7 +173,11 @@ export function hasMinimumAuthoritativeResumeContent(value: unknown): boolean {
             record?.description ??
             record?.achievements,
         ) >= 20;
-      return (company && position) || ((company || position) && (hasDates || hasNarrative));
+      return (
+        hasNarrative ||
+        (company && position) ||
+        ((company || position) && hasDates)
+      );
     })
   ) {
     return true;
@@ -216,6 +226,36 @@ export function hasMinimumAuthoritativeResumeContent(value: unknown): boolean {
       const record = asRecord(entry);
       return isSubstantiveString(record?.name ?? record?.certificationName, 3);
     })
+  ) {
+    return true;
+  }
+
+  const extendedProfessionalSections = [
+    normalized.awards,
+    normalized.publications,
+    normalized.volunteering,
+    normalized.affiliations,
+  ];
+  if (
+    extendedProfessionalSections.some((section) =>
+      asArray(section).some((entry) => {
+        const record = asRecord(entry);
+        if (!record) {
+          return false;
+        }
+        const primaryLabel =
+          cleanString(record.name) ||
+          cleanString(record.title) ||
+          cleanString(record.organization) ||
+          cleanString(record.organizationName) ||
+          cleanString(record.role) ||
+          cleanString(record.roleOrMembershipType);
+        return (
+          isSubstantiveString(primaryLabel, 3) &&
+          contentTextLength(record) >= 20
+        );
+      }),
+    )
   ) {
     return true;
   }

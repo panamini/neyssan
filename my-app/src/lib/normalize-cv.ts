@@ -656,13 +656,49 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
       const hasStructured = Array.isArray((s as any)?.structuredContent);
 
       const originalBlocks: CvBlock[] = Array.isArray(s.blocks) ? s.blocks : [];
-      const existingBlockIds = new Set(
-        originalBlocks
-          .map((block) => (typeof block?.id === "string" ? block.id.trim() : ""))
-          .filter(Boolean),
-      );
       let blocks: CvBlock[] = originalBlocks; // preserve reference unless we actually change
       let blocksChanged = false;
+      const ensureSectionBlocksCopy = () => {
+        if (blocks === originalBlocks) {
+          blocks = [...originalBlocks];
+        }
+      };
+      const refreshRepresentativeBlock = ({
+        id,
+        title,
+        content,
+        linkedStructuredId,
+      }: {
+        id: string;
+        title: string;
+        content: unknown;
+        linkedStructuredId?: string;
+      }): boolean => {
+        const blockIndex = blocks.findIndex((block) => block.id === id);
+        if (blockIndex < 0) {
+          return false;
+        }
+        const currentBlock = blocks[blockIndex];
+        const nextBlock = CvBlockSchemaStrict.parse({
+          ...(currentBlock as any),
+          id,
+          title,
+          type: "text",
+          content,
+          attributes: linkedStructuredId
+            ? {
+                ...((currentBlock as any)?.attributes ?? {}),
+                linkedStructuredId,
+              }
+            : undefined,
+        });
+        if (JSON.stringify(nextBlock) !== JSON.stringify(currentBlock)) {
+          ensureSectionBlocksCopy();
+          blocks[blockIndex] = nextBlock;
+          blocksChanged = true;
+        }
+        return true;
+      };
 
       // Legacy: convert section.content -> single block when no blocks and no structured
       const hasLegacyContent = (s as any).content !== undefined && (s as any).content !== null;
@@ -733,7 +769,6 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return; // already represented
           const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
-          if (existingBlockIds.has(representativeBlockId)) return;
 
           // Derive preferred title and content from structured item
           let derivedTitle: string;
@@ -760,6 +795,17 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           } else if (secType === "education") {
             const desc = item?.description;
             if (typeof desc !== "undefined") derivedContent = ensureRemirrorDoc(desc as any);
+          }
+
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title: derivedTitle,
+              content: derivedContent,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
           }
 
           // Try to repurpose an existing unlinked block for this item
@@ -821,7 +867,6 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
             ensureBlocksCopy();
             blocks.push(newBlock);
             blocksChanged = true;
-            existingBlockIds.add(representativeBlockId);
             if (itemId) existingLinked.add(itemId);
           }
         });
@@ -889,12 +934,21 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
           const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
-          if (existingBlockIds.has(representativeBlockId)) return;
           const certificationName = String(item?.certificationName ?? "").trim();
           const issuer = String(item?.issuingOrganization ?? "").trim();
           const title = certificationName || `Certification ${idx + 1}`;
           const detailBits = [issuer, String(item?.credentialId ?? "").trim()].filter(Boolean);
           const content = ensureRemirrorDoc(detailBits.join("\n"));
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title,
+              content,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
+          }
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
             id: representativeBlockId,
             title,
@@ -905,7 +959,6 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
-          existingBlockIds.add(representativeBlockId);
           if (itemId) existingLinked.add(itemId);
         });
       }
@@ -931,7 +984,6 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
           const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
-          if (existingBlockIds.has(representativeBlockId)) return;
           const organizationName = String(item?.organizationName ?? "").trim();
           const membershipType = String(item?.roleOrMembershipType ?? "").trim();
           const title = organizationName || `Affiliation ${idx + 1}`;
@@ -942,6 +994,16 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
                 ? normalizeWhitespace(JSON.stringify(item.notes))
                 : "";
           const content = ensureRemirrorDoc([membershipType, notes].filter(Boolean).join("\n"));
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title,
+              content,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
+          }
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
             id: representativeBlockId,
             title,
@@ -952,7 +1014,6 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
-          existingBlockIds.add(representativeBlockId);
           if (itemId) existingLinked.add(itemId);
         });
       }
@@ -980,20 +1041,29 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
           if (itemId && existingLinked.has(itemId)) return;
           const representativeBlockId = buildRepresentativeBlockId(s.id, itemId, idx);
-          if (existingBlockIds.has(representativeBlockId)) return;
           const text = String(item?.text ?? "").trim();
           const title = text || `Achievement ${idx + 1}`;
+          const content = ensureRemirrorDoc(text);
+          if (
+            refreshRepresentativeBlock({
+              id: representativeBlockId,
+              title,
+              content,
+              linkedStructuredId: itemId,
+            })
+          ) {
+            return;
+          }
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
             id: representativeBlockId,
             title,
             type: "text",
-            content: ensureRemirrorDoc(text),
+            content,
             attributes: itemId ? { linkedStructuredId: itemId } : undefined,
           });
           ensureBlocksCopy();
           blocks.push(newBlock);
           blocksChanged = true;
-          existingBlockIds.add(representativeBlockId);
           if (itemId) existingLinked.add(itemId);
         });
       }
