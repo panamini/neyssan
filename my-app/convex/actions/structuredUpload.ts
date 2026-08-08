@@ -9,8 +9,12 @@ import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonica
 import { buildImportRecoveryPayload } from "../lib/parsing/importRecovery";
 import { filterRecoverySourceSectionsForRedundantHeader } from "../lib/parsing/recoverySourceFilter";
 import {
+  asNonEmptyRecord,
+  buildAuthoritativeResumeEnvelope,
+  isMistralPayloadSelectable,
+} from "../lib/parsing/mistralPayloadTrust";
+import {
   buildAuthoritativeResumeDebugSnapshot,
-  type AuthoritativeResume,
 } from "../../src/lib/authoritative-resume";
 
 type UResponse = Awaited<ReturnType<typeof undiciFetch>>;
@@ -201,64 +205,6 @@ export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayloa
       rawSections: mergedRawSections,
       sections: mergedSections,
     },
-  };
-}
-
-function buildDiagnosticsEnvelope(payload: ParserResponse | null | undefined): Record<string, any> {
-  const payloadDiagnostics =
-    payload?.diagnostics && typeof payload.diagnostics === "object"
-      ? payload.diagnostics
-      : {};
-  const resultDiagnostics =
-    payload?.result?.diagnostics && typeof payload.result.diagnostics === "object"
-      ? payload.result.diagnostics
-      : {};
-
-  return {
-    ...payloadDiagnostics,
-    ...resultDiagnostics,
-  } as Record<string, any>;
-}
-
-function extractTrustedMistralNormalizedPayload(
-  payload: ParserResponse | null | undefined,
-): Record<string, unknown> | null {
-  const resultNormalized =
-    payload?.result?.normalized && typeof payload.result.normalized === "object"
-      ? (payload.result.normalized as Record<string, unknown>)
-      : null;
-  if (resultNormalized) {
-    return resultNormalized;
-  }
-
-  return payload?.normalized && typeof payload.normalized === "object"
-    ? (payload.normalized as Record<string, unknown>)
-    : null;
-}
-
-export function buildAuthoritativeResumeEnvelope(
-  payload: ParserResponse | null | undefined,
-): AuthoritativeResume | null {
-  const diagnostics = buildDiagnosticsEnvelope(payload);
-  const routeLooksLikeMistral =
-    String(diagnostics.ocr_engine ?? "").trim().toLowerCase() === "mistral" ||
-    String(diagnostics.mistral_runtime ?? "").trim().toLowerCase() === "mistral" ||
-    String(diagnostics.mistral_runtime ?? "").trim().toLowerCase() ===
-      "local_fallback";
-  if (!routeLooksLikeMistral) {
-    return null;
-  }
-
-  const fallbackToLegacy = diagnostics.mistral_fallback === true;
-  const normalized = fallbackToLegacy
-    ? null
-    : extractTrustedMistralNormalizedPayload(payload);
-
-  return {
-    source: "mistral_v3",
-    trusted: fallbackToLegacy !== true && Boolean(normalized),
-    fallbackToLegacy,
-    normalized: fallbackToLegacy ? null : normalized,
   };
 }
 
@@ -1353,20 +1299,19 @@ export const structuredUpload = action({
               } as ParserResponse;
               if (payload.result && typeof payload.result === "object") {
                 const result = payload.result;
-                if (!result.normalized || typeof result.normalized !== "object") {
-                  result.normalized = {} as any;
-                }
-                const resultNormalized = result.normalized as Record<string, any>;
-                if (typeof result.rawText === "string") {
-                  if (typeof resultNormalized.rawText !== "string" || !resultNormalized.rawText.trim()) {
-                    resultNormalized.rawText = result.rawText;
+                const resultNormalized = asNonEmptyRecord(result.normalized);
+                if (resultNormalized) {
+                  if (typeof result.rawText === "string") {
+                    if (typeof resultNormalized.rawText !== "string" || !resultNormalized.rawText.trim()) {
+                      resultNormalized.rawText = result.rawText;
+                    }
                   }
-                }
-                if (!Array.isArray(resultNormalized.rawSections)) {
-                  if (Array.isArray((result as any).rawSections)) {
-                    resultNormalized.rawSections = (result as any).rawSections;
-                  } else if (typeof result.rawText === "string" && result.rawText.trim()) {
-                    resultNormalized.rawSections = [{ label: "BODY", content: result.rawText }];
+                  if (!Array.isArray(resultNormalized.rawSections)) {
+                    if (Array.isArray((result as any).rawSections)) {
+                      resultNormalized.rawSections = (result as any).rawSections;
+                    } else if (typeof result.rawText === "string" && result.rawText.trim()) {
+                      resultNormalized.rawSections = [{ label: "BODY", content: result.rawText }];
+                    }
                   }
                 }
               }
@@ -1478,8 +1423,9 @@ export const structuredUpload = action({
               return Number.isFinite(num) ? num : 0;
             } catch { return 0; }
           })();
-          const sectionsOk = rawSectionsLen > 0;
-          const meaningful = activeUseMistral ? (sectionsOk || ocrChars >= 200) : (meaningfulBaseline || canonicalPass);
+          const meaningful = activeUseMistral
+            ? isMistralPayloadSelectable(payload, { ocrChars, rawSectionsLen })
+            : (meaningfulBaseline || canonicalPass);
           console.debug(
             "[structuredUpload] payload content check label=%s mode=%s meaningful=%s diagnostics=%j",
             attempt.label,
@@ -1496,10 +1442,16 @@ export const structuredUpload = action({
             endpointSucceeded = true;
           } else {
             if (activeUseMistral) {
-              throw buildMistralOcrUnavailableError({
-                reason: "mistral_unusable_content",
-                detail: "Insufficient OCR text (<200 chars) and no sections",
-              });
+              const authoritativeResume = buildAuthoritativeResumeEnvelope(payload);
+              const reason = authoritativeResume?.fallbackToLegacy
+                ? "mistral_fallback"
+                : authoritativeResume?.trusted
+                  ? "insufficient_ocr_evidence"
+                  : "missing_trusted_normalized_payload";
+              aggregatedErrors.push(
+                `${attempt.label}:${modeVariant} rejected Mistral payload (${reason}; ocrChars=${ocrChars} rawSections=${rawSectionsLen})`,
+              );
+              break;
             }
             const sectionsFound = diagnostics?.sections_found ?? {};
             const sectionsFoundSummary = Object.entries(sectionsFound)

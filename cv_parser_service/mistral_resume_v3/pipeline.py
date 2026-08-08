@@ -245,6 +245,37 @@ EXPERIENCE_ROLE_MARKERS = {
     "supervisor",
     "technician",
 }
+HEADER_DESIRED_POSITION_ROLE_MARKERS = EXPERIENCE_ROLE_MARKERS | {
+    "accountant",
+    "administrator",
+    "architect",
+    "attorney",
+    "chef",
+    "counselor",
+    "editor",
+    "executive",
+    "hacker",
+    "intern",
+    "journalist",
+    "nurse",
+    "operator",
+    "owner",
+    "planner",
+    "producer",
+    "recruiter",
+    "representative",
+    "scientist",
+    "strategist",
+    "teacher",
+    "trainer",
+    "writer",
+}
+US_STATE_CODES = set(
+    (
+        "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO "
+        "MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC"
+    ).split()
+)
 EXPERIENCE_MONTH_NUMBERS = {
     "jan": "01",
     "january": "01",
@@ -608,6 +639,22 @@ def _contains_identity_name_tokens(value: Optional[str], identity_name: Optional
     return matched >= min(2, len(name_tokens))
 
 
+def _has_header_desired_position_role_marker(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    role_tokens = {
+        re.sub(r"^[^\w]+|[^\w]+$", "", token)
+        for token in _normalize_lookup(cleaned).split()
+    }
+    return bool(role_tokens & HEADER_DESIRED_POSITION_ROLE_MARKERS)
+
+
+def _has_us_state_code_tail(value: str) -> bool:
+    parts = value.rsplit(",", 1)
+    return len(parts) == 2 and parts[1].strip().upper() in US_STATE_CODES
+
+
 def _looks_like_header_desired_position_candidate(value: Optional[str], *, identity_name: Optional[str]) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -620,6 +667,7 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
     tokens = [token for token in normalized.split() if token]
     if len(tokens) >= 2 and all(token in SECTION_HEADING_WORDS for token in tokens):
         return False
+    has_role_marker = _has_header_desired_position_role_marker(cleaned)
     if _is_heading_value(cleaned) or _classify_heading(cleaned):
         return False
     if HEADER_CONTACT_LABEL_RE.search(cleaned):
@@ -632,12 +680,16 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
         return False
     if ADDRESSISH_STREET_RE.search(cleaned) or ADDRESSISH_STREET_FRAGMENT_RE.search(cleaned):
         return False
-    if (
+    location_shape_match = (
         HEADER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(cleaned)
         or HEADER_UPPER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(cleaned)
         or HEADER_LOCATION_TAIL_RE.fullmatch(cleaned)
         or HEADER_UPPER_LOCATION_TAIL_RE.fullmatch(cleaned)
-        or HEADER_INTERNATIONAL_LOCATION_RE.search(cleaned)
+    )
+    if HEADER_INTERNATIONAL_LOCATION_RE.search(cleaned):
+        return False
+    if location_shape_match and (
+        not has_role_marker or _has_us_state_code_tail(cleaned)
     ):
         return False
     if ":" in cleaned:
@@ -645,7 +697,7 @@ def _looks_like_header_desired_position_candidate(value: Optional[str], *, ident
     token_count = len(cleaned.split())
     if token_count < 2 or token_count > 8:
         return False
-    return True
+    return has_role_marker
 
 
 def _looks_like_non_title_header_phrase(value: Optional[str]) -> bool:
@@ -700,6 +752,9 @@ def _strip_location_fragments_from_header_line(value: Optional[str]) -> Optional
         HEADER_TRAILING_LOCATION_WITH_POSTAL_RE,
         HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE,
     ):
+        match = pattern.search(working)
+        if match and _has_header_desired_position_role_marker(match.group(0)):
+            continue
         working = pattern.sub(" ", working)
     return _clean_inline_text(working.strip(" -|,"))
 

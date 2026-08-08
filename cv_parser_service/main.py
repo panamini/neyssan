@@ -756,7 +756,11 @@ async def mistral_ocr_parse(
         diag_payload = {}
     diag_payload.update(forced_diag)
     mistral_model = diagnostics.get("model")
-    mistral_fallback = bool(diagnostics.get("fallback")) or mistral_model == "mistral-fallback-dev"
+    mistral_fallback = (
+        bool(diagnostics.get("fallback"))
+        or bool(diagnostics.get("fallback_to_legacy"))
+        or mistral_model == "mistral-fallback-dev"
+    )
     if mistral_model:
         diag_payload["mistral_model"] = mistral_model
     diag_payload["mistral_fallback"] = mistral_fallback

@@ -1451,6 +1451,46 @@ def _run_desired_position_header_case(
             },
             "New Teacher",
         ),
+        (
+            "JANE DOE\nProduct Owner\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Product Owner",
+        ),
+        (
+            "JANE DOE\nGrowth Hacker\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Growth Hacker",
+        ),
+        (
+            "JANE DOE\nUX Strategist\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "UX Strategist",
+        ),
+        (
+            "JANE DOE\nProduct Designer, UX\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Product Designer, UX",
+        ),
+        (
+            "JANE DOE\nSenior Engineer, AI\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Senior Engineer, AI",
+        ),
     ],
     ids=[
         "name-title-contact",
@@ -1459,6 +1499,11 @@ def _run_desired_position_header_case(
         "title-embedded-in-noisy-line",
         "uppercase-header-variant",
         "linda-header-title-with-address",
+        "product-owner-header-title",
+        "growth-hacker-header-title",
+        "ux-strategist-header-title",
+        "punctuated-product-designer-header-title",
+        "punctuated-senior-engineer-header-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_recovers_desired_position_from_structural_header_patterns(
@@ -1551,6 +1596,34 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
                 "contact": {"email": "jane@example.com", "address": "Paris, France"},
             },
         ),
+        (
+            "JANE DOE\nUS Citizen\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+        (
+            "JANE DOE\nSecurity Clearance Secret\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+        (
+            "JANE DOE\nProfessional Resume\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+        (
+            "JANE DOE\nTrainer, PA\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
     ],
     ids=[
         "no-title-in-header",
@@ -1559,6 +1632,10 @@ def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_r
         "name-prefixed-noisy-header-must-not-produce-name-title",
         "header-without-title-signal-returns-null",
         "international-location-must-not-become-title",
+        "citizenship-metadata-must-not-become-title",
+        "security-clearance-metadata-must-not-become-title",
+        "document-label-must-not-become-title",
+        "role-named-city-must-not-become-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_does_not_recover_desired_position_from_invalid_header_patterns(
