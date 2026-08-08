@@ -364,6 +364,34 @@ def test_contact_recovery_does_not_promote_reference_emails_after_the_header() -
     ) == {}
 
 
+def test_generic_details_contact_recovery_does_not_promote_reference_email() -> None:
+    markdown = (
+        "# Details\n"
+        "Phone: +1 555 010 0101\n"
+        "References available on request: referee@example.com\n"
+    )
+    assert _recover_contact_from_document(markdown) == {
+        "phone": "+1 555 010 0101",
+    }
+
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={"document_name": "generic-details-contact.pdf"},
+            annotation_raw={
+                "identity": {"name": "Jane Doe"},
+                "contact": {"phone": "+1 555 010 0101"},
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["status"] == "success"
+    assert result["canonical_payload"]["normalized"]["contact"]["phone"] == "+1 555 010 0101"
+    assert result["canonical_payload"]["normalized"]["contact"]["email"] is None
+
+
 def test_generic_details_heading_is_not_treated_as_contact_without_contact_evidence() -> None:
     sections = _extract_explicit_sections_from_pages(
         [
