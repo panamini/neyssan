@@ -1,27 +1,37 @@
 import type { AuthoritativeResume } from "../../../src/lib/authoritative-resume";
 
 type MistralPayload = {
-  diagnostics?: Record<string, unknown>;
-  normalized?: Record<string, unknown>;
+  diagnostics?: unknown;
+  normalized?: unknown;
   result?: {
-    diagnostics?: Record<string, unknown>;
-    normalized?: Record<string, unknown>;
+    diagnostics?: unknown;
+    normalized?: unknown;
   };
 };
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
 function buildDiagnosticsEnvelope(
   payload: MistralPayload | null | undefined,
 ): Record<string, unknown> {
   return {
-    ...(payload?.diagnostics ?? {}),
-    ...(payload?.result?.diagnostics ?? {}),
+    ...(asRecord(payload?.diagnostics) ?? {}),
+    ...(asRecord(payload?.result?.diagnostics) ?? {}),
   };
 }
 
 function extractTrustedMistralNormalizedPayload(
   payload: MistralPayload | null | undefined,
 ): Record<string, unknown> | null {
-  return payload?.result?.normalized ?? payload?.normalized ?? null;
+  return (
+    asRecord(payload?.result?.normalized) ??
+    asRecord(payload?.normalized) ??
+    null
+  );
 }
 
 function normalizedDiagnosticValue(value: unknown): string {

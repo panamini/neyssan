@@ -1451,6 +1451,30 @@ def _run_desired_position_header_case(
             },
             "New Teacher",
         ),
+        (
+            "JANE DOE\nProduct Owner\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Product Owner",
+        ),
+        (
+            "JANE DOE\nGrowth Hacker\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "Growth Hacker",
+        ),
+        (
+            "JANE DOE\nUX Strategist\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+            "UX Strategist",
+        ),
     ],
     ids=[
         "name-title-contact",
@@ -1459,6 +1483,9 @@ def _run_desired_position_header_case(
         "title-embedded-in-noisy-line",
         "uppercase-header-variant",
         "linda-header-title-with-address",
+        "product-owner-header-title",
+        "growth-hacker-header-title",
+        "ux-strategist-header-title",
     ],
 )
 def test_run_resume_pipeline_from_ocr_result_recovers_desired_position_from_structural_header_patterns(

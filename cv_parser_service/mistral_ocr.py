@@ -281,6 +281,7 @@ def should_use_ocr_raw_sections(
 def _pages_and_diagnostics_from_pipeline_result(result: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     pages = list(result.get("pages") or [])
     diagnostics = dict(result.get("diagnostics") or {})
+    diagnostics["fallback_to_legacy"] = bool(result.get("fallback_to_legacy"))
     canonical_payload = result.get("canonical_payload")
     if isinstance(canonical_payload, dict) and not result.get("fallback_to_legacy"):
         diagnostics[INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY] = canonical_payload

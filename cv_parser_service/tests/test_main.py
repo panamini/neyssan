@@ -26,6 +26,7 @@ from cv_parser_service.main import (
     app,
     mistral_ocr_parse,
 )
+from cv_parser_service.mistral_ocr import _pages_and_diagnostics_from_pipeline_result
 from cv_parser_service.mistral_resume_v3 import INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY
 
 
@@ -313,6 +314,43 @@ def test_mistral_ocr_parse_marks_local_fallback_runtime(monkeypatch):
     assert diagnostics["mistral_model"] == "mistral-fallback-dev"
     assert diagnostics["mistral_fallback"] is True
     assert diagnostics["mistral_runtime"] == "local_fallback"
+
+
+def test_mistral_ocr_parse_marks_pipeline_legacy_fallback_runtime(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [{"index": 0, "markdown": "pipeline fallback text"}],
+            {
+                "model": "mistral-ocr-latest",
+                "fallback_to_legacy": True,
+                "pages": 1,
+                "ocr_chars": 22,
+            },
+        )
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    diagnostics = json.loads(response.body)["diagnostics"]
+    assert diagnostics["mistral_fallback"] is True
+    assert diagnostics["mistral_runtime"] == "local_fallback"
+
+
+def test_pipeline_legacy_fallback_is_preserved_in_mistral_diagnostics():
+    _, diagnostics = _pages_and_diagnostics_from_pipeline_result(
+        {
+            "pages": [{"index": 0, "markdown": "pipeline fallback text"}],
+            "fallback_to_legacy": True,
+            "diagnostics": {"model": "mistral-ocr-latest"},
+        }
+    )
+
+    assert diagnostics["fallback_to_legacy"] is True
 
 
 def test_mistral_ocr_parse_uses_canonical_ocr_raw_sections_when_present(monkeypatch):
